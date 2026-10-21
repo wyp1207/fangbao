@@ -32,6 +32,7 @@ const router = createRouter({
         { path: 'history', redirect: '/history/tasks' },
         { path: 'history/tasks', name: 'history-tasks', component: () => import('@/pages/History.vue'), meta: { tab: 'tasks' } },
         { path: 'history/alarms', name: 'history-alarms', component: () => import('@/pages/History.vue'), meta: { tab: 'alarms' } },
+        { path: 'reports', name: 'reports', component: () => import('@/pages/Reports.vue') },
         { path: 'run-data', name: 'run-data', component: () => import('@/pages/RunData.vue') },
 
         // 设备管理

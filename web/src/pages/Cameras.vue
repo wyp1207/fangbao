@@ -170,6 +170,16 @@ async function toggle(v: VideoRow) {
   }
 }
 
+async function toggleDashboard(v: VideoRow) {
+  try {
+    await api.updateVideo(v.id, { show_on_dashboard: !v.show_on_dashboard })
+    toast(v.show_on_dashboard ? '已从首页移除' : '已设为首页显示', 'ok')
+    await reload()
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : '设置失败', 'danger')
+  }
+}
+
 async function remove(v: VideoRow) {
   if (!window.confirm(`确定删除视频源「${v.name}」？`)) return
   try {
@@ -214,6 +224,7 @@ onMounted(() => { void reload(); void loadGo2rtc() })
             <th style="width: 110px">go2rtc 流名</th>
             <th>视频流地址</th>
             <th style="width: 90px">状态</th>
+            <th style="width: 100px">首页显示</th>
             <th style="width: 170px">操作</th>
           </tr>
         </thead>
@@ -227,6 +238,13 @@ onMounted(() => { void reload(); void loadGo2rtc() })
             <td class="mono url">{{ v.url }}</td>
             <td><span class="tag" :class="v.enabled ? 'ok' : 'danger'">{{ v.enabled ? '启用' : '停用' }}</span></td>
             <td>
+              <button class="dash-toggle" :class="{ on: v.show_on_dashboard }"
+                      :title="v.show_on_dashboard ? '已在大屏显示，点击取消' : '点击让它在首页大屏显示'"
+                      @click="toggleDashboard(v)">
+                {{ v.show_on_dashboard ? '大屏显示' : '不上大屏' }}
+              </button>
+            </td>
+            <td>
               <div class="row-actions">
                 <button class="act" title="预览画面" @click="$router.push({ name: 'video', query: { source: String(v.id) } })">▶</button>
                 <button class="act" title="编辑" @click="openEdit(v)">✎</button>
@@ -238,7 +256,7 @@ onMounted(() => { void reload(); void loadGo2rtc() })
             </td>
           </tr>
           <tr v-if="!filtered.length">
-            <td colspan="7" class="dim">{{ loading ? '读取中…' : '还没有视频源，点右上角新增' }}</td>
+            <td colspan="8" class="dim">{{ loading ? '读取中…' : '还没有视频源，点右上角新增' }}</td>
           </tr>
         </tbody>
       </table>
@@ -308,6 +326,15 @@ onMounted(() => { void reload(); void loadGo2rtc() })
 </template>
 
 <style scoped>
+.dash-toggle {
+  background: rgba(0, 60, 110, 0.6); color: #9fd2ff;
+  border: 1px solid rgba(111, 227, 255, 0.3); border-radius: 4px;
+  padding: 3px 9px; font-size: 12px; cursor: pointer;
+}
+.dash-toggle.on {
+  background: rgba(41, 212, 255, 0.28); color: #eaf7ff; border-color: #7fe9ff;
+}
+
 .page { display: flex; flex-direction: column; gap: 12px; min-height: 100%; }
 .page > .panel { flex: 1; min-height: 0; }
 .small { font-size: 12px; line-height: 1.8; }

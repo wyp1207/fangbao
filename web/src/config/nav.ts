@@ -52,6 +52,7 @@ export const NAV: NavGroup[] = [
       { name: 'history-tasks', label: '任务数据', real: true },
       { name: 'history-alarms', label: '告警数据', real: true },
       { name: 'run-data', label: '运行数据' },
+          { name: 'reports', label: '巡检报表' },
     ],
   },
   {

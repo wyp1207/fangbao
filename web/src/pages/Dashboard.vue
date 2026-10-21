@@ -53,14 +53,20 @@ async function unlock() {
 
 // ---- 全屏 ----
 // 首页内嵌视频：取第一路可用视频源（可见光/热红外分开挑）
-const videoRows = ref<{ id: number; name: string; group_name: string; stream_name: string; go2rtc_url: string | null }[]>([])
+const videoRows = ref<{
+  id: number; name: string; group_name: string; stream_name: string
+  go2rtc_url: string | null; show_on_dashboard?: boolean
+}[]>([])
+
+/** 只有显式勾了「首页显示」的摄像头才上大屏——测试流不该自己冒出来 */
+const dashVideos = computed(() => videoRows.value.filter((v) => v.show_on_dashboard && v.go2rtc_url))
 const visibleStream = computed(() => {
-  const v = videoRows.value.find((x) => x.go2rtc_url && /充电房|可见光|车体/.test(x.group_name + x.name))
-    ?? videoRows.value.find((x) => x.go2rtc_url)
+  const pool = dashVideos.value
+  const v = pool.find((x) => /充电房|可见光|车体/.test(x.group_name + x.name)) ?? pool[0]
   return v?.go2rtc_url ?? ''
 })
 const thermalStream = computed(() => {
-  const v = videoRows.value.find((x) => x.go2rtc_url && /热|红外|thermal/i.test(x.name + x.group_name))
+  const v = dashVideos.value.find((x) => /热|红外|thermal/i.test(x.name + x.group_name))
   return v?.go2rtc_url ?? ''
 })
 
@@ -325,9 +331,9 @@ async function logout() {
           <div class="embed">
             <iframe v-if="visibleStream" :src="visibleStream" title="可见光" allow="autoplay; fullscreen" />
             <div v-else class="embed-empty">
-              <b>未配置可见光视频源</b>
-              <span>到「设备管理 → 摄像头」添加 RTSP 后自动出现</span>
-              <button class="btn btn-sm" @click="router.push({ name: 'cameras' })">去添加</button>
+              <b>视频通道未接入</b>
+              <span>真机联调后，在「设备管理 → 摄像头」勾选「首页显示」即自动呈现</span>
+              <button class="btn btn-sm" @click="router.push({ name: 'cameras' })">去配置</button>
             </div>
             <button class="embed-expand" title="打开视频监控" @click="goVideo('可见光')">打开全屏页 ↗</button>
           </div>
@@ -337,8 +343,8 @@ async function logout() {
           <div class="embed">
             <iframe v-if="thermalStream" :src="thermalStream" title="热红外" allow="autoplay; fullscreen" />
             <div v-else class="embed-empty">
-              <b>未接入热成像通道</b>
-              <span>热像仪接上后在这里直接显示</span>
+              <b>视频通道未接入</b>
+              <span>热像仪接上后，勾选「首页显示」即自动呈现</span>
             </div>
             <button class="embed-expand" title="打开视频监控" @click="goVideo('热红外')">打开全屏页 ↗</button>
           </div>

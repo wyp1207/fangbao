@@ -81,6 +81,7 @@ class VideoOut(BaseModel):
     vendor: str
     url: str          # 已打码
     enabled: bool
+    show_on_dashboard: bool = False
     note: str | None = None
     stream_name: str = ""
     play_url: str | None = None
@@ -93,6 +94,7 @@ class VideoIn(BaseModel):
     vendor: str = "other"
     url: str = Field(min_length=4, max_length=512)
     enabled: bool = True
+    show_on_dashboard: bool = False
     note: str | None = Field(default=None, max_length=200)
     stream_name: str = Field(default="", max_length=32)
 
@@ -103,6 +105,7 @@ class VideoPatch(BaseModel):
     vendor: str | None = None
     url: str | None = None
     enabled: bool | None = None
+    show_on_dashboard: bool | None = None
     note: str | None = None
     stream_name: str | None = None
 
@@ -129,7 +132,8 @@ def _go2rtc_url(stream_name: str) -> str | None:
 def _out(v: VideoSource) -> VideoOut:
     return VideoOut(
         id=v.id, name=v.name, group_name=v.group_name, vendor=v.vendor,
-        url=mask_url(v.url), enabled=v.enabled, note=v.note,
+        url=mask_url(v.url), enabled=v.enabled,
+        show_on_dashboard=v.show_on_dashboard, note=v.note,
         stream_name=v.stream_name or "",
         play_url=_play_url(v.name) if v.enabled else None,
         go2rtc_url=_go2rtc_url(v.stream_name) if v.enabled else None,

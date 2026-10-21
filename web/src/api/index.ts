@@ -45,6 +45,7 @@ export interface UserRow {
 }
 
 export interface VideoRow {
+  show_on_dashboard?: boolean
   id: number
   name: string
   group_name: string
@@ -230,7 +231,7 @@ export const api = {
   go2rtcStreams: () => request<{ ok: boolean; reason?: string; streams: { name: string; source: string; web: boolean; ready: boolean }[] }>('/videos/go2rtc-streams'),
   createVideo: (body: { name: string; group_name: string; vendor: string; url: string; note?: string | null; stream_name?: string }) =>
     request<VideoRow>('/videos', { method: 'POST', body }),
-  updateVideo: (id: number, body: Partial<{ name: string; group_name: string; vendor: string; url: string; enabled: boolean; note: string | null; stream_name: string }>) =>
+  updateVideo: (id: number, body: Partial<{ name: string; group_name: string; vendor: string; url: string; enabled: boolean; show_on_dashboard: boolean; note: string | null; stream_name: string }>) =>
     request<VideoRow>(`/videos/${id}`, { method: 'PATCH', body }),
   snapshotUrl: (id: number, tick: number) => `/api/v1/videos/${id}/snapshot?t=${tick}`,
   testVideo: (id: number) =>
@@ -261,6 +262,12 @@ export const api = {
       .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
       .join('&')
     return request<{ total: number; items: Record<string, unknown>[] }>(`/notify/logs${qs ? `?${qs}` : ''}`)
+  },
+  reportSummary: (dateFrom?: string, dateTo?: string) => {
+    const q: string[] = []
+    if (dateFrom) q.push(`date_from=${dateFrom}`)
+    if (dateTo) q.push(`date_to=${dateTo}`)
+    return request<Record<string, unknown>>(`/reports/summary${q.length ? '?' + q.join('&') : ''}`)
   },
   messages: () => request<{ items: { id: number; ts: number; level: string; source: string; title: string; body: string; link: Record<string, unknown> }[]; unread: number }>('/messages'),
 
