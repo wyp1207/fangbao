@@ -27,6 +27,15 @@ export interface StatusSnapshot {
   poll_count: number
 }
 
+export interface UserRow {
+  id: number
+  username: string
+  role: 'admin' | 'operator' | 'viewer'
+  is_active: boolean
+  created_at: string | null
+  last_login_at: string | null
+}
+
 export interface RobotRow {
   id: number
   name: string
@@ -81,6 +90,15 @@ export const api = {
   me: () => request<User>('/auth/me'),
 
   robots: () => request<RobotRow[]>('/robots'),
+
+  users: () => request<UserRow[]>('/users'),
+  createUser: (body: { username: string; password: string; role: string }) =>
+    request<UserRow>('/users', { method: 'POST', body }),
+  updateUser: (id: number, body: { role?: string; is_active?: boolean }) =>
+    request<UserRow>(`/users/${id}`, { method: 'PATCH', body }),
+  resetPassword: (id: number, password: string) =>
+    request<{ ok: boolean }>(`/users/${id}/password`, { method: 'POST', body: { password } }),
+  deleteUser: (id: number) => request<{ ok: boolean }>(`/users/${id}`, { method: 'DELETE' }),
   status: (id = 1) => request<StatusSnapshot>(`/robots/${id}/status`),
   maps: (id = 1) => request<MapMeta[]>(`/robots/${id}/maps`),
   currentMap: (id = 1) => request<{ name: string; md5sum?: string }>(`/robots/${id}/map/current`),

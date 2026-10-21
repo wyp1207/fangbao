@@ -16,6 +16,7 @@ const nav = [
   { name: 'alarms', label: '监控中心' },
   { name: 'history', label: '数据查询' },
   { name: 'settings', label: '系统管理' },
+  { name: 'users', label: '用户管理' },
 ]
 
 const state = computed(() => {

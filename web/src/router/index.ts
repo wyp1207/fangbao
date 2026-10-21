@@ -16,6 +16,7 @@ const router = createRouter({
         { path: 'alarms', name: 'alarms', component: () => import('@/pages/Alarms.vue') },
         { path: 'history', name: 'history', component: () => import('@/pages/History.vue') },
         { path: 'settings', name: 'settings', component: () => import('@/pages/Settings.vue') },
+        { path: 'users', name: 'users', component: () => import('@/pages/Users.vue') },
       ],
     },
   ],

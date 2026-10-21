@@ -51,6 +51,11 @@ class Conflict(PlatformError):
     code = "CONFLICT"
 
 
+class BadRequest(PlatformError):
+    status_code = 400
+    code = "BAD_REQUEST"
+
+
 class ExternalUnavailable(PlatformError):
     status_code = 503
     code = "EXTERNAL_UNAVAILABLE"
