@@ -53,7 +53,20 @@ function onDocClick(e: MouseEvent) {
   openKey.value = null
 }
 
+let closeTimer: number | undefined
+
+/** 延时关闭：给鼠标从标签挪到下拉留出时间（两者在 DOM 上不相邻） */
+function scheduleClose() {
+  window.clearTimeout(closeTimer)
+  closeTimer = window.setTimeout(() => { openKey.value = null }, 220)
+}
+
+function cancelClose() {
+  window.clearTimeout(closeTimer)
+}
+
 function close() {
+  window.clearTimeout(closeTimer)
   openKey.value = null
 }
 
@@ -71,7 +84,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <nav ref="root" class="nav" @mouseleave="close">
+  <nav ref="root" class="nav" @mouseenter="cancelClose" @mouseleave="scheduleClose">
     <div
       v-for="g in groups" :key="g.key"
       class="nav-item"
@@ -92,7 +105,8 @@ onBeforeUnmount(() => {
         ref="dropEl"
         class="nav-drop"
         :style="{ left: pos.left + 'px', top: pos.top + 'px' }"
-        @mouseleave="close"
+        @mouseenter="cancelClose"
+        @mouseleave="scheduleClose"
       >
         <li
           v-for="it in openGroup.items" :key="it.name"
