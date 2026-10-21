@@ -70,9 +70,9 @@ async function onLogout() {
 
 .hdr {
   flex: none; height: 54px;
+  position: relative; z-index: 50;   /* 让下拉菜单盖在内容区之上 */
   display: flex; align-items: center; gap: 18px;
   padding: 0 16px;
-  overflow: hidden;
   background: linear-gradient(180deg, #0a7ad0, #005da4);
   border-bottom: 1px solid rgba(111, 227, 255, 0.5);
   box-shadow: 0 2px 12px rgba(0, 40, 110, 0.5);
@@ -89,7 +89,7 @@ async function onLogout() {
 .logo-text b { display: block; font-size: 15px; color: #fff; letter-spacing: 0.08em; }
 .logo-text i { font-style: normal; font-size: 9.5px; color: #9fd2ff; letter-spacing: 0.18em; }
 
-.tabs { display: flex; gap: 6px; }
+.tabs { display: flex; gap: 6px; min-width: 0; }
 .mini-title {
   flex: 1; display: flex; align-items: center; justify-content: center; gap: 10px;
   font-size: 17px; font-weight: 800; letter-spacing: 0.16em;

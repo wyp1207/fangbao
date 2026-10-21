@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { NAV, isActive, type NavGroup } from '@/config/nav'
@@ -25,7 +25,8 @@ function toggle(g: NavGroup) {
     if (g.route) void router.push({ name: g.route })
     return
   }
-  openKey.value = openKey.value === g.key ? null : g.key
+  // 点击只负责「打开」：鼠标移上去已经打开了，再点一下不该又关掉
+  openKey.value = g.key
 }
 
 function hover(g: NavGroup) {
@@ -111,7 +112,7 @@ defineExpose({ currentLabel })
 .caret { font-style: normal; font-size: 10px; opacity: 0.8; }
 
 .drop {
-  position: absolute; left: 0; top: calc(100% + 6px);
+  position: absolute; left: 0; top: calc(100% + 13px);
   z-index: 60;
   min-width: 168px;
   margin: 0; padding: 5px 0;
