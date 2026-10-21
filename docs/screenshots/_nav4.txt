@@ -1,0 +1,10 @@
+[首页] dropdown=N
+[实时监控] dropdown=N
+[巡检管理] dropdown=N
+[告警中心] dropdown=N
+[数据查询] dropdown=N
+[设备管理] dropdown=N
+[录像管理] dropdown=N
+[系统管理] dropdown=N
+
+errors:

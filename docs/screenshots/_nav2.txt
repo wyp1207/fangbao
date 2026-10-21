@@ -1,0 +1,11 @@
+start url=http://127.0.0.1:5173/dashboard
+dropdown count after click = 1
+  机器人状态          -> /robot-status      textlen=199
+  地图监控           -> /map               textlen=225
+  视频监控           -> /video             textlen=122
+  充电房监控          -> /room              textlen=123
+  环境监测 未接入       -> /env               textlen=214
+
+pageerrors:
+  CONSOLE Failed to load resource: the server responded with a status of 401 (Unauthorized)
+  CONSOLE Failed to load resource: the server responded with a status of 401 (Unauthorized)

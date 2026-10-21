@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { NAV, isActive, type NavGroup } from '@/config/nav'
@@ -11,30 +11,35 @@ const props = withDefaults(defineProps<{ start?: number; end?: number }>(), {
 const route = useRoute()
 const router = useRouter()
 
-const openKey = ref<string | null>(null)
-const root = ref<HTMLElement | null>(null)
-
 const groups = computed(() => NAV.slice(props.start, props.end))
 
-function currentLabel(): string {
-  return String(route.name ?? '')
+const openKey = ref<string | null>(null)
+const pos = ref({ left: 0, top: 0 })
+const root = ref<HTMLElement | null>(null)
+const dropEl = ref<HTMLElement | null>(null)
+
+const openGroup = computed(() => groups.value.find((g) => g.key === openKey.value) ?? null)
+
+function place(el: HTMLElement) {
+  const r = el.getBoundingClientRect()
+  pos.value = { left: r.left, top: r.bottom + 6 }
 }
 
-function toggle(g: NavGroup) {
+function toggle(g: NavGroup, ev: MouseEvent) {
   if (!g.items?.length) {
     if (g.route) void router.push({ name: g.route })
     return
   }
-  // 点击只负责「打开」：鼠标移上去已经打开了，再点一下不该又关掉
+  const el = ev.currentTarget as HTMLElement
+  openKey.value = openKey.value === g.key ? null : g.key
+  if (openKey.value) place(el)
+}
+
+function hover(g: NavGroup, ev: MouseEvent) {
+  if (!g.items?.length) return
+  const el = ev.currentTarget as HTMLElement
+  if (openKey.value !== g.key) place(el)
   openKey.value = g.key
-}
-
-function hover(g: NavGroup) {
-  if (g.items?.length) openKey.value = g.key
-}
-
-function leaveRoot() {
-  openKey.value = null
 }
 
 function go(name: string) {
@@ -43,49 +48,68 @@ function go(name: string) {
 }
 
 function onDocClick(e: MouseEvent) {
-  if (root.value && !root.value.contains(e.target as Node)) openKey.value = null
+  const t = e.target as Node
+  if (root.value?.contains(t) || dropEl.value?.contains(t)) return
+  openKey.value = null
 }
 
-onMounted(() => document.addEventListener('click', onDocClick))
-onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
+function close() {
+  openKey.value = null
+}
 
-defineExpose({ currentLabel })
+onMounted(() => {
+  // 捕获阶段监听：先于业务组件处理，点空白处一定关
+  document.addEventListener("click", onDocClick, true)
+  window.addEventListener("resize", close)
+  window.addEventListener("scroll", close, true)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener("click", onDocClick, true)
+  window.removeEventListener("resize", close)
+  window.removeEventListener("scroll", close, true)
+})
 </script>
 
 <template>
-  <nav ref="root" class="nav" @mouseleave="leaveRoot">
+  <nav ref="root" class="nav" @mouseleave="close">
     <div
       v-for="g in groups" :key="g.key"
       class="nav-item"
       :class="{ active: isActive(g, route.name), open: openKey === g.key }"
-      @mouseenter="hover(g)"
+      @mouseenter="hover(g, $event)"
+      @click="toggle(g, $event)"
     >
-      <button class="nav-tab" @click="toggle(g)">
+      <button class="nav-tab" type="button">
         {{ g.label }}
         <i v-if="g.items?.length" class="caret">▾</i>
       </button>
-
-      <transition name="drop">
-        <ul v-if="openKey === g.key && g.items?.length" class="drop">
-          <li
-            v-for="it in g.items" :key="it.name"
-            :class="{ on: route.name === it.name }"
-            @click="go(it.name)"
-          >
-            <span class="dot-mk" />
-            {{ it.label }}
-            <em v-if="!it.real" class="pending">未接入</em>
-          </li>
-        </ul>
-      </transition>
     </div>
+
+    <!-- 下拉挂到 body：不受父级 overflow / z-index 影响 -->
+    <Teleport to="body">
+      <ul
+        v-if="openGroup?.items?.length"
+        ref="dropEl"
+        class="nav-drop"
+        :style="{ left: pos.left + 'px', top: pos.top + 'px' }"
+        @mouseleave="close"
+      >
+        <li
+          v-for="it in openGroup.items" :key="it.name"
+          :class="{ on: route.name === it.name }"
+          @click.stop="go(it.name)"
+        >
+          <span class="dot-mk" />
+          {{ it.label }}
+          <em v-if="!it.real" class="pending">未接入</em>
+        </li>
+      </ul>
+    </Teleport>
   </nav>
 </template>
 
 <style scoped>
-.nav { display: flex; gap: 6px; align-items: center; min-width: 0; overflow-x: auto; scrollbar-width: none; }
-.nav::-webkit-scrollbar { display: none; }
-
+.nav { display: flex; gap: 6px; align-items: center; min-width: 0; }
 .nav-item { position: relative; }
 
 .nav-tab {
@@ -113,58 +137,40 @@ defineExpose({ currentLabel })
   box-shadow: 0 0 14px rgba(120, 220, 255, 0.6);
 }
 .caret { font-style: normal; font-size: 10px; opacity: 0.8; }
+</style>
 
-.drop {
-  position: absolute; left: 0; top: calc(100% + 13px);
-  z-index: 60;
+<style>
+/* Teleport 出来的节点不在组件作用域内，只能写全局样式 */
+.nav-drop {
+  position: fixed;
+  z-index: 2147483000;
   min-width: 168px;
   margin: 0; padding: 5px 0;
   list-style: none;
   background: linear-gradient(180deg, rgba(0, 84, 160, 0.98), rgba(0, 48, 96, 0.98));
-  border: 1px solid rgba(111, 227, 255, 0.5);
-  box-shadow: 0 10px 26px rgba(0, 25, 60, 0.6);
+  border: 1px solid rgba(111, 227, 255, 0.55);
+  box-shadow: 0 12px 30px rgba(0, 20, 50, 0.75);
 }
-.drop::before {
+.nav-drop::before {
   content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px;
   background: linear-gradient(90deg, transparent, #9fefff, transparent);
 }
-.drop li {
+.nav-drop li {
   display: flex; align-items: center; gap: 8px;
   padding: 7px 14px;
   font-size: 13px; color: #cfe8ff;
   cursor: pointer;
   white-space: nowrap;
 }
-.drop li:hover { background: rgba(41, 212, 255, 0.2); color: #fff; }
-.drop li.on {
+.nav-drop li:hover { background: rgba(41, 212, 255, 0.2); color: #fff; }
+.nav-drop li.on {
   color: #062f66; font-weight: 700;
   background: linear-gradient(180deg, #b9ecff, #4fc3ff);
 }
-.dot-mk {
-  width: 5px; height: 5px; flex: none;
-  background: #6fe3ff; transform: rotate(45deg);
+.nav-drop .dot-mk { width: 5px; height: 5px; flex: none; background: #6fe3ff; transform: rotate(45deg); }
+.nav-drop li.on .dot-mk { background: #0a5ecb; }
+.nav-drop .pending {
+  margin-left: auto; font-style: normal; font-size: 10.5px; color: #ffe08a;
+  border: 1px solid rgba(255, 207, 63, 0.5); padding: 0 4px;
 }
-.drop li.on .dot-mk { background: #0a5ecb; }
-.pending {
-  margin-left: auto;
-  font-style: normal; font-size: 10.5px;
-  color: #ffe08a;
-  border: 1px solid rgba(255, 207, 63, 0.5);
-  padding: 0 4px;
-}
-
-.drop-enter-active, .drop-leave-active { transition: all 0.14s ease; }
-.drop-enter-from, .drop-leave-to { opacity: 0; transform: translateY(-6px); }
 </style>
-
-@media (max-width: 1700px) {
-  .nav { gap: 4px; }
-  .nav-tab { padding: 5px 12px; font-size: 13px; }
-}
-@media (max-width: 1500px) {
-  .nav-tab { padding: 4px 9px; font-size: 12.5px; }
-  .caret { display: none; }
-}
-@media (max-width: 1280px) {
-  .nav-tab { padding: 3px 7px; font-size: 12px; }
-}
