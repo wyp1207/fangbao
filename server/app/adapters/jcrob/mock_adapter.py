@@ -19,19 +19,26 @@ from app.adapters.jcrob.capability import probe
 from app.adapters.jcrob.config_view import project_config
 
 
-def _make_png(size: int = 64) -> bytes:
-    """纯色占位底图（不引 Pillow）。真机联调时用 /navigation/map_png 替换。"""
+def _make_png(width: int, height: int) -> bytes:
+    """生成占位底图：暗底 + 每 50px 一条网格线。
+
+    尺寸必须与 saved_maps 里的 width/height 一致——真机也是拿 PNG 像素尺寸
+    和 resolution/origin 配对算坐标的，尺寸不对，点位会全落到图外。
+    """
     def chunk(tag: bytes, data: bytes) -> bytes:
         return (struct.pack(">I", len(data)) + tag + data
                 + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF))
 
-    raw = b"".join(b"\x00" + bytes([11, 22, 32] * size) for _ in range(size))
-    ihdr = struct.pack(">IIBBBBB", size, size, 8, 2, 0, 0, 0)
+    bg, grid = (12, 22, 34), (30, 49, 72)
+    rows = []
+    for y in range(height):
+        row = bytearray()
+        for x in range(width):
+            row += bytes(grid if (x % 50 == 0 or y % 50 == 0) else bg)
+        rows.append(b"\x00" + bytes(row))
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
     return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr)
-            + chunk(b"IDAT", zlib.compress(raw, 6)) + chunk(b"IEND", b""))
-
-
-_PNG_1PX = _make_png()
+            + chunk(b"IDAT", zlib.compress(b"".join(rows), 6)) + chunk(b"IEND", b""))
 
 
 class MockJcrobAdapter:
@@ -97,7 +104,11 @@ class MockJcrobAdapter:
         return self._load("current_map")
 
     async def get_map_png(self, name: str) -> bytes:
-        return _PNG_1PX
+        # 尺寸跟 saved_maps 一致，否则坐标换算会和底图对不上
+        for meta in await self.list_maps():
+            if meta.get("name") == name:
+                return _make_png(int(meta.get("width", 306)), int(meta.get("height", 324)))
+        raise jerr.NotSupported(f"mock 里没有地图 {name}")
 
     async def get_current_path(self) -> dict[str, Any]:
         return self._load("current_path")
