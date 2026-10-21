@@ -78,6 +78,16 @@ async def import_map(
     db: Session = Depends(get_db),
     me: User = Depends(require_roles("admin", "operator")),
 ) -> dict:
+    # 分辨率填错会直接导致点位坐标错位——这是能撞设备的事，必须在入口拦
+    if not (0.01 <= resolution <= 0.5):
+        raise BadRequest(
+            f"分辨率 {resolution} 不合理：应在 0.01–0.50 米/像素之间（0.05 是常见激光雷达栅格）",
+            code="BAD_RESOLUTION",
+        )
+    for label, value in (("原点 X", origin_x), ("原点 Y", origin_y)):
+        if abs(value) > 5000:
+            raise BadRequest(f"{label}={value} 超出合理范围（±5000 米）", code="BAD_ORIGIN")
+
     if file.content_type not in ("image/png", "image/jpeg"):
         raise BadRequest("只接受 PNG / JPG", code="BAD_MIME")
     raw = await file.read()
@@ -187,8 +197,23 @@ def add_point(
     db: Session = Depends(get_db),
     me: User = Depends(require_roles("admin", "operator")),
 ) -> dict:
-    if not db.get(PlatformMap, map_id):
+    map_row = db.get(PlatformMap, map_id)
+    if not map_row:
         raise NotFound("地图不存在")
+
+    # 点位必须落在这张图覆盖的物理范围内，否则下发后机器人会往图外走
+    if map_row.width and map_row.height:
+        px = (body.x - map_row.origin_x) / map_row.resolution
+        py = (body.y - map_row.origin_y) / map_row.resolution
+        if not (0 <= px <= map_row.width and 0 <= py <= map_row.height):
+            raise BadRequest(
+                f"点位 ({body.x}, {body.y}) 不在这张图范围内："
+                f"图幅 {map_row.width}×{map_row.height} px，"
+                f"对应 X {map_row.origin_x:.1f}~{map_row.origin_x + map_row.width * map_row.resolution:.1f} m，"
+                f"Y {map_row.origin_y:.1f}~{map_row.origin_y + map_row.height * map_row.resolution:.1f} m",
+                code="POINT_OUT_OF_MAP",
+            )
+
     p = PointDraft(map_id=map_id, name=body.name, x=body.x, y=body.y,
                    theta=body.theta, note=body.note)
     db.add(p)
@@ -213,7 +238,8 @@ def import_points(
     """
     import csv
 
-    if not db.get(PlatformMap, map_id):
+    map_row = db.get(PlatformMap, map_id)
+    if not map_row:
         raise NotFound("地图不存在")
 
     raw = file.file.read()
@@ -247,6 +273,12 @@ def import_points(
                 theta = float(row["theta"])
             except ValueError:
                 errors.append(f"第 {i} 行（{name}）：theta 不是数字，按 0 处理")
+
+        px = (x - map_row.origin_x) / (map_row.resolution or 0.05)
+        py = (y - map_row.origin_y) / (map_row.resolution or 0.05)
+        if map_row.width and map_row.height and not (0 <= px <= map_row.width and 0 <= py <= map_row.height):
+            errors.append(f"第 {i} 行（{name}）：坐标 ({x}, {y}) 不在地图范围内")
+            continue
 
         if name in existing:
             p = existing[name]

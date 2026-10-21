@@ -59,6 +59,10 @@ class AlarmStore:
         self._items: list[Alarm] = []
         self._last_raised: dict[str, float] = {}
         self._first_seen: dict[str, float] = {}
+        # 置信度：同指标在窗口内反复超限，说明不是抖动，要升级
+        self._recent_hits: dict[str, list[float]] = {}
+        self.escalate_window_s = 300.0
+        self.escalate_hits = 3
         self._lock = threading.Lock()
         self._session_factory: Callable[[], Session] | None = None
 
@@ -104,6 +108,19 @@ class AlarmStore:
             found.append(("offline", "critical",
                           f"机器人通信中断（{age_s:.0f}s 未更新）" if age_s >= 0 else "机器人通信中断",
                           round(age_s, 1)))
+
+        # 置信度升级：同一指标 5 分钟内第 3 次出现，就按严重处理，
+        # 避免"网络抖动 → 一直提示 → 值班忽略 → 真事故漏掉"
+        with self._lock:
+            for metric, level, message, value in list(found):
+                hits = self._recent_hits.setdefault(metric, [])
+                hits.append(now)
+                hits[:] = [t for t in hits if now - t <= self.escalate_window_s]
+                if level == "warn" and len(hits) >= self.escalate_hits:
+                    idx = found.index((metric, level, message, value))
+                    found[idx] = (metric, "critical",
+                                  f"{message}（{int(self.escalate_window_s // 60)} 分钟内第 {len(hits)} 次）",
+                                  value)
 
         new: list[Alarm] = []
         with self._lock:

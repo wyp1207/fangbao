@@ -146,3 +146,75 @@ def test_notify_logs_endpoint(auth_client):
     assert r.status_code == 200
     body = r.json()
     assert "total" in body and isinstance(body["items"], list)
+
+
+def test_password_policy(auth_client):
+    """密码策略：太短/纯数字要被拒，合规的能改，改回原样。"""
+    short = auth_client.post("/api/v1/auth/password",
+                             json={"old_password": "admin123", "new_password": "abc"})
+    assert short.status_code in (400, 422)
+
+    weak = auth_client.post("/api/v1/auth/password",
+                            json={"old_password": "admin123", "new_password": "12345678"})
+    assert weak.status_code == 400
+    assert "字母" in weak.json()["message"] or "数字" in weak.json()["message"]
+
+    ok = auth_client.post("/api/v1/auth/password",
+                          json={"old_password": "admin123", "new_password": "Admin12345"})
+    assert ok.status_code == 200
+
+    back = auth_client.post("/api/v1/auth/password",
+                            json={"old_password": "Admin12345", "new_password": "admin123"})
+    assert back.status_code == 200
+
+
+def test_login_lockout(auth_client):
+    """连续 5 次密码错误后，第 6 次应提示锁定而不是继续普通 401。"""
+    for _ in range(5):
+        r = auth_client.post("/api/v1/auth/login",
+                             json={"username": "lockme", "password": "wrong-pass"})
+        assert r.status_code == 401
+    locked = auth_client.post("/api/v1/auth/login",
+                              json={"username": "lockme", "password": "wrong-pass"})
+    assert locked.status_code == 401
+    assert "次数过多" in locked.json()["message"]
+
+
+def test_map_point_out_of_range(auth_client):
+    """点位超出地图范围要被拒——这是防撞机的最后一道闸。"""
+    import io as _io
+
+    png = (b"\x89PNG\r\n\x1a\n")
+    # 直接构造一张 100x100 的图太麻烦，用真实 PIL 生成
+    from PIL import Image
+
+    buf = _io.BytesIO()
+    Image.new("RGB", (100, 100), "white").save(buf, format="PNG")
+    buf.seek(0)
+
+    r = auth_client.post(
+        "/api/v1/maps/library",
+        files={"file": ("t.png", buf.getvalue(), "image/png")},
+        data={"name": "校验用图", "resolution": "0.05", "origin_x": "0", "origin_y": "0"},
+    )
+    assert r.status_code == 200, r.text
+    map_id = r.json()["id"]
+
+    ok = auth_client.post(f"/api/v1/maps/library/{map_id}/points",
+                          json={"name": "图内", "x": 2.0, "y": 2.0})
+    assert ok.status_code == 200
+
+    bad = auth_client.post(f"/api/v1/maps/library/{map_id}/points",
+                           json={"name": "图外", "x": 99.0, "y": 99.0})
+    assert bad.status_code == 400
+    assert bad.json()["code"] == "POINT_OUT_OF_MAP"
+
+    # 分辨率不合理也要拒
+    buf.seek(0)
+    bad_res = auth_client.post(
+        "/api/v1/maps/library",
+        files={"file": ("t2.png", buf.getvalue(), "image/png")},
+        data={"name": "坏分辨率", "resolution": "5.0"},
+    )
+    assert bad_res.status_code == 400
+    assert bad_res.json()["code"] == "BAD_RESOLUTION"

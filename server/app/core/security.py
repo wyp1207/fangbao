@@ -110,3 +110,22 @@ def unseal(blob: str, *, secret: str) -> str:
         return bytes(b ^ key[i % len(key)] for i, b in enumerate(data)).decode()
     except Exception:  # noqa: BLE001
         return ""
+
+
+# ---------- 密码策略 ----------
+MIN_PASSWORD_LEN = 8
+
+
+def validate_password(password: str, *, username: str = "") -> None:
+    """密码强度：≥8 位、含字母和数字、不能等于用户名。
+
+    抛 ValueError（由调用方转成 400），不在这里引 FastAPI 依赖。
+    """
+    if len(password) < MIN_PASSWORD_LEN:
+        raise ValueError(f"密码至少 {MIN_PASSWORD_LEN} 位")
+    if password.lower() == (username or "").lower():
+        raise ValueError("密码不能和用户名相同")
+    has_alpha = any(c.isalpha() for c in password)
+    has_digit = any(c.isdigit() for c in password)
+    if not (has_alpha and has_digit):
+        raise ValueError("密码要同时包含字母和数字")

@@ -74,8 +74,8 @@ function openPwd() {
 }
 
 async function submitPwd() {
-  if (newPwd.value.length < 6) {
-    toast('新密码至少 6 位', 'warn')
+  if (newPwd.value.length < 8) {
+    toast('新密码至少 8 位，且要同时含字母和数字', 'warn')
     return
   }
   pwdBusy.value = true
@@ -145,7 +145,7 @@ onBeforeUnmount(() => {
       <div class="dlg">
         <div class="panel-title"><span>修改密码 · {{ username }}</span></div>
         <label class="fld"><span>原密码</span><input class="input" type="password" v-model="oldPwd" /></label>
-        <label class="fld"><span>新密码（至少 6 位）</span><input class="input" type="password" v-model="newPwd" /></label>
+        <label class="fld"><span>新密码（至少 8 位，含字母和数字）</span><input class="input" type="password" v-model="newPwd" /></label>
         <div class="actions">
           <button class="btn btn-sm" @click="pwdOpen = false">取消</button>
           <button class="btn btn-sm primary" :disabled="pwdBusy" @click="submitPwd">确认修改</button>

@@ -17,8 +17,10 @@ def _cookie_secure(request: Request, settings) -> bool:
         return bool(settings.cookie_secure)
     proto = (request.headers.get("x-forwarded-proto") or request.url.scheme or "").lower()
     return proto == "https"
-from app.core.errors import Unauthorized
-from app.core.security import create_access_token, hash_password, new_csrf_token, verify_password
+from app.core.errors import BadRequest, Unauthorized
+import time
+
+from app.core.security import create_access_token, validate_password, hash_password, new_csrf_token, verify_password
 from app.db.session import get_db
 from app.services.messages import audit
 from app.models.user import User
@@ -28,6 +30,34 @@ def _ip(request: Request) -> str | None:
     return request.client.host if request.client else None
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+# 登录防爆破：同账号+IP 10 分钟内失败 5 次，锁 10 分钟
+LOGIN_MAX_FAIL = 5
+LOGIN_WINDOW_S = 600
+LOGIN_LOCK_S = 600
+_fail_log: dict[str, list[float]] = {}
+_locked_until: dict[str, float] = {}
+
+
+def _login_key(username: str, ip: str | None) -> str:
+    return f"{username.lower()}|{ip or '-'}"
+
+
+def _check_locked(key: str) -> int:
+    """返回剩余锁定秒数，0 表示没锁。"""
+    until = _locked_until.get(key, 0)
+    left = int(until - time.time())
+    return left if left > 0 else 0
+
+
+def _record_fail(key: str) -> None:
+    now = time.time()
+    hits = [t for t in _fail_log.get(key, []) if now - t <= LOGIN_WINDOW_S]
+    hits.append(now)
+    _fail_log[key] = hits
+    if len(hits) >= LOGIN_MAX_FAIL:
+        _locked_until[key] = now + LOGIN_LOCK_S
+        _fail_log[key] = []
 
 
 class LoginIn(BaseModel):
@@ -49,15 +79,23 @@ class LoginOut(BaseModel):
 @router.post("/login", response_model=LoginOut)
 def login(body: LoginIn, response: Response, request: Request,
           db: Session = Depends(get_db)) -> LoginOut:
+    key = _login_key(body.username, request.client.host if request.client else None)
+    left = _check_locked(key)
+    if left:
+        raise Unauthorized(f"登录失败次数过多，请 {left // 60 + 1} 分钟后再试")
     settings = get_settings()
     user = db.scalar(select(User).where(User.username == body.username))
     if not user or not user.is_active or not verify_password(body.password, user.password_hash):
+        _record_fail(key)
         from app.services.messages import store as msg_store
 
         msg_store.add("warn", "user", f"登录失败：{body.username}",
                       "账号不存在、已停用或密码错误" if user else "账号不存在",
                       {"to": "users"} if user else {})
         raise Unauthorized("用户名或密码错误")
+
+    _fail_log.pop(key, None)          # 登录成功清零
+    _locked_until.pop(key, None)
 
     audit(db=db, action="auth.login", target=user.username, user=user,
           client_ip=_ip(request), summary="登录成功")
@@ -111,6 +149,11 @@ def change_own_password(
         raise Unauthorized("原密码不正确")
     if body.old_password == body.new_password:
         raise Unauthorized("新密码不能和原密码相同")
+    try:
+        validate_password(body.new_password, username=user.username)
+    except ValueError as exc:
+        raise BadRequest(str(exc), code="WEAK_PASSWORD") from exc
+
     user.password_hash = hash_password(body.new_password)
     db.commit()
     from app.services.messages import store as msg_store

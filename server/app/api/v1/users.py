@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_csrf, require_roles
 from app.core.errors import BadRequest, NotFound
-from app.core.security import hash_password
+from app.core.security import hash_password, validate_password
 from app.db.session import get_db
 from app.models.user import User
 from app.services.messages import audit, store as msg_store
@@ -81,6 +81,11 @@ def create_user(
     _check_role(body.role)
     if db.scalar(select(User).where(User.username == body.username)):
         raise BadRequest("用户名已存在", code="USERNAME_TAKEN")
+    try:
+        validate_password(body.password, username=body.username)
+    except ValueError as exc:
+        raise BadRequest(str(exc), code="WEAK_PASSWORD") from exc
+
     user = User(
         username=body.username,
         password_hash=hash_password(body.password),
@@ -134,6 +139,10 @@ def reset_password(
     user = db.get(User, user_id)
     if not user:
         raise NotFound("用户不存在")
+    try:
+        validate_password(body.password, username=user.username)
+    except ValueError as exc:
+        raise BadRequest(str(exc), code="WEAK_PASSWORD") from exc
     user.password_hash = hash_password(body.password)
     db.commit()
     msg_store.add("warn", "user", f"管理员重置密码：{user.username}",
