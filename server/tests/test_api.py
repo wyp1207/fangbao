@@ -38,8 +38,9 @@ def test_status_after_login(auth_client):
 def test_maps_endpoint(auth_client):
     r = auth_client.get("/api/v1/robots/1/maps")
     assert r.status_code == 200
-    assert isinstance(r.json(), list)
-    assert r.json()[0]["name"] == "map1"
+    body = r.json()
+    assert isinstance(body, list) and body
+    assert body[0]["name"] == "map1"
 
 
 def test_nav_points_are_parsed_server_side(auth_client):
@@ -54,7 +55,8 @@ def test_nav_points_are_parsed_server_side(auth_client):
 def test_alarms_list_and_ack(auth_client):
     r = auth_client.get("/api/v1/alarms")
     assert r.status_code == 200
-    assert isinstance(r.json(), list)
+    body = r.json()
+    assert isinstance(body, dict) and "items" in body
 
     # 伪造一条：确认接口对不存在的 id 返回 404，而不是静默成功
     miss = auth_client.post("/api/v1/alarms/999999/ack")
@@ -66,7 +68,7 @@ def test_alarm_flow_via_api(auth_client):
     store = auth_client.app.state.alarms
     store.evaluate(status={}, info={"battery": 5, "driver_port": False}, age_s=0)
 
-    items = auth_client.get("/api/v1/alarms").json()
+    items = auth_client.get("/api/v1/alarms").json()["items"]
     assert items and items[0]["metric"] == "battery"
     alarm_id = items[0]["id"]
 
@@ -74,7 +76,7 @@ def test_alarm_flow_via_api(auth_client):
     assert acked["acked_by"] == "admin"
     assert acked["acked_at"]
 
-    active = auth_client.get("/api/v1/alarms?active=true").json()
+    active = auth_client.get("/api/v1/alarms?status=unacked").json()["items"]
     assert all(a["id"] != alarm_id for a in active)
 
 
