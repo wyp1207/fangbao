@@ -1,11 +1,23 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { api, type TaskItem } from '@/api'
 import { useRobotStore } from '@/stores/robot'
 import DarkSelect from '@/components/DarkSelect.vue'
 import { toast } from '@/composables/useToast'
 
 const robot = useRobotStore()
+const route = useRoute()
+const router = useRouter()
+
+// 菜单里的「任务数据 / 告警数据」是同一页的两种模式，靠路由 meta 区分
+watch(
+  () => route.meta.tab,
+  (t) => {
+    if (t === 'tasks' || t === 'alarms') tab.value = t
+  },
+  { immediate: true },
+)
 
 type Tab = 'tasks' | 'alarms'
 const tab = ref<Tab>('tasks')
@@ -124,7 +136,7 @@ onMounted(async () => {
         <button
           v-for="t in tabs" :key="t.key"
           class="tab-btn" :class="{ on: tab === t.key }"
-          @click="tab = t.key"
+          @click="router.push({ name: t.key === 'tasks' ? 'history-tasks' : 'history-alarms' })"
         >{{ t.label }}（{{ t.key === 'tasks' ? taskRows.length : alarmRows.length }}）</button>
       </div>
 

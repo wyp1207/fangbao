@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import TopNav from '@/components/TopNav.vue'
 import { useRobotStore } from '@/stores/robot'
 
 const auth = useAuthStore()
@@ -9,15 +10,6 @@ const robot = useRobotStore()
 const route = useRoute()
 const router = useRouter()
 
-const nav = [
-  { name: 'dashboard', label: '首页' },
-  { name: 'map', label: '巡检管理' },
-  { name: 'tasks', label: '任务与巡航' },
-  { name: 'alarms', label: '监控中心' },
-  { name: 'history', label: '数据查询' },
-  { name: 'settings', label: '系统管理' },
-  { name: 'users', label: '用户管理' },
-]
 
 const state = computed(() => {
   if (!robot.online) return { text: '通信中断', cls: 'danger' }
@@ -49,26 +41,11 @@ async function onLogout() {
         </div>
       </div>
 
-      <nav class="tabs">
-        <router-link
-          v-for="item in nav.slice(0, 3)" :key="item.name"
-          :to="{ name: item.name }"
-          class="tab" :class="{ active: route.name === item.name }"
-        >
-          {{ item.label }}
-          <span v-if="item.name === 'alarms' && alarmCount" class="badge">{{ alarmCount }}</span>
-        </router-link>
-      </nav>
+      <TopNav :start="0" :end="3" />
 
       <div class="mini-title"><span class="w" />智能巡检机器人管理平台<span class="w r" /></div>
 
-      <nav class="tabs">
-        <router-link
-          v-for="item in nav.slice(3)" :key="item.name"
-          :to="{ name: item.name }"
-          class="tab" :class="{ active: route.name === item.name }"
-        >{{ item.label }}</router-link>
-      </nav>
+      <TopNav :start="3" />
 
       <div class="right">
         <span class="state" :class="state.cls">

@@ -6,6 +6,7 @@ import ScadaPanel from '@/components/ScadaPanel.vue'
 import VideoBox from '@/components/VideoBox.vue'
 import AnimatedNumber from '@/components/AnimatedNumber.vue'
 import DarkSelect from '@/components/DarkSelect.vue'
+import TopNav from '@/components/TopNav.vue'
 import { toast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { useRobotStore } from '@/stores/robot'
@@ -46,15 +47,6 @@ function tryControl() {
   toast('写操作未开放：需真机联调通过 + 现场授权签字（采集表 01 表 15–17 行）', 'warn', 3200)
 }
 
-const nav = [
-  { name: 'dashboard', label: '首页' },
-  { name: 'map', label: '巡检管理' },
-  { name: 'tasks', label: '任务与巡航' },
-  { name: 'alarms', label: '监控中心' },
-  { name: 'history', label: '数据查询' },
-  { name: 'settings', label: '系统管理' },
-  { name: 'users', label: '用户管理' },
-]
 
 const pose = computed(() => robot.pose)
 const galileo = computed(() => robot.snapshot?.galileo ?? {})
@@ -154,13 +146,7 @@ async function logout() {
             <i>JCROB</i>
           </div>
         </div>
-        <nav class="tabs">
-          <router-link
-            v-for="item in nav.slice(0, 3)" :key="item.name"
-            :to="{ name: item.name }"
-            class="tab" :class="{ active: item.name === 'dashboard' }"
-          >{{ item.label }}</router-link>
-        </nav>
+        <TopNav :start="0" :end="3" />
       </div>
 
       <div class="board-title">
@@ -170,13 +156,7 @@ async function logout() {
       </div>
 
       <div class="hdr-right">
-        <nav class="tabs">
-          <router-link
-            v-for="item in nav.slice(3)" :key="item.name"
-            :to="{ name: item.name }"
-            class="tab" :class="{ active: item.name === 'dashboard' }"
-          >{{ item.label }}</router-link>
-        </nav>
+        <TopNav :start="3" />
         <router-link class="icon-btn" :to="{ name: 'alarms' }" title="告警">
           <span class="bell" />{{ unacked.length }}
         </router-link>
