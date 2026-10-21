@@ -78,3 +78,35 @@ def csrf_matches(cookie_value: str | None, header_value: str | None) -> bool:
     if not cookie_value or not header_value:
         return False
     return hmac.compare_digest(cookie_value, header_value)
+
+
+# ---------- 设备凭据的"封存" ----------
+# 说明：这不是强加密。平台要拿原文去连设备，任何本地密钥都能被同机读取，
+# 这一层只是避免"数据库里直接看到明文密码"，真正防线是网络隔离与最小权限。
+# 用 SHA256(secret|nonce) 做密钥流异或，避免引入 cryptography 依赖。
+
+def seal(plain: str, *, secret: str) -> str:
+    import hashlib
+    import os
+
+    if not plain:
+        return ""
+    nonce = os.urandom(16)
+    key = hashlib.sha256(secret.encode() + nonce).digest()
+    data = plain.encode()
+    out = bytes(b ^ key[i % len(key)] for i, b in enumerate(data))
+    return _b64(nonce + out)
+
+
+def unseal(blob: str, *, secret: str) -> str:
+    import hashlib
+
+    if not blob:
+        return ""
+    try:
+        raw = _unb64(blob)
+        nonce, data = raw[:16], raw[16:]
+        key = hashlib.sha256(secret.encode() + nonce).digest()
+        return bytes(b ^ key[i % len(key)] for i, b in enumerate(data)).decode()
+    except Exception:  # noqa: BLE001
+        return ""

@@ -57,6 +57,27 @@ export interface VideoRow {
   go2rtc_url: string | null
 }
 
+export interface DeviceItem {
+  id: number
+  name: string
+  device_type: string
+  adapter: string
+  adapter_label: string
+  supported: boolean
+  station: string
+  ip: string
+  port: number
+  ws_port: number
+  username: string | null
+  mode: string
+  is_active: boolean
+  version: string | null
+  slam_type: string | null
+  last_seen: string | null
+  note: string | null
+  needs: string[]
+}
+
 export interface RobotRow {
   id: number
   name: string
@@ -132,6 +153,17 @@ export const api = {
   me: () => request<User>('/auth/me'),
 
   robots: () => request<RobotRow[]>('/robots'),
+
+  // 设备台账（多设备）
+  devices: () => request<DeviceItem[]>('/devices'),
+  deviceMeta: () => request<{ device_types: { value: string; label: string }[]; adapters: Record<string, { label: string; device_type: string; supported: boolean; needs: string[]; note: string }> }>('/devices/meta'),
+  createDevice: (body: Record<string, unknown>) =>
+    request<DeviceItem>('/devices', { method: 'POST', body }),
+  updateDevice: (id: number, body: Record<string, unknown>) =>
+    request<DeviceItem>(`/devices/${id}`, { method: 'PATCH', body }),
+  deleteDevice: (id: number) => request<{ ok: boolean }>(`/devices/${id}`, { method: 'DELETE' }),
+  testDevice: (id: number) =>
+    request<{ tcp: boolean; http: boolean; detail: string }>(`/devices/${id}/test`, { method: 'POST' }),
 
   videos: () => request<VideoRow[]>('/videos'),
   registerGo2rtc: (id: number) =>
