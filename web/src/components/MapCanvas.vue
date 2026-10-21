@@ -9,6 +9,8 @@ const props = defineProps<{
   pose: { x?: number; y?: number; theta_rad?: number } | null
   stale: boolean
   trail?: { x: number; y: number }[]
+  /** 深色大屏模式：底图反色成黑底青灰栅格（浅色 SLAM 图直接贴会刺眼） */
+  dark?: boolean
 }>()
 
 const canvas = ref<HTMLCanvasElement | null>(null)
@@ -81,7 +83,7 @@ function draw() {
   if (!ctx) return
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
   ctx.clearRect(0, 0, w, h)
-  ctx.fillStyle = '#f7f9fc'
+  ctx.fillStyle = props.dark ? '#040a14' : '#f7f9fc'
   ctx.fillRect(0, 0, w, h)
 
   if (!img || !ready) {
@@ -91,12 +93,14 @@ function draw() {
     return
   }
 
-  // 底图略微提亮，让点位和机器人更清楚
+  // 底图：深色模式下反色成黑底青灰栅格，浅色模式只做轻微提亮
   ctx.save()
   ctx.translate(offsetX, offsetY)
   ctx.scale(scale, scale)
+  if (props.dark) ctx.filter = 'invert(1) hue-rotate(172deg) saturate(0.55) brightness(1.25)'
   ctx.drawImage(img, 0, 0)
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.18)'
+  ctx.filter = 'none'
+  ctx.fillStyle = props.dark ? 'rgba(4, 10, 20, 0.18)' : 'rgba(255, 255, 255, 0.18)'
   ctx.fillRect(0, 0, img.width, img.height)
   ctx.restore()
 
@@ -110,10 +114,12 @@ function draw() {
       if (i === 0) ctx.moveTo(sx, sy)
       else ctx.lineTo(sx, sy)
     })
-    ctx.strokeStyle = 'rgba(22, 119, 255, 0.35)'
+    ctx.strokeStyle = props.dark ? 'rgba(41, 212, 255, 0.55)' : 'rgba(22, 119, 255, 0.35)'
+    if (props.dark) ctx.setLineDash([6, 5])
     ctx.lineWidth = 1.6
     ctx.lineJoin = 'round'
     ctx.stroke()
+    ctx.setLineDash([])
   }
 
   // 点位
@@ -123,18 +129,20 @@ function draw() {
     const sy = offsetY + py * scale
     ctx.beginPath()
     ctx.arc(sx, sy, 7, 0, Math.PI * 2)
-    ctx.fillStyle = 'rgba(22, 119, 255, 0.14)'
+    ctx.fillStyle = props.dark ? 'rgba(59, 130, 246, 0.22)' : 'rgba(22, 119, 255, 0.14)'
     ctx.fill()
     ctx.beginPath()
     ctx.arc(sx, sy, 3.2, 0, Math.PI * 2)
-    ctx.fillStyle = '#1677ff'
+    ctx.fillStyle = props.dark ? '#3b82f6' : '#1677ff'
+    if (props.dark) { ctx.shadowColor = 'rgba(59,130,246,.9)'; ctx.shadowBlur = 10 }
     ctx.fill()
+    ctx.shadowBlur = 0
     if (p.name) {
       ctx.font = '11px "PingFang SC", "Microsoft YaHei", sans-serif'
       const tw = ctx.measureText(p.name).width
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'
+      ctx.fillStyle = props.dark ? 'rgba(6, 14, 26, 0.8)' : 'rgba(255, 255, 255, 0.9)'
       ctx.fillRect(sx + 9, sy - 17, tw + 8, 15)
-      ctx.fillStyle = '#6b7a8c'
+      ctx.fillStyle = props.dark ? '#a9bbd6' : '#6b7a8c'
       ctx.fillText(p.name, sx + 13, sy - 6)
     }
   }
@@ -145,11 +153,13 @@ function draw() {
     const [px, py] = worldToPixel(pose.x, pose.y)
     const sx = offsetX + px * scale
     const sy = offsetY + py * scale
-    const color = props.stale ? '#9aa8b8' : '#1677ff'
+    const color = props.stale ? '#7e8ca3' : props.dark ? '#29d4ff' : '#1677ff'
 
     ctx.beginPath()
     ctx.arc(sx, sy, 13, 0, Math.PI * 2)
-    ctx.fillStyle = props.stale ? 'rgba(154, 168, 184, 0.15)' : 'rgba(22, 119, 255, 0.12)'
+    ctx.fillStyle = props.stale
+      ? 'rgba(126, 140, 163, 0.15)'
+      : props.dark ? 'rgba(41, 212, 255, 0.16)' : 'rgba(22, 119, 255, 0.12)'
     ctx.fill()
 
     ctx.save()
@@ -161,12 +171,16 @@ function draw() {
     ctx.lineTo(-6.5, -6)
     ctx.closePath()
     ctx.fillStyle = color
+    if (props.dark && !props.stale) {
+      ctx.shadowColor = 'rgba(41, 212, 255, 0.9)'
+      ctx.shadowBlur = 14
+    }
     ctx.fill()
     ctx.restore()
   }
 
   if (props.stale) {
-    ctx.fillStyle = 'rgba(247, 249, 252, 0.55)'
+    ctx.fillStyle = props.dark ? 'rgba(4, 10, 20, 0.55)' : 'rgba(247, 249, 252, 0.55)'
     ctx.fillRect(0, 0, w, h)
     ctx.fillStyle = '#e8912a'
     ctx.font = 'bold 13px "PingFang SC", "Microsoft YaHei", sans-serif'
@@ -221,7 +235,7 @@ onBeforeUnmount(() => ro?.disconnect())
 </script>
 
 <template>
-  <div ref="wrap" class="map-wrap">
+  <div ref="wrap" class="map-wrap" :class="{ dark }">
     <canvas
       ref="canvas"
       @wheel="onWheel"
@@ -262,6 +276,22 @@ onBeforeUnmount(() => ro?.disconnect())
   background-size: 18px 18px;
   border: 1px solid var(--line);
 }
+.map-wrap.dark {
+  background-color: #040a14;
+  background-image: radial-gradient(rgba(64, 158, 255, 0.12) 1px, transparent 1px);
+  border-color: rgba(64, 158, 255, 0.25);
+  border-radius: 2px;
+}
+.map-wrap.dark .hud {
+  background: rgba(8, 18, 34, 0.82);
+  border-color: rgba(64, 158, 255, 0.28);
+  color: #a9bbd6;
+  box-shadow: none;
+}
+.map-wrap.dark .k.point { background: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
+.map-wrap.dark .k.robot { background: #29d4ff; }
+.map-wrap.dark .k.trail { border-top-color: rgba(41, 212, 255, 0.55); }
+.map-wrap.dark .scalebar i { border-color: #6b7c99; }
 canvas { width: 100%; height: 100%; display: block; cursor: crosshair; }
 
 .hud {
