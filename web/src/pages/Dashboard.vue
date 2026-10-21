@@ -348,16 +348,19 @@ async function logout() {
 }
 .hdr-left { display: flex; align-items: center; gap: 14px; }
 .logo { display: flex; align-items: center; gap: 9px; }
-/* 和之前那个 30×30 的小图标保持同样体量 */
+/* 透明底直接放蓝底上：靠外发光把轮廓托出来 */
 .logo-badge {
   display: flex; align-items: center; justify-content: center;
   height: 30px;
-  padding: 0 6px;
-  background: #fff;
-  border-radius: 2px;
-  box-shadow: 0 0 10px rgba(0, 40, 100, 0.35);
 }
-.logo-img { height: 20px; width: auto; max-width: 120px; object-fit: contain; display: block; }
+.logo-img {
+  height: 28px; width: auto; max-width: 140px;
+  object-fit: contain; display: block;
+  /* 提亮但不糊：保留蓝色相，只抬亮度 + 一圈淡青描边 */
+  filter: brightness(1.9) saturate(1.05)
+          drop-shadow(0 0 3px rgba(220, 250, 255, 0.95))
+          drop-shadow(0 0 10px rgba(110, 210, 255, 0.5));
+}
 .mark {
   width: 30px; height: 30px; display: grid; place-items: center;
   color: #eaf7ff; font-size: 17px;
