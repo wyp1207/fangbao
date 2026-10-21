@@ -9,6 +9,14 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_csrf
 from app.core.config import get_settings
+
+
+def _cookie_secure(request: Request, settings) -> bool:
+    """部署在 http 内网时不能给 cookie 加 Secure，否则浏览器不回传。"""
+    if settings.cookie_secure is not None:
+        return bool(settings.cookie_secure)
+    proto = (request.headers.get("x-forwarded-proto") or request.url.scheme or "").lower()
+    return proto == "https"
 from app.core.errors import Unauthorized
 from app.core.security import create_access_token, hash_password, new_csrf_token, verify_password
 from app.db.session import get_db
@@ -59,7 +67,7 @@ def login(body: LoginIn, response: Response, request: Request,
         ttl_minutes=settings.jwt_ttl_minutes,
     )
     csrf = new_csrf_token()
-    secure = not settings.is_dev
+    secure = _cookie_secure(request, settings)
     response.set_cookie(
         settings.cookie_name, token, httponly=True, samesite="lax",
         secure=secure, max_age=settings.jwt_ttl_minutes * 60, path="/",

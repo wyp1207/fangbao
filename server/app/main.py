@@ -46,6 +46,10 @@ async def lifespan(app: FastAPI):
     if settings.is_dev:
         create_all()
         bootstrap()
+    else:
+        # 生产库结构由 alembic 迁移负责，这里只补"空库没有账号"的兜底
+        from app.db.init import ensure_bootstrap
+        ensure_bootstrap()
 
     adapter = build_adapter(settings)
     cache = StateCache()

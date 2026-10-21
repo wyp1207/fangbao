@@ -1,0 +1,39 @@
+# 构建上下文瘦身 + 防止把本地数据打进镜像
+# 注意：构建上下文是仓库根目录，这里的路径都是相对根目录
+
+# 本地数据（绝对不能进镜像）
+server/data/
+server/data/**
+*.db
+*.db-wal
+*.db-shm
+
+# 依赖与产物
+web/node_modules/
+web/dist/
+**/__pycache__/
+**/*.pyc
+.venv/
+venv/
+.pytest_cache/
+web/.npm-cache/
+web/.vite/
+
+# 版本库与文档
+.git/
+.gitignore
+docs/
+_backup/
+probe_out/
+
+# 一次性中间产物
+rel.db
+_jcrob_pdf_text.txt
+_screens_contact.png
+_ui_contact.jpg
+_xlsx_image1.png
+_tech_spec_dump.txt
+
+# 部署密钥
+deploy/env
+deploy/docker-compose.local.yml

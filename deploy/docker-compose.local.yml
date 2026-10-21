@@ -1,0 +1,17 @@
+﻿# 本地冒烟用：只把数据库换成 SQLite、绑定挂载换命名卷，不改生产文件
+services:
+  jc-server:
+    environment:
+      JC_DB_URL: sqlite:////app/data/local.db
+    volumes:
+      - jc-data:/app/data
+      - jc-logs:/app/logs
+    depends_on: !reset []
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+  jc-nginx:
+    ports: ["8099:80"]
+
+volumes:
+  jc-data:
+  jc-logs:

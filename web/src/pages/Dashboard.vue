@@ -819,7 +819,7 @@ async function logout() {
 
 /* 告警趋势（空坐标系，不画假曲线） */
 .trend-wrap { margin-top: 4px; flex: none; }
-.trend { height: 46px; display: flex; align-items: stretch; gap: 4px; }
+.trend { position: relative; height: 46px; display: flex; align-items: stretch; gap: 4px; }
 .t-head { display: flex; justify-content: space-between; font-size: 10.5px; color: #9fd2ff; margin-bottom: 2px; }
 .t-head em { font-style: normal; color: #ffe08a; }
 .t-plot {
@@ -998,7 +998,7 @@ async function logout() {
 .embed-expand:hover { border-color: #7fe9ff; color: #fff; }
 
 /* 近 7 日告警趋势柱 */
-.trend { height: 46px; display: flex; align-items: stretch; gap: 4px; }
+.trend { position: relative; height: 46px; display: flex; align-items: stretch; gap: 4px; }
 .trend-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 2px; min-height: 0; }
 .trend-col .bar-stack {
   flex: 1 1 auto; width: 72%; min-height: 0;

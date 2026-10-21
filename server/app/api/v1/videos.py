@@ -116,8 +116,12 @@ def _play_url(name: str) -> str | None:
 
 
 def _go2rtc_url(stream_name: str) -> str | None:
-    base = getattr(get_settings(), "go2rtc_base", "") or ""
-    if not base or not stream_name:
+    settings = get_settings()
+    if not stream_name:
+        return None
+    # 部署时优先用同源反代前缀（nginx /go2rtc/），开发时回落到直连地址
+    base = getattr(settings, "go2rtc_public_base", "") or getattr(settings, "go2rtc_base", "") or ""
+    if not base:
         return None
     return f"{base.rstrip('/')}/stream.html?src={stream_name}&mode=mse"
 

@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     secret_key: str = Field(default="dev-only-secret-change-me-please-32b")
     jwt_ttl_minutes: int = 240
     cookie_name: str = "jc_token"
+
+    # Cookie 的 Secure 标记：None = 按实际协议自动判断（https 才加 Secure）。
+    # 内网 http 部署时如果无脑加 Secure，浏览器不会回传 cookie，
+    # 表现就是"登录成功但所有接口 401"。
+    cookie_secure: bool | None = None
     csrf_cookie: str = "jc_csrf"
 
     db_url: str = f"sqlite:///{SERVER_ROOT / 'data' / 'app.db'}"
@@ -41,6 +46,10 @@ class Settings(BaseSettings):
     video_relay_url: str = ""
     # go2rtc 的 HTTP 地址（如 http://127.0.0.1:1984）；配了就用它的 MSE/WebRTC 播放器
     go2rtc_base: str = ""
+
+    # 浏览器侧的 go2rtc 地址。部署时 nginx 反代 /go2rtc/ 到 go2rtc，
+    # 这里填 /go2rtc，前端就用同源相对路径，不用暴露 1984 端口、也没有跨域问题
+    go2rtc_public_base: str = ""
     # MJPEG 转码宽度：太小会糊、太大吃 CPU
     video_scale_width: int = 1280
     # 录像开关：保留策略未定前默认关闭，避免盘被写满
