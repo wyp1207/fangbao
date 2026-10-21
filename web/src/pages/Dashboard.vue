@@ -232,14 +232,31 @@ async function logout() {
         <div class="field"><label>当前场站</label><DarkSelect :model-value="site" :options="sites" width="190px" @update:model-value="onSite" /></div>
         <div class="field"><label>当前设备</label><DarkSelect :model-value="deviceId" :options="devices" width="170px" @update:model-value="onDevice" /></div>
         <span class="tool-icons">
-          <button class="ti" type="button" title="锁定屏幕" @click="lockScreen">🔒</button>
+          <button class="ti" type="button" title="锁定屏幕" @click="lockScreen">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <rect x="3" y="7" width="10" height="7" rx="1.2" />
+              <path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7" />
+            </svg>
+          </button>
           <button class="ti" type="button" :title="`告警：${unacked.length} 条未确认`" @click="goAlarms('unacked')">
-            🔔<em v-if="unacked.length" class="ti-badge">{{ unacked.length }}</em>
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M8 2.2a3.6 3.6 0 0 0-3.6 3.6v2.4L3.2 11h9.6l-1.2-2.8V5.8A3.6 3.6 0 0 0 8 2.2Z" />
+              <path d="M6.4 12.6a1.6 1.6 0 0 0 3.2 0" />
+            </svg>
+            <em v-if="unacked.length" class="ti-badge">{{ unacked.length }}</em>
           </button>
           <button class="ti" type="button" title="消息中心" @click="router.push({ name: 'messages' })">
-            ✉<em v-if="msgUnread" class="ti-badge">{{ msgUnread }}</em>
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <rect x="2" y="3.5" width="12" height="9" rx="1.2" />
+              <path d="M2.4 4.4 8 8.6l5.6-4.2" />
+            </svg>
+            <em v-if="msgUnread" class="ti-badge">{{ msgUnread }}</em>
           </button>
-          <button class="ti" type="button" title="全屏 / 退出全屏" @click="toggleFullscreen">⛶</button>
+          <button class="ti" type="button" title="全屏 / 退出全屏" @click="toggleFullscreen">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M6 2.5H2.5V6M10 2.5h3.5V6M6 13.5H2.5V10M10 13.5h3.5V10" />
+            </svg>
+          </button>
         </span>
       </div>
 
@@ -551,13 +568,20 @@ async function logout() {
 .tool-icons { display: flex; gap: 6px; }
 .ti {
   position: relative;
-  width: 24px; height: 22px; display: grid; place-items: center;
-  font-size: 11px; font-style: normal;
+  width: 26px; height: 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0; line-height: 1;
   background: rgba(0, 90, 170, 0.6);
   border: 1px solid rgba(111, 227, 255, 0.35);
   color: #dff0ff; cursor: pointer;
   transition: all 0.15s;
 }
+.ti svg {
+  width: 13px; height: 13px; display: block;
+  fill: none; stroke: currentColor; stroke-width: 1.4;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.ti:hover { color: #fff; }
 .ti:hover { border-color: #7fe9ff; box-shadow: 0 0 8px rgba(80, 200, 255, 0.5); }
 .ti-badge {
   position: absolute; top: -6px; right: -6px;
