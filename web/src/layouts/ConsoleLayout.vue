@@ -74,7 +74,12 @@ async function onLogout() {
   border-bottom: 1px solid rgba(111, 227, 255, 0.5);
   box-shadow: 0 2px 12px rgba(0, 40, 110, 0.5);
 }
-.logo { display: flex; align-items: center; gap: 9px; min-width: 190px; }
+.logo { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.logo-badge { display: flex; align-items: center; height: 26px; }
+.logo-img {
+  height: 22px; width: auto; display: block;
+  filter: contrast(1.8) saturate(1.1) drop-shadow(0 0 5px rgba(190, 240, 255, 0.5));
+}
 .mark {
   width: 30px; height: 30px; display: grid; place-items: center;
   color: #eaf7ff; font-size: 17px;

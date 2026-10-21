@@ -357,7 +357,7 @@ async function logout() {
   height: 28px; width: auto; max-width: 140px;
   object-fit: contain; display: block;
   /* 亮度保持原样，只拉对比度：边缘更实，蓝底上更容易看出形状 */
-  filter: contrast(1.55) saturate(1.1)
+  filter: contrast(1.8) saturate(1.1)
           drop-shadow(0 0 5px rgba(190, 240, 255, 0.5));
 }
 .mark {

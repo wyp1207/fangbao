@@ -1,0 +1,23 @@
+OK  /robot-status          panels= 2 textlen=200
+OK  /map                   panels= 2 textlen=225
+OK  /video                 panels= 1 textlen=122
+OK  /room                  panels= 1 textlen=123
+OK  /env                   panels= 1 textlen=214
+OK  /tasks                 panels= 2 textlen=250
+OK  /points                panels= 1 textlen=235
+OK  /task-calendar         panels= 1 textlen=179
+OK  /alarms                panels= 2 textlen=279
+OK  /alarm-rules           panels= 1 textlen=233
+OK  /history/tasks         panels= 1 textlen=207
+OK  /history/alarms        panels= 1 textlen=154
+OK  /run-data              panels= 1 textlen=188
+OK  /robots                panels= 2 textlen=414
+OK  /cameras               panels= 1 textlen=346
+OK  /env-device            panels= 1 textlen=176
+OK  /record/plan           panels= 1 textlen=342
+OK  /record/playback       panels= 1 textlen=151
+OK  /users                 panels= 1 textlen=137
+OK  /settings              panels= 4 textlen=442
+OK  /oplog                 panels= 1 textlen=176
+
+pageerrors:

@@ -10,17 +10,18 @@ const robot = useRobotStore()
 const route = useRoute()
 const router = useRouter()
 
+type Tab = 'tasks' | 'alarms'
+// 先用路由 meta 定初值，避免 watch(immediate) 在 tab 声明前执行（TDZ 白屏）
+const initialTab = route.meta.tab === 'alarms' ? 'alarms' : 'tasks'
+const tab = ref<Tab>(initialTab)
+
 // 菜单里的「任务数据 / 告警数据」是同一页的两种模式，靠路由 meta 区分
 watch(
   () => route.meta.tab,
   (t) => {
     if (t === 'tasks' || t === 'alarms') tab.value = t
   },
-  { immediate: true },
 )
-
-type Tab = 'tasks' | 'alarms'
-const tab = ref<Tab>('tasks')
 
 const tasks = ref<TaskItem[]>([])
 const loading = ref(false)
