@@ -158,7 +158,7 @@ async function logout() {
           <span class="bell" />{{ unacked.length }}
         </router-link>
         <div class="user">
-          <span class="avatar">{{ (auth.user?.username ?? 'A').slice(0, 1).toUpperCase() }}</span>
+          <span class="avatar" :title="`当前账号：${auth.user?.username ?? '未登录'}`">{{ (auth.user?.username ?? 'A').slice(0, 1).toUpperCase() }}</span>
         </div>
         <button class="logout" @click="logout">退出</button>
       </div>
