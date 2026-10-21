@@ -137,7 +137,7 @@ onMounted(async () => {
           <label>止</label>
           <input class="input date" type="date" v-model="to" />
         </template>
-        <button class="btn btn-sm" @click="reset">重置</button>
+        <button class="btn btn-sm warn" @click="reset">重置</button>
         <span class="grow" />
         <button class="btn btn-sm" :disabled="loading" @click="loadTasks">刷新</button>
         <button class="btn btn-sm primary" @click="exportCurrent">导出 CSV</button>

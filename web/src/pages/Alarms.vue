@@ -12,6 +12,8 @@ const message = ref('')
 const keyword = ref('')
 const levelFilter = ref('')
 const ackFilter = ref('')
+const page = ref(1)
+const pageSize = 10
 
 const levelText: Record<string, string> = { critical: '严重', warn: '提醒' }
 const levelOptions = [
@@ -34,6 +36,13 @@ const filtered = computed(() =>
     return true
   }),
 )
+
+const paged = computed(() => filtered.value.slice((page.value - 1) * pageSize, page.value * pageSize))
+const pageCount = computed(() => Math.max(1, Math.ceil(filtered.value.length / pageSize)))
+
+function goto(p: number) {
+  page.value = Math.min(Math.max(1, p), pageCount.value)
+}
 
 const rules = [
   { metric: 'lel（可燃气体）', threshold: '未标定', note: '需要现场安全员给定 ppm 阈值' },
@@ -58,6 +67,7 @@ function reset() {
   keyword.value = ''
   levelFilter.value = ''
   ackFilter.value = ''
+  page.value = 1
 }
 
 onMounted(() => { void robot.refreshAlarms() })
@@ -78,8 +88,8 @@ onMounted(() => { void robot.refreshAlarms() })
         <DarkSelect v-model="levelFilter" :options="levelOptions" width="110px" />
         <label>状态</label>
         <DarkSelect v-model="ackFilter" :options="ackOptions" width="110px" />
-        <button class="btn btn-sm" @click="robot.refreshAlarms()">查询</button>
-        <button class="btn btn-sm" @click="reset">重置</button>
+        <button class="btn btn-sm ok" @click="robot.refreshAlarms()">查询</button>
+        <button class="btn btn-sm warn" @click="reset">重置</button>
         <span class="grow" />
         <button class="btn btn-sm" @click="robot.refreshAlarms()">刷新</button>
         <button class="btn btn-sm" @click="toast('导出待 W5 落库后开放', 'warn')">导出</button>
@@ -97,8 +107,8 @@ onMounted(() => { void robot.refreshAlarms() })
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(a, i) in filtered" :key="a.id">
-            <td>{{ i + 1 }}</td>
+          <tr v-for="(a, i) in paged" :key="a.id">
+            <td>{{ (page - 1) * pageSize + i + 1 }}</td>
             <td class="num dim">{{ a.started_at.replace('T', ' ').slice(0, 19) }}</td>
             <td>
               <span class="tag" :class="a.level === 'critical' ? 'danger' : 'warn'">{{ levelText[a.level] }}</span>
@@ -109,7 +119,7 @@ onMounted(() => { void robot.refreshAlarms() })
               <span v-else class="danger">未确认</span>
             </td>
             <td>
-              <button class="link-btn" :disabled="!!a.acked_at || !auth.canWrite" @click="ack(a.id)">确认</button>
+              <button class="act" title="确认告警" :disabled="!!a.acked_at || !auth.canWrite" @click="ack(a.id)">✓</button>
             </td>
           </tr>
           <tr v-if="!filtered.length">
@@ -119,10 +129,14 @@ onMounted(() => { void robot.refreshAlarms() })
       </table>
 
       <div class="pager">
-        <span>共 {{ filtered.length }} 条</span>
+        <span>共 {{ filtered.length }} 条 · 第 {{ page }}/{{ pageCount }} 页</span>
         <span class="spacer" />
-        <button class="on">1</button>
-        <button disabled>下一页</button>
+        <button :disabled="page <= 1" @click="goto(page - 1)">上一页</button>
+        <button
+          v-for="n in pageCount" :key="n"
+          :class="{ on: n === page }" @click="goto(n)"
+        >{{ n }}</button>
+        <button :disabled="page >= pageCount" @click="goto(page + 1)">下一页</button>
       </div>
 
       <p v-if="message" class="danger small">{{ message }}</p>

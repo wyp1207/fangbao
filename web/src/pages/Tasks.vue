@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { api, type TaskItem } from '@/api'
 import DarkSelect from '@/components/DarkSelect.vue'
 import { toast } from '@/composables/useToast'
+import WriteLockedDialog from '@/components/WriteLockedDialog.vue'
 
 const tasks = ref<TaskItem[]>([])
 const loading = ref(false)
@@ -48,6 +49,13 @@ const filtered = computed(() =>
   }),
 )
 
+const paged = computed(() => filtered.value.slice((page.value - 1) * pageSize, page.value * pageSize))
+const pageCount = computed(() => Math.max(1, Math.ceil(filtered.value.length / pageSize)))
+
+function goto(p: number) {
+  page.value = Math.min(Math.max(1, p), pageCount.value)
+}
+
 async function reload() {
   loading.value = true
   error.value = ''
@@ -61,6 +69,9 @@ async function reload() {
 }
 
 const detail = ref<TaskItem | null>(null)
+const locked = ref('')
+const page = ref(1)
+const pageSize = 10
 
 function tryWrite(action: string) {
   toast(`${action}未开放：需真机联调通过 + 现场授权签字`, 'warn', 3000)
@@ -70,6 +81,7 @@ function reset() {
   keyword.value = ''
   stateFilter.value = ''
   loopFilter.value = ''
+  page.value = 1
 }
 
 onMounted(reload)
@@ -90,11 +102,11 @@ onMounted(reload)
         <DarkSelect v-model="stateFilter" :options="stateOptions" width="130px" />
         <label>循环</label>
         <DarkSelect v-model="loopFilter" :options="loopOptions" width="96px" />
-        <button class="btn btn-sm" :disabled="loading" @click="reload">查询</button>
-        <button class="btn btn-sm" @click="reset">重置</button>
+        <button class="btn btn-sm ok" :disabled="loading" @click="reload">查询</button>
+        <button class="btn btn-sm warn" @click="reset">重置</button>
         <span class="grow" />
-        <button class="btn btn-sm" disabled>新建任务</button>
-        <button class="btn btn-sm" disabled>批量删除</button>
+        <button class="btn btn-sm" @click="locked = '新建任务'">新建任务</button>
+        <button class="btn btn-sm" @click="locked = '批量删除任务'">批量删除</button>
       </div>
 
       <table class="grid">
@@ -111,8 +123,8 @@ onMounted(reload)
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(t, i) in filtered" :key="t.id">
-            <td>{{ i + 1 }}</td>
+          <tr v-for="(t, i) in paged" :key="t.id">
+            <td>{{ (page - 1) * pageSize + i + 1 }}</td>
             <td>{{ t.name }}</td>
             <td><span class="tag" :class="stateTone[t.state] ?? ''">{{ stateText[t.state] ?? t.state }}</span></td>
             <td class="num">{{ Array.isArray(t.sub_tasks) ? t.sub_tasks.length : 0 }}</td>
@@ -121,9 +133,9 @@ onMounted(reload)
             <td class="num dim">{{ t.id.slice(0, 8) }}…</td>
             <td>
               <div class="row-actions">
-                <button class="link-btn" @click="detail = t">详情</button>
-                <button class="link-btn" @click="tryWrite('下发')">下发</button>
-                <button class="link-btn" @click="tryWrite('取消')">取消</button>
+                <button class="act" title="查看详情" @click="detail = t">☰</button>
+                <button class="act" title="下发任务（未开放）" @click="locked = '下发任务'">▶</button>
+                <button class="act danger" title="取消任务（未开放）" @click="locked = '取消任务'">■</button>
               </div>
             </td>
           </tr>
@@ -134,10 +146,14 @@ onMounted(reload)
       </table>
 
       <div class="pager">
-        <span>共 {{ filtered.length }} 条</span>
+        <span>共 {{ filtered.length }} 条 · 第 {{ page }}/{{ pageCount }} 页</span>
         <span class="spacer" />
-        <button class="on">1</button>
-        <button disabled>下一页</button>
+        <button :disabled="page <= 1" @click="goto(page - 1)">上一页</button>
+        <button
+          v-for="n in pageCount" :key="n"
+          :class="{ on: n === page }" @click="goto(n)"
+        >{{ n }}</button>
+        <button :disabled="page >= pageCount" @click="goto(page + 1)">下一页</button>
       </div>
 
       <p v-if="error" class="danger small">{{ error }}</p>
@@ -167,13 +183,15 @@ onMounted(reload)
     <section class="panel">
       <div class="panel-title"><span>下发与执行</span></div>
       <div class="toolbar" style="margin-bottom: 8px">
-        <button class="btn btn-sm" disabled>下发</button>
-        <button class="btn btn-sm" disabled>暂停</button>
-        <button class="btn btn-sm" disabled>继续</button>
-        <button class="btn btn-sm" disabled>取消当前任务</button>
+        <button class="btn btn-sm" @click="locked = '下发任务'">下发</button>
+        <button class="btn btn-sm" @click="locked = '暂停任务'">暂停</button>
+        <button class="btn btn-sm" @click="locked = '继续任务'">继续</button>
+        <button class="btn btn-sm" @click="locked = '取消当前任务'">取消当前任务</button>
         <span class="grow" />
         <span class="tag warn">写操作未开放</span>
       </div>
+      <WriteLockedDialog :open="!!locked" :action="locked" @close="locked = ''" />
+
       <p class="muted small">
         “取消任务”不是安全急停。平台没有急停下发接口，安全急停只能按车上的硬件按钮。
         按方案 §5.7，取消始终带 <code>jcrob_task_id</code>；“取消全部任务”不向前端暴露。

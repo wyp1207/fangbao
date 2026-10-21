@@ -1,6 +1,7 @@
 ﻿<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import MapCanvas from '@/components/MapCanvas.vue'
+import WriteLockedDialog from '@/components/WriteLockedDialog.vue'
 import { api, type MapMeta, type NavPoint } from '@/api'
 import { useRobotStore } from '@/stores/robot'
 
@@ -34,6 +35,7 @@ onMounted(async () => {
   maps.value = await api.maps()
   if (maps.value.length) await choose(maps.value[0].name)
 })
+const locked = ref('')
 </script>
 
 <template>
@@ -83,9 +85,11 @@ onMounted(async () => {
         />
       </div>
       <p v-if="error" class="danger small">{{ error }}</p>
+      <WriteLockedDialog :open="!!locked" :action="locked" @close="locked = ''" />
+
       <div class="actions">
-        <button class="btn" disabled>新增点位（待真机单位实测）</button>
-        <button class="btn" disabled>同步 nav_points（写操作未开放）</button>
+        <button class="btn" @click="locked = '新增点位'">新增点位</button>
+        <button class="btn" @click="locked = '同步 nav_points'">同步 nav_points</button>
       </div>
     </section>
   </div>

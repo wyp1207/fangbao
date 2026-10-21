@@ -158,11 +158,11 @@ onMounted(reload)
               <td class="num dim">{{ (u.last_login_at ?? '—').replace('T', ' ').slice(0, 19) }}</td>
               <td>
                 <div class="row-actions">
-                  <button class="link-btn" @click="resetting = u; newPassword = ''">重置密码</button>
-                  <button class="link-btn" :disabled="u.id === auth.user?.id" @click="toggleActive(u)">
-                    {{ u.is_active ? '停用' : '启用' }}
+                  <button class="act" title="重置密码" @click="resetting = u; newPassword = ''">⚿</button>
+                  <button class="act" :title="u.is_active ? '停用' : '启用'" :disabled="u.id === auth.user?.id" @click="toggleActive(u)">
+                    {{ u.is_active ? '⏸' : '▶' }}
                   </button>
-                  <button class="link-btn danger-text" :disabled="u.id === auth.user?.id" @click="remove(u)">删除</button>
+                  <button class="act danger" title="删除账号" :disabled="u.id === auth.user?.id" @click="remove(u)">🗑</button>
                 </div>
               </td>
             </tr>

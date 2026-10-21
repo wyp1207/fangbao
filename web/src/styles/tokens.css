@@ -217,3 +217,34 @@ table.grid tbody tr:hover td { background: rgba(41, 212, 255, 0.16); }
   color: #7fe9ff; font-size: 12px; padding: 0;
 }
 .link-btn[disabled] { color: #5d8fc4; cursor: not-allowed; }
+/* ---------- 参考图里的按钮色：搜索绿、重置金 ---------- */
+.btn.ok {
+  background: linear-gradient(180deg, #4ef08a, #12a34e);
+  border-color: #86ffb8; color: #03300f; font-weight: 700;
+}
+.btn.ok:hover { filter: brightness(1.08); box-shadow: 0 0 12px rgba(78, 240, 138, 0.6); }
+.btn.warn {
+  background: linear-gradient(180deg, #ffd76a, #c8860d);
+  border-color: #ffe6a3; color: #3d2500; font-weight: 700;
+}
+.btn.warn:hover { filter: brightness(1.08); box-shadow: 0 0 12px rgba(255, 207, 63, 0.6); }
+
+/* ---------- 表格行内小方块图标按钮（参考图那种） ---------- */
+.act {
+  width: 26px; height: 24px;
+  display: inline-grid; place-items: center;
+  font-size: 12px; line-height: 1;
+  color: #cfe8ff; cursor: pointer;
+  background: linear-gradient(180deg, rgba(20, 130, 220, 0.6), rgba(0, 70, 140, 0.75));
+  border: 1px solid rgba(111, 227, 255, 0.45);
+  transition: all 0.12s;
+}
+.act:hover {
+  color: #062f66;
+  background: linear-gradient(180deg, #b9ecff, #4fc3ff);
+  box-shadow: 0 0 10px rgba(120, 220, 255, 0.6);
+}
+.act[disabled] { opacity: 0.4; cursor: not-allowed; }
+.act[disabled]:hover { color: #cfe8ff; background: linear-gradient(180deg, rgba(20, 130, 220, 0.6), rgba(0, 70, 140, 0.75)); box-shadow: none; }
+.act.danger { border-color: rgba(255, 90, 90, 0.5); color: #ffb3b3; }
+.act.danger:hover { background: linear-gradient(180deg, #ff9a9a, #d32020); color: #fff; }
