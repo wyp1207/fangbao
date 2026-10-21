@@ -204,21 +204,22 @@ async function logout() {
   <div class="board">
     <!-- 顶栏：左 logo+标签 / 中间大标题 / 右标签+用户 -->
     <header class="hdr">
-      <div class="hdr-left">
-        <div class="logo">
-          <span class="logo-badge"><img class="logo-img" :src="logoUrl" alt="logo" /></span>
-        </div>
-        <TopNav :start="0" :end="4" />
+      <div class="logo">
+        <span class="logo-badge"><img class="logo-img" :src="logoUrl" alt="logo" /></span>
+        <span class="brand">AI防爆巡检</span>
       </div>
 
-      <div class="board-title">
-        <span class="wing l" />
-        <h1>智能巡检机器人管理平台</h1>
-        <span class="wing r" />
+      <div class="hdr-center">
+        <TopNav :start="0" :end="4" />
+        <div class="board-title">
+          <span class="wing l" />
+          <h1>智能巡检机器人管理平台</h1>
+          <span class="wing r" />
+        </div>
+        <TopNav :start="4" />
       </div>
 
       <div class="hdr-right">
-        <TopNav :start="4" />
         <router-link class="icon-btn" :to="{ name: 'alarms' }" title="告警">
           <span class="bell" />{{ unacked.length }}
         </router-link>
@@ -451,17 +452,28 @@ async function logout() {
 /* 顶栏 */
 .hdr {
   position: relative;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
   align-items: center;
+  justify-content: center;
   gap: 12px;
   padding: 0 16px;
   background: linear-gradient(180deg, #0a7ad0, #005da4);
   border-bottom: 1px solid rgba(111, 227, 255, 0.5);
   box-shadow: 0 2px 12px rgba(0, 40, 110, 0.5);
 }
-.hdr-left { display: flex; align-items: center; gap: 14px; }
-.logo { display: flex; align-items: center; gap: 9px; }
+.hdr-center { display: flex; align-items: center; gap: 16px; }
+.logo {
+  position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
+  display: flex; align-items: center; gap: 9px;
+  z-index: 2;
+}
+.brand {
+  font-size: 15px; font-weight: 800; letter-spacing: 0.12em;
+  background: linear-gradient(180deg, #ffffff 30%, #9fe4ff 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-shadow: 0 0 14px rgba(90, 200, 255, 0.5);
+  white-space: nowrap;
+}
 /* 透明底直接放蓝底上：靠外发光把轮廓托出来 */
 .logo-badge {
   display: flex; align-items: center; justify-content: center;
@@ -501,13 +513,15 @@ async function logout() {
   box-shadow: 0 0 14px rgba(120, 220, 255, 0.8);
 }
 
-.hdr-right { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
+.hdr-right {
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  display: flex; align-items: center; gap: 10px;
+  z-index: 2;
+}
 
 /* 中间大标题（参考图那种带翼的标题组件） */
 .board-title {
-  position: absolute; left: 50%; top: 50%;
-  transform: translate(-50%, -50%);
-  display: flex; align-items: center; gap: 16px;
+  display: flex; align-items: center; gap: 14px;
   pointer-events: none;
 }
 .board-title h1 {
@@ -781,6 +795,10 @@ async function logout() {
   .logo-text i { display: none; }
 }
 
+/* 1440 下标签要占位，品牌文字先收起，只留 logo，避免和「首页」挤在一起 */
+@media (max-width: 1560px) {
+  .brand { display: none; }
+}
 @media (max-width: 1600px) {
   .tab { padding: 4px 10px; font-size: 12.5px; }
   .board-title { gap: 10px; }

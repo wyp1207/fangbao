@@ -37,13 +37,14 @@ async function onLogout() {
     <header class="hdr">
       <div class="logo">
         <span class="logo-badge"><img class="logo-img" :src="logoUrl" alt="logo" /></span>
+        <span class="brand">AI防爆巡检</span>
       </div>
 
-      <TopNav :start="0" :end="4" />
-
-      <div class="mini-title"><span class="w" />智能巡检机器人管理平台<span class="w r" /></div>
-
-      <TopNav :start="4" />
+      <div class="hdr-center">
+        <TopNav :start="0" :end="4" />
+        <div class="mini-title"><span class="w" />智能巡检机器人管理平台<span class="w r" /></div>
+        <TopNav :start="4" />
+      </div>
 
       <div class="right">
         <span class="state" :class="state.cls">
@@ -65,13 +66,24 @@ async function onLogout() {
 .hdr {
   flex: none; height: 54px;
   position: relative; z-index: 50;   /* 让下拉菜单盖在内容区之上 */
-  display: flex; align-items: center; gap: 18px;
+  display: flex; align-items: center; justify-content: center; gap: 16px;
   padding: 0 16px;
   background: linear-gradient(180deg, #0a7ad0, #005da4);
   border-bottom: 1px solid rgba(111, 227, 255, 0.5);
   box-shadow: 0 2px 12px rgba(0, 40, 110, 0.5);
 }
-.logo { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.hdr-center { display: flex; align-items: center; gap: 16px; }
+.logo {
+  position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
+  display: flex; align-items: center; gap: 9px; z-index: 2;
+}
+.brand {
+  font-size: 14px; font-weight: 800; letter-spacing: 0.1em;
+  background: linear-gradient(180deg, #ffffff 30%, #9fe4ff 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-shadow: 0 0 12px rgba(90, 200, 255, 0.45);
+  white-space: nowrap;
+}
 .logo-badge { display: flex; align-items: center; height: 26px; }
 .logo-img {
   height: 22px; width: auto; display: block;
@@ -90,7 +102,7 @@ async function onLogout() {
 
 .tabs { display: flex; gap: 6px; min-width: 0; }
 .mini-title {
-  flex: 1; display: flex; align-items: center; justify-content: center; gap: 10px;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
   font-size: 17px; font-weight: 800; letter-spacing: 0.16em;
   background: linear-gradient(180deg, #ffffff 35%, #9fe4ff 100%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
@@ -121,7 +133,10 @@ async function onLogout() {
   display: inline-block;
 }
 
-.right { display: flex; align-items: center; gap: 12px; justify-content: flex-end; margin-left: auto; flex: none; }
+.right {
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  display: flex; align-items: center; gap: 12px; z-index: 2;
+}
 .state {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 4px 11px; font-size: 12.5px;
@@ -155,6 +170,9 @@ async function onLogout() {
   .mini-title .w { width: 22px; }
   .tab { padding: 5px 13px; font-size: 13px; }
   .logo-text i { display: none; }
+}
+@media (max-width: 1560px) {
+  .brand { display: none; }
 }
 @media (max-width: 1700px) {
   .state { display: none; }
