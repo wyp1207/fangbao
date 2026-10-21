@@ -7,9 +7,11 @@ import { toast } from '@/composables/useToast'
 const videos = ref<VideoRow[]>([])
 const running = ref<Record<number, boolean>>({})
 const storage = ref({ files: 0, bytes: 0, dir: '' })
+const keepDays = ref(30)
+const maxGb = ref(800)
 const ready = ref(false)
 const ffmpeg = ref(true)
-const paused = ref(true)   // 与后端 JC_RECORDING_ENABLED 对应；关闭时不写盘
+const paused = ref(false)   // 由后端 /recordings/status 的 enabled 决定
 
 const totalMb = computed(() => (storage.value.bytes / 1024 / 1024).toFixed(1))
 
@@ -22,21 +24,20 @@ async function load() {
     ])
     videos.value = vs
     ffmpeg.value = status.ffmpeg
+    paused.value = !status.enabled
     ready.value = true
     const map: Record<number, boolean> = {}
     for (const r of status.recorders) map[r.video_id] = r.running
     running.value = map
     storage.value = st
+    keepDays.value = status.keep_days
+    maxGb.value = status.max_gb
   } catch (e) {
     toast(e instanceof ApiError ? e.message : '录像状态读取失败', 'danger')
   }
 }
 
 async function start(v: VideoRow) {
-  if (paused.value) {
-    toast('录像已暂停：保留策略待定，暂不落盘', 'warn', 3000)
-    return
-  }
   try {
     await api.startRecording(v.id)
     toast(`开始录制：${v.name}`, 'ok')
@@ -69,8 +70,8 @@ onBeforeUnmount(() => window.clearInterval(timer))
     <section class="panel">
       <div class="panel-title">
         <span>录像计划</span>
-        <span class="tag warn">录像已暂停</span>
-        <span class="muted">保留策略待定，暂不落盘；已录的 {{ storage.files }} 段仍可回放</span>
+        <span class="tag" :class="paused ? 'warn' : 'ok'">{{ paused ? '录像已暂停' : '录像已启用' }}</span>
+        <span class="muted">保留 {{ keepDays }} 天 / 上限 {{ maxGb }} GB，超限自动删最老</span>
       </div>
 
       <div class="summary">
@@ -112,8 +113,8 @@ onBeforeUnmount(() => window.clearInterval(timer))
       </table>
 
       <p class="muted small">
-        当前状态：<b class="warn">暂停录制</b>（<code>JC_RECORDING_ENABLED=false</code>）。
-        要恢复时，先定下保留天数与容量上限（见 docs/录像保留策略-20261021.xlsx），再把这个开关打开。<br />
+        当前状态：<b :class="paused ? 'warn' : 'ok'">{{ paused ? '暂停录制（JC_RECORDING_ENABLED=false）' : '录制已启用' }}</b>。
+        保留策略见 docs/录像保留策略-20261021.xlsx；清理每 10 分钟跑一次，磁盘低于 5GB 会自动停录并告警。<br />
         录制是服务端 ffmpeg 把 RTSP 转成 H.264 分段落盘，每段 5 分钟（可配 <code>JC_RECORD_SEGMENT_SECONDS</code>）。
         1080p 转码约吃 0.3–0.5 核，所以同时最多录 2 路；要更多路建议在 go2rtc 侧录制或加转码机。
       </p>

@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 
 from app.adapters.jcrob import build_adapter
 from app.adapters.jcrob import errors as jerr
-from app.api.v1 import alarms, auth, health, messages, recordings, robots, users, videos
+from app.api.v1 import alarms, audit, auth, health, messages, recordings, robots, users, videos
 from app.core.config import get_settings
 from app.core.errors import PlatformError
 from app.core.logging import setup_logging
@@ -48,6 +48,12 @@ async def lifespan(app: FastAPI):
     adapter = build_adapter(settings)
     cache = StateCache()
     alarms = AlarmStore()
+    # 告警与消息落库：重启不丢（W5 之前的最小持久化）
+    from app.db.session import SessionLocal as _SessionLocal
+    from app.services.messages import store as message_store
+
+    alarms.attach_db(_SessionLocal)
+    message_store.attach_db(_SessionLocal)
     poller = StatusPoller(adapter, cache, settings.jcrob_poll_interval, alarms=alarms)
     poller_service = Service("status_poller", poller)
     lag = LoopLagMonitor()
@@ -57,6 +63,10 @@ async def lifespan(app: FastAPI):
     app.state.alarms = alarms
     app.state.services = Services([poller_service], lag)
 
+    from app.services.recorder import janitor as record_janitor
+
+    record_janitor.start()
+
     poller_service.start()
     lag.start()
     try:
@@ -65,6 +75,7 @@ async def lifespan(app: FastAPI):
         # 录像进程是外部 ffmpeg，必须显式收掉，否则会变成孤儿进程
         from app.services.recorder import registry as recorder_registry
         recorder_registry.stop_all()
+        record_janitor.stop()
         await poller_service.stop()
         await lag.stop()
         await adapter.aclose()
@@ -102,6 +113,7 @@ def create_app() -> FastAPI:
     app.include_router(videos.router, prefix=settings.api_prefix)
     app.include_router(recordings.router, prefix=settings.api_prefix)
     app.include_router(messages.router, prefix=settings.api_prefix)
+    app.include_router(audit.router, prefix=settings.api_prefix)
     return app
 
 

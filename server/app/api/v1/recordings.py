@@ -39,7 +39,15 @@ def list_recordings(
 def recording_status(
     _: User = Depends(require_roles("admin", "operator", "viewer")),
 ) -> dict:
-    return {"recorders": registry.status(), "ffmpeg": bool(FFMPEG)}
+    from app.core.config import get_settings
+
+    return {
+        "recorders": registry.status(),
+        "ffmpeg": bool(FFMPEG),
+        "enabled": bool(getattr(get_settings(), "recording_enabled", False)),
+        "keep_days": getattr(get_settings(), "record_keep_days", 30),
+        "max_gb": getattr(get_settings(), "record_max_gb", 800),
+    }
 
 
 @router.post("/{video_id}/start", dependencies=[Depends(require_csrf)])

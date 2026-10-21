@@ -9,6 +9,8 @@ from sqlalchemy import select
 from app.core.config import get_settings
 from app.core.security import hash_password
 from app.db.session import Base, SessionLocal, engine
+from app.models.alarm import AlarmRecord  # noqa: F401
+from app.models.message import MessageRecord  # noqa: F401
 from app.models.robot import Robot
 from app.models.user import User
 from app.models.video_source import VideoSource  # noqa: F401  create_all 需要先导入

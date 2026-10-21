@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { api, type AlarmItem } from '@/api'
 import { useRobotStore } from '@/stores/robot'
 import { useAuthStore } from '@/stores/auth'
 import DarkSelect from '@/components/DarkSelect.vue'
@@ -38,21 +39,29 @@ const ackOptions = [
   { value: 'acked', label: '已确认' },
 ]
 
-const filtered = computed(() =>
-  robot.alarms.filter((a) => {
-    if (keyword.value && !a.message.includes(keyword.value)) return false
-    if (levelFilter.value && a.level !== levelFilter.value) return false
-    if (ackFilter.value === 'unacked' && a.acked_at) return false
-    if (ackFilter.value === 'acked' && !a.acked_at) return false
-    return true
-  }),
-)
+const rows = ref<AlarmItem[]>([])
+const total = ref(0)
+
+const filtered = computed(() => rows.value)   // 服务端已过滤，这里只给模板用
+
+async function reload() {
+  const res = await api.alarmQuery({
+    status: ackFilter.value,
+    level: levelFilter.value,
+    q: keyword.value,
+    limit: pageSize,
+    offset: (page.value - 1) * pageSize,
+  })
+  rows.value = res.items
+  total.value = res.total
+}
 
 const paged = computed(() => filtered.value.slice((page.value - 1) * pageSize, page.value * pageSize))
-const pageCount = computed(() => Math.max(1, Math.ceil(filtered.value.length / pageSize)))
+const pageCount = computed(() => Math.max(1, Math.ceil(total.value / pageSize)))
 
-function goto(p: number) {
+async function goto(p: number) {
   page.value = Math.min(Math.max(1, p), pageCount.value)
+  await reload()
 }
 
 const rules = [
@@ -69,6 +78,7 @@ async function ack(id: number) {
   try {
     await robot.ackAlarm(id)
     toast('告警已确认（恢复仍由数据判断）', 'ok')
+    await reload()
   } catch (e) {
     message.value = e instanceof Error ? e.message : '确认失败'
   }
@@ -81,8 +91,9 @@ function reset() {
   page.value = 1
 }
 
-onMounted(() => { applyQuery(); void robot.refreshAlarms() })
-watch(() => route.fullPath, () => { if (route.name === 'alarms') applyQuery() })
+onMounted(async () => { applyQuery(); await reload(); void robot.refreshAlarms() })
+watch(() => route.fullPath, async () => { if (route.name === 'alarms') { applyQuery(); page.value = 1; await reload() } })
+watch([levelFilter, ackFilter], async () => { page.value = 1; await reload() })
 </script>
 
 <template>
@@ -100,7 +111,7 @@ watch(() => route.fullPath, () => { if (route.name === 'alarms') applyQuery() })
         <DarkSelect v-model="levelFilter" :options="levelOptions" width="110px" />
         <label>状态</label>
         <DarkSelect v-model="ackFilter" :options="ackOptions" width="110px" />
-        <button class="btn btn-sm ok" @click="robot.refreshAlarms()">查询</button>
+        <button class="btn btn-sm ok" @click="page = 1; reload()">查询</button>
         <button class="btn btn-sm warn" @click="reset">重置</button>
         <span class="grow" />
         <button class="btn btn-sm" @click="robot.refreshAlarms()">刷新</button>
@@ -133,7 +144,7 @@ watch(() => route.fullPath, () => { if (route.name === 'alarms') applyQuery() })
             <td>
               <div class="row-actions">
                 <button class="act" title="确认告警" :disabled="!!a.acked_at || !auth.canWrite" @click="ack(a.id)">✓</button>
-                <button class="act" title="按这天回看录像" @click="router.push({ name: 'record-playback', query: { date: a.started_at.slice(0, 10) } })">⟲</button>
+                <button class="act" title="回看这个时刻的录像" @click="router.push({ name: 'record-playback', query: { date: a.started_at.slice(0, 10), t: a.started_at.slice(11, 19) } })">⟲</button>
               </div>
             </td>
           </tr>
@@ -144,11 +155,11 @@ watch(() => route.fullPath, () => { if (route.name === 'alarms') applyQuery() })
       </table>
 
       <div class="pager">
-        <span>共 {{ filtered.length }} 条 · 第 {{ page }}/{{ pageCount }} 页</span>
+        <span>共 {{ total }} 条 · 第 {{ page }}/{{ pageCount }} 页</span>
         <span class="spacer" />
         <button :disabled="page <= 1" @click="goto(page - 1)">上一页</button>
         <button
-          v-for="n in pageCount" :key="n"
+          v-for="n in Math.min(pageCount, 7)" :key="n"
           :class="{ on: n === page }" @click="goto(n)"
         >{{ n }}</button>
         <button :disabled="page >= pageCount" @click="goto(page + 1)">下一页</button>

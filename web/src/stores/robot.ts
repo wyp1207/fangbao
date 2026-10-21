@@ -35,7 +35,7 @@ export const useRobotStore = defineStore('robot', {
     },
     async refreshAlarms() {
       try {
-        this.alarms = await api.alarms()
+        this.alarms = (await api.alarms()).items
       } catch {
         /* 告警拉取失败不打断状态轮询 */
       }

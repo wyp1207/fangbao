@@ -29,6 +29,7 @@ from app.core.errors import BadRequest, NotFound
 from app.db.session import get_db
 from app.models.user import User
 from app.models.video_source import VideoSource
+from app.services.messages import audit
 
 router = APIRouter(prefix="/videos", tags=["videos"])
 
@@ -180,7 +181,7 @@ def list_go2rtc_streams(
 def create_video(
     body: VideoIn,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("admin")),
+    me: User = Depends(require_roles("admin")),
 ) -> VideoOut:
     if body.vendor not in VENDORS:
         raise BadRequest("厂商只能是 hikvision/dahua/other", code="BAD_VENDOR")
@@ -189,6 +190,8 @@ def create_video(
     db.add(v)
     db.commit()
     db.refresh(v)
+    audit(db=db, action="video.create", target=v.name, user=me,
+          detail={"vendor": v.vendor, "group": v.group_name})
     return _out(v)
 
 
@@ -342,7 +345,7 @@ _snap_fail_ts: dict[str, float] = {}
 def _log_snapshot_fail(name: str) -> None:
     """抓帧失败留痕，但同一路 60 秒只记一条，避免每 2 秒刷一条。"""
     import time as _t
-    from app.services.messages import store as msg_store
+    from app.services.messages import audit, store as msg_store
 
     now = _t.time()
     if now - _snap_fail_ts.get(name, 0) < 60:
@@ -397,7 +400,7 @@ def register_go2rtc(
 
     name = _slug(v.name, v.id)
     web_name = f"{name}_web"
-    from app.services.messages import store as msg_store
+    from app.services.messages import audit, store as msg_store
 
     try:
         _g2_call("PUT", f"/api/streams?name={name}&src={quote(v.url, safe='')}")
@@ -420,7 +423,8 @@ def register_go2rtc(
     db.commit()
     db.refresh(v)
 
-    from app.services.messages import store as msg_store
+    from app.services.messages import audit, store as msg_store
+    audit(db=db, action="video.register", target=v.name, user=_, detail={"stream": web_name})
     msg_store.add("info", "video", f"视频源已注册：{v.name}",
                   f"go2rtc 流 {web_name}（厂商 {VENDORS.get(v.vendor, v.vendor)}）",
                   {"to": "video", "query": {"source": str(v.id)}})
@@ -431,11 +435,12 @@ def register_go2rtc(
 def delete_video(
     video_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("admin")),
+    me: User = Depends(require_roles("admin")),
 ) -> dict:
     v = db.get(VideoSource, video_id)
     if not v:
         raise NotFound("视频源不存在")
     db.delete(v)
     db.commit()
+    audit(db=db, action="video.delete", target=v.name, user=me)
     return {"ok": True}

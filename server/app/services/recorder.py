@@ -167,6 +167,110 @@ def probe_duration(path: Path) -> float | None:
         return None
 
 
+# ---------- 保留策略（R1 按天数 / R2 按容量 / R5 磁盘保护）----------
+
+def _cfg_int(name: str, default: int) -> int:
+    try:
+        from app.core.config import get_settings
+        return int(getattr(get_settings(), name, default) or default)
+    except Exception:  # noqa: BLE001
+        return default
+
+
+def purge(keep_days: int | None = None, max_gb: int | None = None) -> dict:
+    """按保留策略删老录像。返回删了多少、为什么。
+
+    顺序：先按天数删（R1），再看总量（R2）。两条都只删最老的，
+    删到 70% 水位为止，不会一次把盘清空。
+    """
+    keep_days = keep_days if keep_days is not None else _cfg_int("record_keep_days", 30)
+    max_gb = max_gb if max_gb is not None else _cfg_int("record_max_gb", 800)
+    cutoff = time.time() - keep_days * 86400
+
+    files = sorted(segment_files(), key=lambda f: f["started_at"])
+    deleted = 0
+    freed = 0
+    for f in files:
+        try:
+            p = safe_path(f["path"])
+        except Exception:  # noqa: BLE001
+            continue
+        mtime = p.stat().st_mtime
+        if mtime < cutoff:
+            size = p.stat().st_size
+            p.unlink(missing_ok=True)
+            deleted += 1
+            freed += size
+            continue
+        break  # 已按时间升序，遇到未过期的就可以停
+
+    total_bytes = sum(f["size"] for f in segment_files())
+    cap = max_gb * 1024 ** 3
+    if total_bytes > cap:
+        target = int(cap * 0.7)
+        for f in sorted(segment_files(), key=lambda x: x["started_at"]):
+            if total_bytes <= target:
+                break
+            try:
+                p = safe_path(f["path"])
+                size = p.stat().st_size
+                p.unlink(missing_ok=True)
+                total_bytes -= size
+                deleted += 1
+                freed += size
+            except Exception:  # noqa: BLE001
+                continue
+
+    return {"deleted": deleted, "freed_bytes": freed, "remaining_bytes": total_bytes}
+
+
+def disk_free_gb() -> float:
+    target = ROOT if ROOT.exists() else ROOT.parent
+    try:
+        return shutil.disk_usage(target).free / 1024 ** 3
+    except Exception:  # noqa: BLE001
+        return 999.0
+
+
+class RetentionJanitor:
+    """每 10 分钟跑一次；磁盘低于阈值时停掉所有录制（R5）。"""
+
+    def __init__(self, interval_s: int = 600) -> None:
+        self.interval_s = interval_s
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        if self._thread and self._thread.is_alive():
+            return
+        self._stop.clear()
+        self._thread = threading.Thread(target=self._loop, daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+
+    def _loop(self) -> None:
+        while not self._stop.wait(self.interval_s):
+            try:
+                res = purge()
+                if res["deleted"]:
+                    log.info("录像清理：删除 %s 个文件，释放 %.1f MB",
+                             res["deleted"], res["freed_bytes"] / 1024 ** 2)
+                min_free = _cfg_int("record_min_free_gb", 5)
+                if disk_free_gb() < min_free:
+                    log.warning("磁盘可用 %.1fGB 低于阈值 %sGB，停止所有录制", disk_free_gb(), min_free)
+                    registry.stop_all()
+                    from app.services.messages import store as msg_store
+                    msg_store.add("danger", "system", "磁盘空间不足，已停止录像",
+                                  f"可用 {disk_free_gb():.1f} GB < {min_free} GB", {"to": "record-plan"})
+            except Exception:  # noqa: BLE001
+                log.exception("录像清理失败")
+
+
+janitor = RetentionJanitor()
+
+
 def safe_path(rel: str) -> Path:
     """只允许取 ROOT 下的 mp4，防目录穿越。"""
     from app.core.errors import BadRequest

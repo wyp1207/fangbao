@@ -90,6 +90,23 @@ export interface NavPoint {
   direction: string
 }
 
+export interface AuditItem {
+  id: number
+  ts: string | null
+  username: string | null
+  client_ip: string | null
+  action: string
+  target: string | null
+  success: boolean
+  summary: string | null
+  detail: string | null
+}
+
+export interface AlarmPage {
+  total: number
+  items: AlarmItem[]
+}
+
 export interface AlarmItem {
   id: number
   metric: string
@@ -129,6 +146,13 @@ export const api = {
     request<{ ok: boolean; target: string; message: string }>(`/videos/${id}/test`, { method: 'POST' }),
   deleteVideo: (id: number) => request<{ ok: boolean }>(`/videos/${id}`, { method: 'DELETE' }),
 
+  auditLogs: (params: Record<string, string | number | undefined> = {}) => {
+    const qs = Object.entries(params)
+      .filter(([, v]) => v !== undefined && v !== '')
+      .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
+      .join('&')
+    return request<{ total: number; items: AuditItem[] }>(`/audit-logs${qs ? `?${qs}` : ''}`)
+  },
   messages: () => request<{ items: { id: number; ts: number; level: string; source: string; title: string; body: string; link: Record<string, unknown> }[]; unread: number }>('/messages'),
 
   // 录像
@@ -136,7 +160,13 @@ export const api = {
     request<{ total: number; items: RecordingItem[]; recording: { video_id: number; name: string; running: boolean; started_at: number }[] }>(
       `/recordings${videoId ? `?video_id=${videoId}` : ''}`),
   recordingStatus: () =>
-    request<{ recorders: { video_id: number; name: string; running: boolean; started_at: number }[]; ffmpeg: boolean }>('/recordings/status'),
+    request<{
+      recorders: { video_id: number; name: string; running: boolean; started_at: number }[]
+      ffmpeg: boolean
+      enabled: boolean
+      keep_days: number
+      max_gb: number
+    }>('/recordings/status'),
   startRecording: (videoId: number) =>
     request<{ ok: boolean; video_id: number; running: boolean }>(`/recordings/${videoId}/start`, { method: 'POST' }),
   stopRecording: (videoId: number) =>
@@ -171,7 +201,15 @@ export const api = {
       `/robots/${id}/nav-points?map_name=${encodeURIComponent(mapName)}&path_name=${encodeURIComponent(pathName)}`,
     ),
   tasks: (id = 1) => request<TaskItem[]>(`/robots/${id}/tasks`),
-  alarms: (activeOnly = false) => request<AlarmItem[]>(`/alarms?active=${activeOnly}`),
+  alarms: (activeOnly = false) =>
+    request<AlarmPage>(`/alarms?limit=200${activeOnly ? '&status=unacked' : ''}`),
+  alarmQuery: (params: Record<string, string | number | undefined>) => {
+    const qs = Object.entries(params)
+      .filter(([, v]) => v !== undefined && v !== '')
+      .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
+      .join('&')
+    return request<AlarmPage>(`/alarms${qs ? `?${qs}` : ''}`)
+  },
   ackAlarm: (alarmId: number) =>
     request<AlarmItem>(`/alarms/${alarmId}/ack`, { method: 'POST' }),
   capabilities: (id = 1) => request<Record<string, unknown>>(`/robots/${id}/capabilities`),

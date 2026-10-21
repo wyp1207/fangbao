@@ -44,7 +44,10 @@ class Settings(BaseSettings):
     # MJPEG 转码宽度：太小会糊、太大吃 CPU
     video_scale_width: int = 1280
     # 录像开关：保留策略未定前默认关闭，避免盘被写满
-    recording_enabled: bool = False
+    recording_enabled: bool = True
+    record_keep_days: int = 30
+    record_max_gb: int = 800
+    record_min_free_gb: int = 5
     jcrob_base_url: str = "http://127.0.0.1:3546"
     jcrob_ws_url: str = "ws://127.0.0.1:3547"
     jcrob_username: str = "admin"

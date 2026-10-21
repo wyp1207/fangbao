@@ -12,6 +12,7 @@ const items = ref<RecordingItem[]>([])
 const current = ref<RecordingItem | null>(null)
 const videoId = ref('')
 const date = ref(typeof route.query.date === 'string' ? route.query.date : '')
+const targetTime = ref(typeof route.query.t === 'string' ? route.query.t : '')
 const loading = ref(false)
 const playback = ref<HTMLVideoElement | null>(null)
 
@@ -75,7 +76,39 @@ async function remove(it: RecordingItem) {
 }
 
 watch([videoId, date], load)
-onMounted(load)
+
+/** 按告警时间找所属录像段，选中并跳到告警时刻（前后各留 5 秒） */
+async function jumpToTarget() {
+  if (!targetTime.value || !filtered.value.length) return
+  const want = `${date.value || filtered.value[0].started_at.slice(0, 10)}T${targetTime.value}`
+  const target = new Date(want).getTime()
+  if (Number.isNaN(target)) return
+
+  for (const it of [...filtered.value].sort((a, b) => a.started_at.localeCompare(b.started_at))) {
+    const start = new Date(it.started_at).getTime()
+    const dur = (await api.recordingDuration(it.path).catch(() => ({ duration: null }))).duration ?? 300
+    if (target >= start && target <= start + dur * 1000) {
+      current.value = it
+      await nextTick()
+      const el = playback.value
+      if (el) {
+        const offset = Math.max(0, (target - start) / 1000 - 5)
+        const seek = () => { el.currentTime = offset }
+        el.addEventListener("loadedmetadata", seek, { once: true })
+        el.load()
+        void el.play().catch(() => undefined)
+      }
+      toast(`已定位到告警时刻 ${targetTime.value}`, "ok", 2500)
+      return
+    }
+  }
+  toast("这个时刻没有对应录像（可能没开录）", "warn", 3000)
+}
+
+onMounted(async () => {
+  await load()
+  await jumpToTarget()
+})
 </script>
 
 <template>

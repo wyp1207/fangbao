@@ -1,40 +1,50 @@
-"""告警推导（W2 最小版）。
+"""告警推导 + 持久化。
 
-只做“不用阈值也能判定”的四条：电量、硬件急停、通信中断、数据缺失。
-环境类（lel/smoke/temperature）没有现场标定值，一律不求值——
-页面显示“阈值未标定”，不拿占位值冒充。
+两条线：
+- `AlarmStore.evaluate()` 只在内存里判断"这一轮要不要报"，负责去重；
+- 真正落地的是 `AlarmRecord` 表 —— 重启不丢、能按时间/级别/指标查。
+  绑定了 session_factory 就走数据库，没绑定就退回内存（单测用）。
 
-存内存环形缓冲，不落库：
-ponytail: 现在只需要“驾驶舱最近告警 + 确认”，不需要历史检索；
-W5 做告警中心时再加表与迁移，届时把 evaluate 的产物写库即可。
+camera_id 的取舍：告警产生时如果能确定"这是哪一路摄像头看到的"，就固化下来；
+确定不了就留 null。查询时 null 表示"没有关联视频"，前端不给回放入口，
+而不是猜一个摄像头——那是给运维挖坑。
 """
 
 from __future__ import annotations
 
+import json
 import threading
 import time
-from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
-from typing import Any
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from typing import Any, Callable
+
+from sqlalchemy import and_, func, select
+from sqlalchemy.orm import Session
 
 
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+def _now() -> datetime:
+    return datetime.now().replace(microsecond=0)
 
 
 @dataclass
 class Alarm:
     id: int
     metric: str
-    level: str          # warn | critical
+    level: str
     message: str
     value: Any = None
-    started_at: str = field(default_factory=_now_iso)
+    started_at: str = field(default_factory=lambda: _now().isoformat(timespec="seconds"))
     acked_at: str | None = None
     acked_by: str | None = None
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        return {
+            "id": self.id, "metric": self.metric, "level": self.level,
+            "message": self.message, "value": self.value,
+            "started_at": self.started_at, "acked_at": self.acked_at,
+            "acked_by": self.acked_by, "camera_id": getattr(self, "camera_id", None),
+        }
 
 
 class AlarmStore:
@@ -48,13 +58,17 @@ class AlarmStore:
         self.offline_after_s = offline_after_s
         self._items: list[Alarm] = []
         self._last_raised: dict[str, float] = {}
-        self._seq = 0
         self._lock = threading.Lock()
+        self._session_factory: Callable[[], Session] | None = None
+
+    # ---- 绑定数据库（main.py 启动时调用）----
+    def attach_db(self, session_factory: Callable[[], Session]) -> None:
+        self._session_factory = session_factory
 
     # ---- 求值 -----------------------------------------------------------
     def evaluate(self, *, status: dict, info: dict, age_s: float,
-                 now: float | None = None) -> list[Alarm]:
-        """按当前快照求值，返回本次新增的告警。"""
+                 now: float | None = None,
+                 camera_id: int | None = None, robot_id: int | None = None) -> list[Alarm]:
         now = time.monotonic() if now is None else now
         found: list[tuple[str, str, str, Any]] = []
 
@@ -78,28 +92,98 @@ class AlarmStore:
             for metric, level, message, value in found:
                 last = self._last_raised.get(metric)
                 if last is not None and now - last < self.dedupe_s:
-                    continue  # 去重窗口内不重复产生
+                    continue
                 self._last_raised[metric] = now
-                self._seq += 1
-                alarm = Alarm(id=self._seq, metric=metric, level=level,
-                              message=message, value=value)
+                alarm = Alarm(id=0, metric=metric, level=level, message=message, value=value)
+                alarm.camera_id = camera_id  # type: ignore[attr-defined]
+                if self._session_factory is not None:
+                    self._persist(alarm, robot_id)
+                else:
+                    alarm.id = len(self._items) + 1
                 self._items.append(alarm)
                 new.append(alarm)
             if len(self._items) > self.max_items:
                 self._items = self._items[-self.max_items:]
         return new
 
+    def _persist(self, alarm: Alarm, robot_id: int | None) -> None:
+        from app.models.alarm import AlarmRecord
+
+        with self._session_factory() as db:  # type: ignore[misc]
+            rec = AlarmRecord(
+                metric=alarm.metric, level=alarm.level, message=alarm.message,
+                value_json=json.dumps(alarm.value, ensure_ascii=False) if alarm.value is not None else None,
+                started_at=_now(), robot_id=robot_id,
+                camera_id=getattr(alarm, "camera_id", None),
+            )
+            db.add(rec)
+            db.commit()
+            db.refresh(rec)
+            alarm.id = rec.id
+            alarm.started_at = rec.started_at.isoformat(timespec="seconds")
+
     # ---- 查询与确认 -----------------------------------------------------
     def list(self, *, active_only: bool = False) -> list[dict]:
+        if self._session_factory is not None:
+            return self.query(limit=self.max_items, status="unacked" if active_only else None)["items"]
         with self._lock:
             items = [a for a in self._items if not (active_only and a.acked_at)]
             return [a.to_dict() for a in reversed(items)]
 
+    def query(self, *, limit: int = 200, offset: int = 0, status: str | None = None,
+              level: str | None = None, metric: str | None = None,
+              date_from: str | None = None, date_to: str | None = None,
+              q: str | None = None) -> dict:
+        """数据库查询：告警中心/数据查询用它。"""
+        from app.models.alarm import AlarmRecord
+
+        if self._session_factory is None:
+            items = self.list(active_only=(status == "unacked"))
+            return {"total": len(items), "items": items[offset:offset + limit]}
+
+        conds = []
+        if status == "unacked":
+            conds.append(AlarmRecord.acked_at.is_(None))
+        elif status == "acked":
+            conds.append(AlarmRecord.acked_at.is_not(None))
+        if level:
+            conds.append(AlarmRecord.level == level)
+        if metric:
+            conds.append(AlarmRecord.metric == metric)
+        if date_from:
+            conds.append(AlarmRecord.started_at >= datetime.fromisoformat(date_from))
+        if date_to:
+            conds.append(AlarmRecord.started_at < datetime.fromisoformat(date_to) + timedelta(days=1))
+        if q:
+            conds.append(AlarmRecord.message.like(f"%{q}%"))
+        where = and_(*conds) if conds else None
+
+        with self._session_factory() as db:  # type: ignore[misc]
+            total = db.scalar(select(func.count()).select_from(AlarmRecord).where(where)) if where is not None \
+                else db.scalar(select(func.count()).select_from(AlarmRecord))
+            rows = db.scalars(
+                select(AlarmRecord).where(where).order_by(AlarmRecord.started_at.desc())
+                .limit(limit).offset(offset)
+            ).all()
+            return {"total": total or 0, "items": [r.to_dict() for r in rows]}
+
     def ack(self, alarm_id: int, who: str) -> dict | None:
+        if self._session_factory is not None:
+            from app.models.alarm import AlarmRecord
+
+            with self._session_factory() as db:  # type: ignore[misc]
+                rec = db.get(AlarmRecord, alarm_id)
+                if not rec:
+                    return None
+                rec.acked_at = _now()
+                rec.acked_by = who
+                db.commit()
+                db.refresh(rec)
+                return rec.to_dict()
         with self._lock:
             for alarm in self._items:
                 if alarm.id == alarm_id:
-                    alarm.acked_at = _now_iso()
+                    alarm.acked_at = _now().isoformat(timespec="seconds")
                     alarm.acked_by = who
                     return alarm.to_dict()
         return None

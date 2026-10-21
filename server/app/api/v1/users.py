@@ -20,7 +20,7 @@ from app.core.errors import BadRequest, NotFound
 from app.core.security import hash_password
 from app.db.session import get_db
 from app.models.user import User
-from app.services.messages import store as msg_store
+from app.services.messages import audit, store as msg_store
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -76,7 +76,7 @@ def list_users(
 def create_user(
     body: UserCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("admin")),
+    me: User = Depends(require_roles("admin")),
 ) -> UserOut:
     _check_role(body.role)
     if db.scalar(select(User).where(User.username == body.username)):
@@ -92,6 +92,8 @@ def create_user(
     db.refresh(user)
     msg_store.add("info", "user", f"新建账号：{user.username}",
                   f"角色 {user.role}", {"to": "users"})
+    audit(db=db, action="user.create", target=user.username, user=me,
+          detail={"role": user.role}, summary=f"角色 {user.role}")
     return _out(user)
 
 
@@ -117,6 +119,8 @@ def update_user(
     db.refresh(user)
     msg_store.add("info", "user", f"修改账号：{user.username}",
                   f"角色 {user.role} / {'启用' if user.is_active else '停用'}", {"to": "users"})
+    audit(db=db, action="user.update", target=user.username, user=me,
+          detail={"role": user.role, "active": user.is_active})
     return _out(user)
 
 
@@ -134,6 +138,8 @@ def reset_password(
     db.commit()
     msg_store.add("warn", "user", f"管理员重置密码：{user.username}",
                   f"操作人 {me.username}", {"to": "users"})
+    audit(db=db, action="user.password", target=user.username, user=me,
+          summary="管理员重置密码")
     return {"ok": True}
 
 
@@ -155,4 +161,6 @@ def delete_user(
     db.commit()
     msg_store.add("warn", "user", f"删除账号：{user.username}",
                   f"操作人 {me.username}", {"to": "users"})
+    audit(db=db, action="user.delete", target=user.username, user=me,
+          summary="删除账号")
     return {"ok": True}

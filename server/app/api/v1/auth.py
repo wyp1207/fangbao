@@ -12,7 +12,12 @@ from app.core.config import get_settings
 from app.core.errors import Unauthorized
 from app.core.security import create_access_token, hash_password, new_csrf_token, verify_password
 from app.db.session import get_db
+from app.services.messages import audit
 from app.models.user import User
+
+
+def _ip(request: Request) -> str | None:
+    return request.client.host if request.client else None
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -34,7 +39,8 @@ class LoginOut(BaseModel):
 
 
 @router.post("/login", response_model=LoginOut)
-def login(body: LoginIn, response: Response, db: Session = Depends(get_db)) -> LoginOut:
+def login(body: LoginIn, response: Response, request: Request,
+          db: Session = Depends(get_db)) -> LoginOut:
     settings = get_settings()
     user = db.scalar(select(User).where(User.username == body.username))
     if not user or not user.is_active or not verify_password(body.password, user.password_hash):
@@ -44,6 +50,9 @@ def login(body: LoginIn, response: Response, db: Session = Depends(get_db)) -> L
                       "账号不存在、已停用或密码错误" if user else "账号不存在",
                       {"to": "users"} if user else {})
         raise Unauthorized("用户名或密码错误")
+
+    audit(db=db, action="auth.login", target=user.username, user=user,
+          client_ip=_ip(request), summary="登录成功")
 
     token = create_access_token(
         str(user.id), user.role, secret=settings.secret_key,
