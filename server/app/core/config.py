@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     robot_mode: str = "mock"
     # 转流服务（MediaMTX 等）的 HLS 前缀；空 = 没配转流，前端不做假播放
     video_hls_base: str = ""
+    # 可选的中继地址（go2rtc/MediaMTX），配置后所有取流都走它，避免直连相机多开会话
+    video_relay_url: str = ""
+    # go2rtc 的 HTTP 地址（如 http://127.0.0.1:1984）；配了就用它的 MSE/WebRTC 播放器
+    go2rtc_base: str = ""
     jcrob_base_url: str = "http://127.0.0.1:3546"
     jcrob_ws_url: str = "ws://127.0.0.1:3547"
     jcrob_username: str = "admin"

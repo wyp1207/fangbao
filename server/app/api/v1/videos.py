@@ -18,6 +18,7 @@ import time
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -35,6 +36,25 @@ router = APIRouter(prefix="/videos", tags=["videos"])
 _SNAP_CACHE: dict[int, tuple[float, bytes]] = {}
 _SNAP_TTL = 2.0
 _FFMPEG = shutil.which("ffmpeg")
+def _alive(video_id: int) -> list[subprocess.Popen]:
+    procs = _streams.get(video_id, [])
+    alive = [p for p in procs if p.poll() is None]
+    _streams[video_id] = alive
+    return alive
+
+
+def _total_alive() -> int:
+    return sum(len(_alive(vid)) for vid in list(_streams))
+
+
+def _upstream(url: str) -> str:
+    """优先走中继（go2rtc / MediaMTX），复用同一条上游流。
+
+    直连相机时每个观看者都会新开一条 RTSP 会话，相机侧连接数有限；
+    有中继就只连中继一次，和 detask 的做法一致。
+    """
+    relay = getattr(get_settings(), "video_relay_url", "") or ""
+    return relay.rstrip("/") + "/" + url.split("/")[-1] if relay else url
 
 VENDORS = {"hikvision": "海康", "dahua": "大华", "other": "其他"}
 
@@ -61,7 +81,9 @@ class VideoOut(BaseModel):
     url: str          # 已打码
     enabled: bool
     note: str | None = None
+    stream_name: str = ""
     play_url: str | None = None
+    go2rtc_url: str | None = None   # go2rtc 播放页（MSE ~0.5s），浏览器 iframe 直接放
 
 
 class VideoIn(BaseModel):
@@ -71,6 +93,7 @@ class VideoIn(BaseModel):
     url: str = Field(min_length=4, max_length=512)
     enabled: bool = True
     note: str | None = Field(default=None, max_length=200)
+    stream_name: str = Field(default="", max_length=32)
 
 
 class VideoPatch(BaseModel):
@@ -80,6 +103,7 @@ class VideoPatch(BaseModel):
     url: str | None = None
     enabled: bool | None = None
     note: str | None = None
+    stream_name: str | None = None
 
 
 def _play_url(name: str) -> str | None:
@@ -90,11 +114,20 @@ def _play_url(name: str) -> str | None:
     return f"{base.rstrip('/')}/{name}.m3u8"
 
 
+def _go2rtc_url(stream_name: str) -> str | None:
+    base = getattr(get_settings(), "go2rtc_base", "") or ""
+    if not base or not stream_name:
+        return None
+    return f"{base.rstrip('/')}/stream.html?src={stream_name}&mode=mse"
+
+
 def _out(v: VideoSource) -> VideoOut:
     return VideoOut(
         id=v.id, name=v.name, group_name=v.group_name, vendor=v.vendor,
         url=mask_url(v.url), enabled=v.enabled, note=v.note,
+        stream_name=v.stream_name or "",
         play_url=_play_url(v.name) if v.enabled else None,
+        go2rtc_url=_go2rtc_url(v.stream_name) if v.enabled else None,
     )
 
 
@@ -162,6 +195,64 @@ def test_video(
             return {"ok": True, "target": f"{host}:{port}", "message": f"端口 {port} 可连通"}
     except OSError as exc:
         return {"ok": False, "target": f"{host}:{port}", "message": f"连不上：{exc.__class__.__name__}"}
+
+
+@router.get("/{video_id}/mjpeg")
+def mjpeg(
+    video_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles("admin", "operator", "viewer")),
+):
+    """低延迟预览：共享一条上游转码流，浏览器 <img> 直接显示。
+
+    每路摄像头只有一个 ffmpeg（和 detask 里 go2rtc 承担的角色一样），
+    观众只是从「最新一帧」缓存里取，首帧只付一次握手成本。
+    """
+    from app.core.errors import ExternalUnavailable
+    from app.services.video_stream import FPS, FFMPEG, registry
+
+    if not FFMPEG:
+        raise ExternalUnavailable("服务端没有 ffmpeg，无法转码", code="FFMPEG_MISSING")
+    v = db.get(VideoSource, video_id)
+    if not v:
+        raise NotFound("视频源不存在")
+
+    stream = registry.acquire(video_id, _upstream(v.url))
+    boundary = "frame"
+
+    def gen():
+        try:
+            # 等第一帧（最多 8 秒），拿不到就当作源不可用
+            deadline = time.time() + 8
+            while stream.frame() is None:
+                if time.time() > deadline or not stream.running:
+                    return
+                time.sleep(0.05)
+
+            while True:
+                frame = stream.frame()
+                if frame is None:
+                    if not stream.running:
+                        return
+                    time.sleep(0.05)
+                    continue
+                stream.last_used = time.time()
+                yield (f"--{boundary}\r\n"
+                       f"Content-Type: image/jpeg\r\n"
+                       f"Content-Length: {len(frame)}\r\n\r\n").encode() + frame + b"\r\n"
+                time.sleep(1.0 / FPS)
+        finally:
+            registry.release(video_id)
+
+    return StreamingResponse(gen(), media_type=f"multipart/x-mixed-replace; boundary={boundary}")
+
+
+@router.get("/streams/stats")
+def stream_stats(_: User = Depends(require_roles("admin", "operator"))):
+    """看当前有几路在转码、各自几个观众 —— 排查 CPU 和连接数用。"""
+    from app.services.video_stream import registry
+
+    return registry.stats()
 
 
 @router.get("/{video_id}/snapshot")

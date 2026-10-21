@@ -22,7 +22,7 @@ const vendors = [
 ]
 const vendorText: Record<string, string> = { hikvision: '海康', dahua: '大华', other: '其他' }
 
-const form = ref({ name: '', group_name: '默认分组', vendor: 'hikvision', url: '', note: '', enabled: true })
+const form = ref({ name: '', group_name: '默认分组', vendor: 'hikvision', url: '', note: '', enabled: true, stream_name: '' })
 
 const groups = computed(() => {
   const set = new Set(rows.value.map((r) => r.group_name))
@@ -50,14 +50,14 @@ async function reload() {
 }
 
 function openCreate() {
-  form.value = { name: '', group_name: '默认分组', vendor: 'hikvision', url: '', note: '', enabled: true }
+  form.value = { name: '', group_name: '默认分组', vendor: 'hikvision', url: '', note: '', enabled: true, stream_name: '' }
   creating.value = true
 }
 
 function openEdit(v: VideoRow) {
   form.value = {
     name: v.name, group_name: v.group_name, vendor: v.vendor,
-    url: v.url, note: v.note ?? '', enabled: v.enabled,
+    url: v.url, note: v.note ?? '', enabled: v.enabled, stream_name: v.stream_name,
   }
   editing.value = v
 }
@@ -83,7 +83,7 @@ async function submitEdit() {
     await api.updateVideo(editing.value.id, {
       name: form.value.name, group_name: form.value.group_name,
       vendor: form.value.vendor, url: form.value.url,
-      note: form.value.note || null, enabled: form.value.enabled,
+      note: form.value.note || null, enabled: form.value.enabled, stream_name: form.value.stream_name,
     })
     toast('已保存（密码不变则保留原值）', 'ok')
     editing.value = null
@@ -155,6 +155,7 @@ onMounted(reload)
             <th style="width: 180px">名称</th>
             <th style="width: 130px">分组</th>
             <th style="width: 90px">厂商</th>
+            <th style="width: 110px">go2rtc 流名</th>
             <th>视频流地址</th>
             <th style="width: 90px">状态</th>
             <th style="width: 170px">操作</th>
@@ -166,6 +167,7 @@ onMounted(reload)
             <td>{{ v.name }}</td>
             <td class="dim">{{ v.group_name }}</td>
             <td><span class="tag" :class="v.vendor === 'other' ? '' : 'ok'">{{ vendorText[v.vendor] }}</span></td>
+            <td class="mono dim">{{ v.stream_name || '—' }}</td>
             <td class="mono url">{{ v.url }}</td>
             <td><span class="tag" :class="v.enabled ? 'ok' : 'danger'">{{ v.enabled ? '启用' : '停用' }}</span></td>
             <td>
@@ -201,6 +203,10 @@ onMounted(reload)
           <span>视频流地址</span>
           <input class="input" v-model="form.url" placeholder="rtsp://user:password@host:554/..." />
         </label>
+        <label class="fld">
+          <span>go2rtc 流名（可选）</span>
+          <input class="input" v-model="form.stream_name" placeholder="如 camera_02；填了就能走 MSE/WebRTC 低延迟播放" />
+        </label>
         <label class="fld"><span>备注（可选）</span><input class="input" v-model="form.note" /></label>
         <div class="modal-actions">
           <button class="btn btn-sm" @click="creating = false">取消</button>
@@ -221,6 +227,7 @@ onMounted(reload)
           <input class="input" v-model="form.url" />
           <em class="hint">密码显示为 ***，原样提交即保留原密码</em>
         </label>
+        <label class="fld"><span>go2rtc 流名</span><input class="input" v-model="form.stream_name" /></label>
         <div class="modal-actions">
           <button class="btn btn-sm" @click="editing = null">取消</button>
           <button class="btn btn-sm primary" @click="submitEdit">保存</button>

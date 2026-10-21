@@ -13,10 +13,20 @@ const loading = ref(false)
 const error = ref('')
 const tick = ref(Date.now())
 const snapFailed = ref(false)
+const mjpegFailed = ref(false)
 
 const snapUrl = computed(() =>
   current.value ? api.snapshotUrl(current.value.id, tick.value) : '',
 )
+// MJPEG 是长连接，URL 必须稳定；加时间戳会让 <img> 每 2 秒重建一次流
+const mjpegUrl = computed(() =>
+  current.value ? `/api/v1/videos/${current.value.id}/mjpeg` : '',
+)
+
+function onMjpegError() {
+  mjpegFailed.value = true
+  tick.value = Date.now()   // 立刻切到抓帧
+}
 
 const visible = computed(() =>
   rows.value.filter((r) => (props.group ? r.group_name === props.group : true)),
@@ -35,6 +45,7 @@ async function load() {
   try {
     rows.value = await api.videos()
     if (!current.value) current.value = visible.value[0] ?? null
+    if (current.value) { mjpegFailed.value = false; snapFailed.value = false }
   } catch (e) {
     error.value = e instanceof ApiError ? e.message : '视频源读取失败'
   } finally {
@@ -54,8 +65,11 @@ let snapTimer = 0
 onMounted(async () => {
   await load()
   timer = window.setInterval(load, 30000)       // 配置偶尔刷新
-  snapTimer = window.setInterval(() => {        // 画面每 2s 抓一帧
-    if (current.value && !current.value.play_url && !snapFailed.value) tick.value = Date.now()
+  snapTimer = window.setInterval(() => {
+    // 只有退到抓帧模式才需要刷新；MJPEG 是持续流，不要动 URL
+    if (current.value && !current.value.play_url && mjpegFailed.value && !snapFailed.value) {
+      tick.value = Date.now()
+    }
   }, 2000)
 })
 onBeforeUnmount(() => {
@@ -69,7 +83,9 @@ onBeforeUnmount(() => {
     <section class="panel">
       <div class="panel-title">
         <span>{{ group ? group + '监控' : '视频监控' }}</span>
-        <span v-if="current?.play_url" class="tag ok">HLS 播放</span>
+        <span v-if="current?.go2rtc_url" class="tag ok">go2rtc MSE ~0.5s</span>
+        <span v-else-if="current?.play_url" class="tag ok">HLS 播放</span>
+        <span v-else-if="current && !mjpegFailed" class="tag ok">MJPEG 实时</span>
         <span v-else-if="current && !snapFailed" class="tag ok">抓帧预览</span>
         <span v-else class="tag warn">无可用画面</span>
       </div>
@@ -85,7 +101,15 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="player">
-        <video v-if="current?.play_url" :src="current.play_url" controls autoplay muted />
+        <iframe
+          v-if="current?.go2rtc_url" :src="current.go2rtc_url"
+          class="gz" allow="autoplay; fullscreen" title="go2rtc 实时画面"
+        />
+        <video v-else-if="current?.play_url" :src="current.play_url" controls autoplay muted />
+        <div v-else-if="current && !mjpegFailed" class="snap-wrap">
+          <img :src="mjpegUrl" alt="实时画面" @error="onMjpegError" />
+          <span class="snap-badge">MJPEG 实时 · 首帧约 0.5s</span>
+        </div>
         <div v-else-if="current && !snapFailed" class="snap-wrap">
           <img
             :src="snapUrl" alt="抓帧预览"
@@ -125,6 +149,7 @@ onBeforeUnmount(() => {
 
 .player { flex: 1; min-height: 260px; display: flex; }
 .player video { flex: 1; min-height: 0; background: #02101f; object-fit: contain; }
+.player .gz { flex: 1; min-height: 0; width: 100%; border: 0; background: #02101f; }
 .snap-wrap { position: relative; flex: 1; min-height: 0; display: flex; background: #02101f; }
 .snap-wrap img { width: 100%; height: 100%; object-fit: contain; }
 .snap-badge {

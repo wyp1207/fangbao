@@ -23,6 +23,8 @@ class VideoSource(Base):
     group_name: Mapped[str] = mapped_column(String(32), default="默认分组")
     vendor: Mapped[str] = mapped_column(String(16), default="other")  # hikvision/dahua/other
     url: Mapped[str] = mapped_column(String(512))
+    # go2rtc 里的流名；配了就能走 go2rtc 的 MSE/WebRTC 播放（低延迟），空则退回 MJPEG
+    stream_name: Mapped[str] = mapped_column(String(32), default="")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     note: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

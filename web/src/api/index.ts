@@ -44,7 +44,9 @@ export interface VideoRow {
   url: string
   enabled: boolean
   note: string | null
+  stream_name: string
   play_url: string | null
+  go2rtc_url: string | null
 }
 
 export interface RobotRow {
@@ -103,9 +105,9 @@ export const api = {
   robots: () => request<RobotRow[]>('/robots'),
 
   videos: () => request<VideoRow[]>('/videos'),
-  createVideo: (body: { name: string; group_name: string; vendor: string; url: string; note?: string | null }) =>
+  createVideo: (body: { name: string; group_name: string; vendor: string; url: string; note?: string | null; stream_name?: string }) =>
     request<VideoRow>('/videos', { method: 'POST', body }),
-  updateVideo: (id: number, body: Partial<{ name: string; group_name: string; vendor: string; url: string; enabled: boolean; note: string | null }>) =>
+  updateVideo: (id: number, body: Partial<{ name: string; group_name: string; vendor: string; url: string; enabled: boolean; note: string | null; stream_name: string }>) =>
     request<VideoRow>(`/videos/${id}`, { method: 'PATCH', body }),
   snapshotUrl: (id: number, tick: number) => `/api/v1/videos/${id}/snapshot?t=${tick}`,
   testVideo: (id: number) =>
