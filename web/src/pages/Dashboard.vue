@@ -105,7 +105,9 @@ function onDevice(v: string) {
   // 换设备就刷新视频与地图，避免还显示上一台的画面
   void api.videos().then((rows) => { videoRows.value = rows as never }).catch(() => undefined)
   void loadEnv()
+  void loadTrend()
   timers.push(window.setInterval(loadEnv, 15000))
+  timers.push(window.setInterval(loadTrend, 60000))
 }
 function goAlarms(status: 'unacked' | 'acked') {
   void router.push({ name: 'alarms', query: { status } })
@@ -176,6 +178,22 @@ const envCells = computed(() => [
 
 const envCount = computed(() => Object.keys(env.value).length)
 
+// 近 7 日告警趋势（真实统计）
+type TrendDay = { date: string; warn: number; critical: number; total: number }
+const trend = ref<TrendDay[]>([])
+const trendTotal = computed(() => trend.value.reduce((n, d) => n + d.total, 0))
+const trendPeak = computed(() => Math.max(1, ...trend.value.map((d) => d.total)))
+
+function barH(n: number): number {
+  return n ? Math.max(6, (n / trendPeak.value) * 100) : 0
+}
+
+async function loadTrend() {
+  try {
+    trend.value = (await api.alarmStats(7)).series
+  } catch { /* 统计失败不影响大屏 */ }
+}
+
 async function loadEnv() {
   try {
     env.value = (await api.sensorSummary()).items
@@ -202,7 +220,9 @@ onMounted(async () => {
   robot.start()
   void api.videos().then((rows) => { videoRows.value = rows as never }).catch(() => undefined)
   void loadEnv()
+  void loadTrend()
   timers.push(window.setInterval(loadEnv, 15000))
+  timers.push(window.setInterval(loadTrend, 60000))
   void api.devices().then((rows) => {
     devices.value = rows.map((d) => ({ id: d.id, name: d.name, station: d.station }))
     site.value = rows[0]?.station ?? '未分场站'
@@ -380,7 +400,7 @@ async function logout() {
       </main>
 
       <aside class="col right">
-        <ScadaPanel title="告警统计" tone="gold" class="h-donut stack-panel">
+        <ScadaPanel title="告警统计" tone="gold" class="h-donut stack-panel" :right="`近7日 ${trendTotal} 条`">
           <div class="donut-row" title="点击查看未确认告警" @click="goAlarms('unacked')">
             <svg viewBox="0 0 100 100" class="donut">
               <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,.14)" stroke-width="13" />
@@ -397,9 +417,17 @@ async function logout() {
             </ul>
           </div>
 
-          <div class="trend">
-            <div class="t-head"><span>近 7 日告警趋势</span><em>待接入</em></div>
-            <div class="t-plot"><span>历史数据未接入，接入后自动绘制</span></div>
+          <div class="trend-wrap">
+            <div class="trend">
+              <div v-for="d in trend" :key="d.date" class="trend-col" :title="`${d.date}：严重 ${d.critical} / 注意 ${d.warn}`">
+                <div class="bar-stack">
+                  <span class="b-crit" :style="{ height: barH(d.critical) + '%' }" />
+                  <span class="b-warn" :style="{ height: barH(d.warn) + '%' }" />
+                </div>
+                <span class="trend-x">{{ d.date.slice(8) }}</span>
+              </div>
+              <p v-if="!trendTotal" class="dim small">近 7 天没有告警</p>
+            </div>
           </div>
         </ScadaPanel>
 
@@ -778,20 +806,21 @@ async function logout() {
 
 /* 环形图 */
 .donut-row { display: flex; align-items: center; gap: 12px; position: relative; flex: none; }
-.donut { width: 128px; height: 128px; flex: none; }
+.donut { width: 88px; height: 88px; flex: none; }
 .donut-center {
   position: absolute; left: 0; top: 50%; transform: translateY(-50%);
-  width: 128px; text-align: center; pointer-events: none;
+  width: 88px; text-align: center; pointer-events: none;
 }
-.donut-center b { display: block; font-size: 24px; color: #ffd54a; font-weight: 800; }
+.donut-center b { display: block; font-size: 18px; line-height: 1.1; color: #ffd54a; font-weight: 800; }
 .donut-center em { font-style: normal; font-size: 10px; color: #9fd2ff; }
 .legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
 .legend li { display: flex; align-items: center; gap: 6px; color: #cfe8ff; }
 .legend b { margin-left: auto; color: #fff; font-size: 14px; }
 
 /* 告警趋势（空坐标系，不画假曲线） */
-.trend { margin-top: 4px; flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.t-head { display: flex; justify-content: space-between; font-size: 11px; color: #9fd2ff; margin-bottom: 4px; }
+.trend-wrap { margin-top: 4px; flex: none; }
+.trend { height: 46px; display: flex; align-items: stretch; gap: 4px; }
+.t-head { display: flex; justify-content: space-between; font-size: 10.5px; color: #9fd2ff; margin-bottom: 2px; }
 .t-head em { font-style: normal; color: #ffe08a; }
 .t-plot {
   position: relative; flex: 1; min-height: 54px;
@@ -967,4 +996,17 @@ async function logout() {
   padding: 3px 8px; font-size: 11px; cursor: pointer;
 }
 .embed-expand:hover { border-color: #7fe9ff; color: #fff; }
+
+/* 近 7 日告警趋势柱 */
+.trend { height: 46px; display: flex; align-items: stretch; gap: 4px; }
+.trend-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 2px; min-height: 0; }
+.trend-col .bar-stack {
+  flex: 1 1 auto; width: 72%; min-height: 0;
+  display: flex; flex-direction: column; justify-content: flex-end; gap: 1px;
+}
+.trend-col .bar-stack span { display: block; width: 100%; border-radius: 1px 1px 0 0; }
+.trend-col .b-crit { background: linear-gradient(180deg, #ff8a8a, #d9342b); }
+.trend-col .b-warn { background: linear-gradient(180deg, #ffe066, #d9a300); }
+.trend-x { font-size: 9px; color: #6f9dc4; line-height: 1; }
+.trend p { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; }
 </style>

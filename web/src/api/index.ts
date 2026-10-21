@@ -303,6 +303,9 @@ export const api = {
   tasks: (id = 1) => request<TaskItem[]>(`/robots/${id}/tasks`),
   alarms: (activeOnly = false) =>
     request<AlarmPage>(`/alarms?limit=200${activeOnly ? '&status=unacked' : ''}`),
+  alarmStats: (days = 7) =>
+    request<{ days: number; series: { date: string; warn: number; critical: number; total: number }[];
+              total: number; unacked: number; acked: number; peak: number }>(`/alarms/stats?days=${days}`),
   alarmQuery: (params: Record<string, string | number | undefined>) => {
     const qs = Object.entries(params)
       .filter(([, v]) => v !== undefined && v !== '')

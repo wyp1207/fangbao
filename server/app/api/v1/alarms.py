@@ -47,6 +47,49 @@ def latest_alarms(
     return res
 
 
+@router.get("/stats")
+def alarm_stats(
+    days: int = Query(7, ge=1, le=90),
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> dict:
+    """近 N 日告警趋势：按天分级别计数 + 未确认/总数。"""
+    from datetime import date, datetime, timedelta
+
+    from sqlalchemy import func, select
+
+    from app.models.alarm import AlarmRecord
+
+    start = datetime.combine(date.today() - timedelta(days=days - 1), datetime.min.time())
+    rows = db.execute(
+        select(AlarmRecord.started_at, AlarmRecord.level, AlarmRecord.acked_at)
+        .where(AlarmRecord.started_at >= start)
+    ).all()
+
+    buckets: dict[str, dict[str, int]] = {}
+    for i in range(days):
+        d = (date.today() - timedelta(days=days - 1 - i)).isoformat()
+        buckets[d] = {"warn": 0, "critical": 0}
+
+    unacked = acked = 0
+    for started, level, acked_at in rows:
+        if started is None:
+            continue
+        key = started.date().isoformat()
+        if key in buckets and level in buckets[key]:
+            buckets[key][level] += 1
+        if acked_at is None:
+            unacked += 1
+        else:
+            acked += 1
+
+    series = [{"date": d, "warn": v["warn"], "critical": v["critical"],
+               "total": v["warn"] + v["critical"]} for d, v in buckets.items()]
+    return {"days": days, "series": series, "total": len(rows),
+            "unacked": unacked, "acked": acked,
+            "peak": max((s["total"] for s in series), default=0)}
+
+
 @router.post("/{alarm_id}/ack", dependencies=[Depends(require_csrf)])
 def ack_alarm(
     alarm_id: int,
