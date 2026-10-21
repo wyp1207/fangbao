@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { api, type VideoRow } from '@/api'
 import { ApiError } from '@/api/client'
 import DarkSelect from '@/components/DarkSelect.vue'
 import { toast } from '@/composables/useToast'
 
+const route = useRoute()
+const highlightId = ref<number>(Number(route?.query?.v ?? 0) || 0)
 const rows = ref<VideoRow[]>([])
 const loading = ref(false)
 const error = ref('')
@@ -215,7 +218,7 @@ onMounted(() => { void reload(); void loadGo2rtc() })
           </tr>
         </thead>
         <tbody>
-          <tr v-for="v in filtered" :key="v.id">
+          <tr v-for="v in filtered" :key="v.id" :class="{ hl: v.id === highlightId }">
             <td>{{ v.id }}</td>
             <td>{{ v.name }}</td>
             <td class="dim">{{ v.group_name }}</td>
@@ -225,6 +228,7 @@ onMounted(() => { void reload(); void loadGo2rtc() })
             <td><span class="tag" :class="v.enabled ? 'ok' : 'danger'">{{ v.enabled ? '启用' : '停用' }}</span></td>
             <td>
               <div class="row-actions">
+                <button class="act" title="预览画面" @click="$router.push({ name: 'video', query: { source: String(v.id) } })">▶</button>
                 <button class="act" title="编辑" @click="openEdit(v)">✎</button>
                 <button class="act" title="一键注册到 go2rtc（实时播放）" @click="registerGo2rtc(v)">⚡</button>
                 <button class="act" title="测试连通性" :disabled="testing === v.id" @click="test(v)">⇄</button>
@@ -308,6 +312,7 @@ onMounted(() => { void reload(); void loadGo2rtc() })
 .page > .panel { flex: 1; min-height: 0; }
 .small { font-size: 12px; line-height: 1.8; }
 .url { font-size: 12px; color: #bcdcff; word-break: break-all; }
+tr.hl td { background: rgba(41, 212, 255, 0.22) !important; }
 .mono { font-family: ui-monospace, Consolas, monospace; }
 .modal-mask {
   position: fixed; inset: 0; z-index: 120;

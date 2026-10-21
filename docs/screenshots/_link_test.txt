@@ -1,0 +1,10 @@
+OK   告警统计         -> /alarms?status=unacked
+     状态筛选: 未确认
+▾
+OK   铃铛           -> /alarms?status=unacked
+OK   点位           -> /map?map=map1&point=
+OK   摄像头预览        -> /video?source=1
+     视频页当前源: 充电房-可见光
+▾
+
+pageerrors:

@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
+import router from '@/router'
 import { api, type VideoRow } from '@/api'
 import { ApiError } from '@/api/client'
 import DarkSelect from '@/components/DarkSelect.vue'
 import { toast } from '@/composables/useToast'
 
 const props = withDefaults(defineProps<{ group?: string }>(), { group: '' })
+const route = useRoute()
 
 const rows = ref<VideoRow[]>([])
 const current = ref<VideoRow | null>(null)
@@ -28,9 +31,11 @@ function onMjpegError() {
   tick.value = Date.now()   // 立刻切到抓帧
 }
 
-const visible = computed(() =>
-  rows.value.filter((r) => (props.group ? r.group_name === props.group : true)),
-)
+const queryGroup = computed(() => (typeof route.query.group === 'string' ? route.query.group : ''))
+const visible = computed(() => {
+  const g = props.group || queryGroup.value
+  return rows.value.filter((r) => (g ? r.group_name.includes(g) : true))
+})
 const options = computed(() => visible.value.map((v) => ({ value: String(v.id), label: v.name })))
 const currentId = computed({
   get: () => (current.value ? String(current.value.id) : ''),
@@ -44,6 +49,11 @@ async function load() {
   error.value = ''
   try {
     rows.value = await api.videos()
+    const want = Number(route.query.source ?? 0)
+    if (want) {
+      const hit = visible.value.find((v) => v.id === want)
+      if (hit) current.value = hit
+    }
     if (!current.value) current.value = visible.value[0] ?? null
     if (current.value) { mjpegFailed.value = false; snapFailed.value = false }
   } catch (e) {
@@ -51,6 +61,11 @@ async function load() {
   } finally {
     loading.value = false
   }
+}
+
+function editSource() {
+  if (!current.value) return
+  void router.push({ name: 'cameras', query: { v: String(current.value.id) } })
 }
 
 function test() {
@@ -97,6 +112,7 @@ onBeforeUnmount(() => {
         <button class="btn btn-sm" :disabled="!current" @click="test">测试连通</button>
         <button class="btn btn-sm" @click="load">刷新列表</button>
         <span class="grow" />
+        <button class="btn btn-sm" :disabled="!current" title="去设备管理改这一路" @click="editSource">⚙ 摄像头配置</button>
         <router-link class="btn btn-sm" :to="{ name: 'cameras' }">去管理视频源</router-link>
       </div>
 

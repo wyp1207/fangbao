@@ -1,0 +1,8 @@
+OK   锁屏           -> 遮罩出现
+OK   错误密码       -> 仍然锁定
+OK   正确密码       -> 解锁
+OK   视频→配置          -> /cameras?v=1
+     高亮行: 1
+     告警→回放 URL: /alarms
+
+pageerrors:

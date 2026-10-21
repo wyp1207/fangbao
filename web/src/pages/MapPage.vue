@@ -1,11 +1,13 @@
 ﻿<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import MapCanvas from '@/components/MapCanvas.vue'
 import WriteLockedDialog from '@/components/WriteLockedDialog.vue'
 import { api, type MapMeta, type NavPoint } from '@/api'
 import { useRobotStore } from '@/stores/robot'
 
 const robot = useRobotStore()
+const route = useRoute()
 const maps = ref<MapMeta[]>([])
 const selected = ref('')
 const points = ref<NavPoint[]>([])
@@ -31,6 +33,9 @@ async function choose(name: string) {
 }
 
 onMounted(async () => {
+  // 从首页点位列表跳过来时，自动选中对应地图
+  const wantMap = route.query.map
+  if (typeof wantMap === 'string' && wantMap) selected.value = wantMap
   robot.start()
   maps.value = await api.maps()
   if (maps.value.length) await choose(maps.value[0].name)

@@ -1,11 +1,22 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useRobotStore } from '@/stores/robot'
 import { useAuthStore } from '@/stores/auth'
 import DarkSelect from '@/components/DarkSelect.vue'
 import { toast } from '@/composables/useToast'
 
 const robot = useRobotStore()
+const route = useRoute()
+const router = useRouter()
+
+/** 从首页/铃铛跳过来时带筛选：?status=unacked&level=critical&q=xx */
+function applyQuery() {
+  const { status, level, q } = route.query
+  if (status === 'unacked' || status === 'acked') ackFilter.value = status
+  if (level === 'critical' || level === 'warn') levelFilter.value = level
+  if (typeof q === 'string' && q) keyword.value = q
+}
 const auth = useAuthStore()
 const message = ref('')
 
@@ -70,7 +81,8 @@ function reset() {
   page.value = 1
 }
 
-onMounted(() => { void robot.refreshAlarms() })
+onMounted(() => { applyQuery(); void robot.refreshAlarms() })
+watch(() => route.fullPath, () => { if (route.name === 'alarms') applyQuery() })
 </script>
 
 <template>
@@ -119,7 +131,10 @@ onMounted(() => { void robot.refreshAlarms() })
               <span v-else class="danger">未确认</span>
             </td>
             <td>
-              <button class="act" title="确认告警" :disabled="!!a.acked_at || !auth.canWrite" @click="ack(a.id)">✓</button>
+              <div class="row-actions">
+                <button class="act" title="确认告警" :disabled="!!a.acked_at || !auth.canWrite" @click="ack(a.id)">✓</button>
+                <button class="act" title="按这天回看录像" @click="router.push({ name: 'record-playback', query: { date: a.started_at.slice(0, 10) } })">⟲</button>
+              </div>
             </td>
           </tr>
           <tr v-if="!filtered.length">

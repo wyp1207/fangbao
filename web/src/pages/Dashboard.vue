@@ -25,6 +25,42 @@ const mapError = ref('')
 const now = ref(new Date())
 const controlTab = ref<'ptz' | 'chassis'>('ptz')
 
+// ---- 锁屏 ----
+const locked = ref(false)
+const lockPwd = ref('')
+const lockBusy = ref(false)
+const lockError = ref('')
+
+function lockScreen() {
+  lockPwd.value = ""
+  lockError.value = ""
+  locked.value = true
+}
+
+async function unlock() {
+  lockBusy.value = true
+  lockError.value = ""
+  try {
+    await api.verifyPassword(lockPwd.value)
+    locked.value = false
+    lockPwd.value = ""
+  } catch (e) {
+    lockError.value = e instanceof Error ? e.message : "密码不正确"
+  } finally {
+    lockBusy.value = false
+  }
+}
+
+// ---- 全屏 ----
+const isFull = ref(false)
+function toggleFullscreen() {
+  if (document.fullscreenElement) void document.exitFullscreen()
+  else void document.documentElement.requestFullscreen()
+}
+function onFsChange() {
+  isFull.value = !!document.fullscreenElement
+}
+
 const sites = [
   { value: 'qz-04', label: '泰安 · 泉州石化-04' },
   { value: 'dy-03', label: '东营 · 泉州石化-03' },
@@ -42,6 +78,19 @@ function onDevice(v: string) {
   deviceId.value = v
   toast('已切换到 ' + (devices.value.find((d) => d.value === v)?.label ?? v), 'ok')
 }
+function goAlarms(status: 'unacked' | 'acked') {
+  void router.push({ name: 'alarms', query: { status } })
+}
+
+function goPoint(p: { name?: string }) {
+  void router.push({ name: 'map', query: { map: robot.currentMap, point: p.name ?? '' } })
+}
+
+function goVideo(which: string) {
+  // 视频页自己去拉视频源，这里只负责跳过去
+  void router.push({ name: 'video', query: { group: which } })
+}
+
 function openVideo(which: string) {
   toast(`${which}通道未接入：真机联调后按 RTSP / WebRTC 接入`, 'warn', 3000)
 }
@@ -110,6 +159,7 @@ async function loadMap() {
 
 let timers: number[] = []
 onMounted(async () => {
+  document.addEventListener("fullscreenchange", onFsChange)
   robot.start()
   await loadMap()
   try {
@@ -125,6 +175,7 @@ onMounted(async () => {
   }, 1000))
 })
 onBeforeUnmount(() => {
+  document.removeEventListener("fullscreenchange", onFsChange)
   robot.stop()
   timers.forEach((t) => window.clearInterval(t))
   timers = []
@@ -168,7 +219,11 @@ async function logout() {
         <div class="field"><label>当前场站</label><DarkSelect :model-value="site" :options="sites" width="190px" @update:model-value="onSite" /></div>
         <div class="field"><label>当前设备</label><DarkSelect :model-value="deviceId" :options="devices" width="170px" @update:model-value="onDevice" /></div>
         <span class="tool-icons">
-          <i class="ti">🔒</i><i class="ti">🔔</i><i class="ti">✉</i>
+          <button class="ti" type="button" title="锁定屏幕" @click="lockScreen">🔒</button>
+          <button class="ti" type="button" :title="`告警：${unacked.length} 条未确认`" @click="goAlarms('unacked')">
+            🔔<em v-if="unacked.length" class="ti-badge">{{ unacked.length }}</em>
+          </button>
+          <button class="ti" type="button" title="全屏 / 退出全屏" @click="toggleFullscreen">⛶</button>
         </span>
       </div>
 
@@ -187,13 +242,13 @@ async function logout() {
     <div class="body">
       <aside class="col left">
         <ScadaPanel title="可见光视频" tone="cyan" class="grow" body-class="no-pad">
-          <div class="clickable" @click="openVideo('可见光')">
+          <div class="clickable" @click="goVideo('可见光')">
             <VideoBox title="可见光" hint="海康可见光通道接入后播放" />
           </div>
         </ScadaPanel>
 
         <ScadaPanel title="热红外视频" tone="gold" class="grow" body-class="no-pad">
-          <div class="clickable" @click="openVideo('热红外')">
+          <div class="clickable" @click="goVideo('热红外')">
             <VideoBox title="热红外" hint="热成像通道接入后播放" />
           </div>
         </ScadaPanel>
@@ -236,7 +291,10 @@ async function logout() {
           <table class="tbl">
             <thead><tr><th>时间</th><th>级别</th><th>内容</th><th>状态</th></tr></thead>
             <tbody>
-              <tr v-for="a in robot.alarms.slice(0, 6)" :key="a.id">
+              <tr
+                v-for="a in robot.alarms.slice(0, 6)" :key="a.id"
+                class="clickable-row" title="点击查看告警" @click="goAlarms('unacked')"
+              >
                 <td>{{ a.started_at.slice(11, 19) }}</td>
                 <td><i class="dot" :class="a.level === 'critical' ? 'red' : 'gold'" />{{ a.level === 'critical' ? '严重' : '提醒' }}</td>
                 <td class="strong">{{ a.message }}</td>
@@ -252,7 +310,7 @@ async function logout() {
 
       <aside class="col right">
         <ScadaPanel title="告警统计" tone="gold" class="h-donut stack-panel">
-          <div class="donut-row">
+          <div class="donut-row" title="点击查看未确认告警" @click="goAlarms('unacked')">
             <svg viewBox="0 0 100 100" class="donut">
               <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,.14)" stroke-width="13" />
               <circle cx="50" cy="50" r="42" fill="none" stroke="#38e07b" stroke-width="13"
@@ -286,7 +344,11 @@ async function logout() {
 
         <ScadaPanel title="巡检点位" class="h-points" :right="`${points.length} 点`">
           <ul class="points">
-            <li v-for="(p, i) in points" :key="i">
+            <li
+              v-for="(p, i) in points" :key="i"
+              class="clickable-row" :title="`在地图上看点位：${p.name || '点位 ' + String(i + 1).padStart(2, '0')}`"
+              @click="goPoint(p)"
+            >
               <span class="idx">{{ String(i + 1).padStart(2, '0') }}</span>
               <span class="name">{{ p.name || `点位 ${String(i + 1).padStart(2, '0')}` }}</span>
               <span class="coord">{{ p.x.toFixed(1) }}, {{ p.y.toFixed(1) }}</span>
@@ -306,6 +368,24 @@ async function logout() {
       <span>WebSocket 推送未接入（轮询 1s）</span>
       <span>v0.1.0</span>
     </footer>
+
+    <!-- 锁屏：挡住了就要求输密码，避免值班时别人乱点 -->
+    <div v-if="locked" class="lock-mask">
+      <div class="lock-box">
+        <div class="lock-icon">🔒</div>
+        <h3>屏幕已锁定</h3>
+        <p class="dim">输入当前账号密码解锁</p>
+        <input
+          class="lock-input" type="password" v-model="lockPwd"
+          placeholder="密码" @keyup.enter="unlock" autofocus
+        />
+        <p v-if="lockError" class="red small">{{ lockError }}</p>
+        <div class="lock-actions">
+          <button class="btn btn-sm" @click="locked = false">取消</button>
+          <button class="btn btn-sm primary" :disabled="lockBusy" @click="unlock">解锁</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -451,11 +531,45 @@ async function logout() {
 .sb-right { display: flex; align-items: center; gap: 14px; }
 .tool-icons { display: flex; gap: 6px; }
 .ti {
-  width: 22px; height: 20px; display: grid; place-items: center;
+  position: relative;
+  width: 24px; height: 22px; display: grid; place-items: center;
   font-size: 11px; font-style: normal;
   background: rgba(0, 90, 170, 0.6);
   border: 1px solid rgba(111, 227, 255, 0.35);
+  color: #dff0ff; cursor: pointer;
+  transition: all 0.15s;
 }
+.ti:hover { border-color: #7fe9ff; box-shadow: 0 0 8px rgba(80, 200, 255, 0.5); }
+.ti-badge {
+  position: absolute; top: -6px; right: -6px;
+  min-width: 14px; height: 14px; line-height: 14px;
+  padding: 0 3px; border-radius: 7px;
+  background: #ff5a5a; color: #fff; font-size: 9.5px; font-style: normal;
+}
+
+.lock-mask {
+  position: absolute; inset: 0; z-index: 60;
+  display: grid; place-items: center;
+  background: rgba(2, 12, 28, 0.72);
+  backdrop-filter: blur(6px);
+}
+.lock-box {
+  width: 320px; padding: 22px 22px 18px;
+  text-align: center;
+  background: linear-gradient(180deg, rgba(0, 112, 200, 0.97), rgba(0, 60, 118, 0.98));
+  border: 1px solid rgba(111, 227, 255, 0.6);
+  box-shadow: 0 0 40px rgba(0, 60, 140, 0.8);
+}
+.lock-icon { font-size: 26px; margin-bottom: 6px; }
+.lock-box h3 { margin: 0 0 4px; font-size: 15px; color: #fff; }
+.lock-box p { margin: 0 0 10px; font-size: 12px; }
+.lock-input {
+  width: 100%; padding: 8px 10px; margin-bottom: 8px;
+  background: rgba(0, 45, 90, 0.7); color: #eaf7ff;
+  border: 1px solid rgba(111, 227, 255, 0.45); outline: none;
+}
+.lock-input:focus { border-color: #7fe9ff; box-shadow: 0 0 10px rgba(80, 200, 255, 0.45); }
+.lock-actions { display: flex; justify-content: center; gap: 8px; margin-top: 4px; }
 .field { display: flex; align-items: center; gap: 6px; }
 .field label { color: #8fc4f0; }
 .select {
@@ -600,6 +714,7 @@ async function logout() {
 /* 点位 */
 .points { list-style: none; margin: 0; padding: 0; }
 .t-panel:has(.points) :deep(.t-body) { overflow-y: auto; }
+.clickable-row { cursor: pointer; }
 .points li {
   display: flex; align-items: center; gap: 9px;
   padding: 5px 6px; font-size: 12.5px;

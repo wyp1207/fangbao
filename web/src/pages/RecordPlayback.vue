@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { api, type RecordingItem, type VideoRow } from '@/api'
 import { ApiError } from '@/api/client'
 import DarkSelect from '@/components/DarkSelect.vue'
 import { toast } from '@/composables/useToast'
 
+const route = useRoute()
 const videos = ref<VideoRow[]>([])
 const items = ref<RecordingItem[]>([])
 const current = ref<RecordingItem | null>(null)
 const videoId = ref('')
-const date = ref('')
+const date = ref(typeof route.query.date === 'string' ? route.query.date : '')
 const loading = ref(false)
 const playback = ref<HTMLVideoElement | null>(null)
 

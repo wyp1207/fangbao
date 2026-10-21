@@ -92,3 +92,18 @@ def change_own_password(
     user.password_hash = hash_password(body.new_password)
     db.commit()
     return {"ok": True}
+
+
+class PasswordVerify(BaseModel):
+    password: str = Field(min_length=1, max_length=128)
+
+
+@router.post("/verify")
+def verify_own_password(
+    body: PasswordVerify,
+    user: User = Depends(get_current_user),
+) -> dict:
+    """只校验密码对不对，不签发新 token —— 用于锁屏解锁。"""
+    if not verify_password(body.password, user.password_hash):
+        raise Unauthorized("密码不正确")
+    return {"ok": True}
