@@ -41,12 +41,16 @@ def recording_status(
 ) -> dict:
     from app.core.config import get_settings
 
+    from app.api.v1.settings import load_all
+
+    cfg = load_all()
     return {
         "recorders": registry.status(),
         "ffmpeg": bool(FFMPEG),
-        "enabled": bool(getattr(get_settings(), "recording_enabled", False)),
-        "keep_days": getattr(get_settings(), "record_keep_days", 30),
-        "max_gb": getattr(get_settings(), "record_max_gb", 800),
+        "enabled": bool(cfg.get("record.enabled", True)),
+        "keep_days": int(cfg.get("record.keep_days", 30)),
+        "max_gb": int(cfg.get("record.max_gb", 800)),
+        "min_free_gb": int(cfg.get("record.min_free_gb", 5)),
     }
 
 
@@ -59,10 +63,10 @@ def start_recording(
     v = db.get(VideoSource, video_id)
     if not v:
         raise NotFound("视频源不存在")
-    from app.core.config import get_settings
+    from app.api.v1.settings import load_all
 
-    if not getattr(get_settings(), "recording_enabled", False):
-        raise BadRequest("录像已暂停：保留策略待定，暂不落盘", code="RECORDING_DISABLED")
+    if not bool(load_all().get("record.enabled", True)):
+        raise BadRequest("录像已在系统设置里关闭", code="RECORDING_DISABLED")
     if not FFMPEG:
         raise BadRequest("服务端没有 ffmpeg，无法录像", code="FFMPEG_MISSING")
     rec = registry.start(video_id, v.name, v.url)

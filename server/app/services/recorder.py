@@ -183,8 +183,15 @@ def purge(keep_days: int | None = None, max_gb: int | None = None) -> dict:
     顺序：先按天数删（R1），再看总量（R2）。两条都只删最老的，
     删到 70% 水位为止，不会一次把盘清空。
     """
-    keep_days = keep_days if keep_days is not None else _cfg_int("record_keep_days", 30)
-    max_gb = max_gb if max_gb is not None else _cfg_int("record_max_gb", 800)
+    if keep_days is None or max_gb is None:
+        try:
+            from app.api.v1.settings import load_all
+            s = load_all()
+            keep_days = keep_days if keep_days is not None else int(s.get("record.keep_days", 30))
+            max_gb = max_gb if max_gb is not None else int(s.get("record.max_gb", 800))
+        except Exception:  # noqa: BLE001
+            keep_days = keep_days if keep_days is not None else _cfg_int("record_keep_days", 30)
+            max_gb = max_gb if max_gb is not None else _cfg_int("record_max_gb", 800)
     cutoff = time.time() - keep_days * 86400
 
     files = sorted(segment_files(), key=lambda f: f["started_at"])
@@ -257,7 +264,11 @@ class RetentionJanitor:
                 if res["deleted"]:
                     log.info("录像清理：删除 %s 个文件，释放 %.1f MB",
                              res["deleted"], res["freed_bytes"] / 1024 ** 2)
-                min_free = _cfg_int("record_min_free_gb", 5)
+                try:
+                    from app.api.v1.settings import load_all
+                    min_free = int(load_all().get("record.min_free_gb", 5))
+                except Exception:  # noqa: BLE001
+                    min_free = _cfg_int("record_min_free_gb", 5)
                 if disk_free_gb() < min_free:
                     log.warning("磁盘可用 %.1fGB 低于阈值 %sGB，停止所有录制", disk_free_gb(), min_free)
                     registry.stop_all()

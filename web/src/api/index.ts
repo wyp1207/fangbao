@@ -285,6 +285,10 @@ export const api = {
   precheck: (id = 1) =>
     request<{ ok: boolean; reasons: string[] }>(`/robots/${id}/commands/precheck`, { method: 'POST' }),
   mapPng: (id = 1, name = '') => `/api/v1/robots/${id}/map/png?name=${encodeURIComponent(name)}`,
+  settings: () =>
+    request<{ values: Record<string, unknown>; schema: Record<string, unknown>[]; meta: Record<string, unknown> }>('/settings'),
+  saveSettings: (values: Record<string, unknown>) =>
+    request<{ ok: boolean; values: Record<string, unknown>; changed: Record<string, unknown> }>('/settings', { method: 'PUT', body: { values } }),
   deepHealth: () =>
     request<{
       cache: { online: boolean; age_s: number; consecutive_failures: number; last_error: string | null; poll_count: number }

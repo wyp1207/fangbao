@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { api } from '@/api'
+import DarkSelect from '@/components/DarkSelect.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -8,6 +9,60 @@ const caps = ref<Record<string, unknown> | null>(null)
 const health = ref<Awaited<ReturnType<typeof api.deepHealth>> | null>(null)
 const robot = ref<Awaited<ReturnType<typeof api.robots>>[number] | null>(null)
 const message = ref('')
+
+// ---- 平台设置（落库、可审计、立即生效）----
+interface SchemaItem {
+  key: string
+  label: string
+  type: 'int' | 'float' | 'bool' | 'str'
+  group: string
+  effect: string
+  min?: number
+  max?: number
+  default: unknown
+}
+const schema = ref<SchemaItem[]>([])
+const values = ref<Record<string, unknown>>({})
+const dirty = ref<Record<string, unknown>>({})
+const saving = ref(false)
+
+const groups = computed(() => {
+  const out: Record<string, SchemaItem[]> = {}
+  for (const it of schema.value) (out[it.group] ||= []).push(it)
+  return out
+})
+const dirtyCount = computed(() => Object.keys(dirty.value).length)
+
+async function loadSettings() {
+  try {
+    const res = await api.settings()
+    schema.value = res.schema as unknown as SchemaItem[]
+    values.value = res.values
+    dirty.value = {}
+  } catch (e) {
+    message.value = e instanceof Error ? e.message : '设置读取失败'
+  }
+}
+
+function onEdit(key: string, raw: unknown) {
+  dirty.value = { ...dirty.value, [key]: raw }
+}
+
+async function saveSettings() {
+  if (!dirtyCount.value) return
+  saving.value = true
+  message.value = ''
+  try {
+    const res = await api.saveSettings(dirty.value)
+    values.value = res.values
+    dirty.value = {}
+    message.value = `已保存 ${Object.keys(res.changed).length} 项，立即生效`
+  } catch (e) {
+    message.value = e instanceof Error ? e.message : '保存失败'
+  } finally {
+    saving.value = false
+  }
+}
 
 async function loadRobot() {
   try {
@@ -44,6 +99,7 @@ async function probe() {
 }
 
 onMounted(async () => {
+  await loadSettings()
   await loadRobot()
   await loadCaps()
   await loadHealth()
@@ -52,6 +108,52 @@ onMounted(async () => {
 
 <template>
   <div class="page">
+    <section class="panel">
+      <div class="panel-title">
+        <span>平台设置</span>
+        <span class="muted small">改完立即生效，不用重启；写库并记审计</span>
+        <span class="grow" />
+        <span v-if="dirtyCount" class="tag warn">{{ dirtyCount }} 项未保存</span>
+        <button class="btn btn-sm" :disabled="!dirtyCount" @click="dirty = {}">撤销</button>
+        <button class="btn btn-sm primary" :disabled="!dirtyCount || saving || !auth.canWrite" @click="saveSettings">
+          {{ saving ? '保存中…' : '保存配置' }}
+        </button>
+      </div>
+
+      <div class="set-grid">
+        <div v-for="(items, g) in groups" :key="g" class="set-group">
+          <div class="set-head">{{ g }}</div>
+          <div v-for="it in items" :key="it.key" class="set-row">
+            <label :title="it.effect">{{ it.label }}</label>
+            <DarkSelect
+              v-if="it.type === 'bool'"
+              :model-value="String(dirty[it.key] ?? values[it.key])"
+              :options="[{ value: 'true', label: '开启' }, { value: 'false', label: '关闭' }]"
+              width="110px"
+              @update:model-value="onEdit(it.key, $event === 'true')"
+            />
+            <input
+              v-else-if="it.type === 'str'"
+              class="input"
+              :value="dirty[it.key] ?? values[it.key]"
+              @input="onEdit(it.key, ($event.target as HTMLInputElement).value)"
+            />
+            <input
+              v-else
+              class="input num-in"
+              type="number"
+              :min="it.min" :max="it.max"
+              :step="it.type === 'float' ? 0.01 : 1"
+              :value="dirty[it.key] ?? values[it.key]"
+              @input="onEdit(it.key, Number(($event.target as HTMLInputElement).value))"
+            />
+            <span class="eff">{{ it.effect }}</span>
+          </div>
+        </div>
+      </div>
+      <p v-if="message" class="muted small">{{ message }}</p>
+    </section>
+
     <section class="panel">
       <div class="panel-title"><span>机器人连接</span></div>
       <table class="grid" v-if="robot">
@@ -131,4 +233,25 @@ onMounted(async () => {
 .kv { display: flex; justify-content: space-between; font-size: 13px; padding: 3px 0; }
 .kv span { color: var(--text-2); }
 .small { font-size: 12px; line-height: 1.6; }
+
+/* 设置分组 */
+.set-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 12px; }
+.set-group {
+  border: 1px solid rgba(111, 227, 255, 0.18);
+  background: rgba(0, 60, 110, 0.28);
+  border-radius: 6px; padding: 8px 10px 10px;
+}
+.set-head {
+  font-size: 12px; font-weight: 700; color: #ffe08a; letter-spacing: 0.08em;
+  margin-bottom: 8px; padding-bottom: 5px;
+  border-bottom: 1px solid rgba(255, 207, 63, 0.22);
+}
+.set-row {
+  display: grid; grid-template-columns: 1fr 120px; gap: 8px 10px;
+  align-items: center; margin-bottom: 9px;
+}
+.set-row label { font-size: 12.5px; color: #dceeff; }
+.set-row .input { width: 100%; }
+.num-in { text-align: right; }
+.eff { grid-column: 1 / -1; font-size: 11px; color: #7fa8cc; line-height: 1.5; margin-top: -4px; }
 </style>

@@ -1,0 +1,109 @@
+"""设置项定义：默认值、类型、取值范围、影响谁。
+
+这是"改了要真生效"的清单。新增设置项必须在这里登记，
+否则前端拿不到说明、后端也不知道怎么校验。
+"""
+
+from __future__ import annotations
+
+from typing import Any, Callable
+
+# key -> 定义
+# type: int | float | bool | str | choice
+SCHEMA: dict[str, dict[str, Any]] = {
+    # ---- 告警阈值 ----
+    "alarm.battery_warn": {
+        "label": "电量提醒阈值（%）", "type": "int", "default": 20, "min": 5, "max": 90,
+        "group": "告警", "effect": "电量低于此值产生 warn 告警",
+    },
+    "alarm.battery_critical": {
+        "label": "电量严重阈值（%）", "type": "int", "default": 10, "min": 1, "max": 60,
+        "group": "告警", "effect": "电量低于此值产生 critical 告警",
+    },
+    "alarm.offline_after_s": {
+        "label": "离线判定（秒）", "type": "int", "default": 10, "min": 3, "max": 300,
+        "group": "告警", "effect": "超过这么久没收到机器人数据判定为通信中断",
+    },
+    "alarm.dedupe_s": {
+        "label": "同类告警去重窗口（秒）", "type": "int", "default": 60, "min": 10, "max": 3600,
+        "group": "告警", "effect": "同一指标在窗口内不重复产生告警",
+    },
+    "alarm.sustain_s": {
+        "label": "告警持续确认（秒）", "type": "int", "default": 0, "min": 0, "max": 600,
+        "group": "告警", "effect": "条件持续这么久才报，0=立即报（防抖）",
+    },
+
+    # ---- 录像 ----
+    "record.enabled": {
+        "label": "启用录像", "type": "bool", "default": True,
+        "group": "录像", "effect": "关掉后所有录制停止，已录文件保留",
+    },
+    "record.keep_days": {
+        "label": "录像保留天数", "type": "int", "default": 30, "min": 1, "max": 365,
+        "group": "录像", "effect": "超过天数的分段自动删除",
+    },
+    "record.max_gb": {
+        "label": "录像容量上限（GB）", "type": "int", "default": 800, "min": 10, "max": 8000,
+        "group": "录像", "effect": "超过后从最老的删到 70%",
+    },
+    "record.min_free_gb": {
+        "label": "磁盘保护阈值（GB）", "type": "int", "default": 5, "min": 1, "max": 100,
+        "group": "录像", "effect": "可用空间低于此值自动停录并告警",
+    },
+
+    # ---- 视频 ----
+    "video.transcode_width": {
+        "label": "转码宽度（px）", "type": "int", "default": 1280, "min": 480, "max": 3840,
+        "group": "视频", "effect": "MJPEG 兜底流的缩放宽度，越小越省 CPU",
+    },
+    "video.mjpeg_fps": {
+        "label": "兜底流帧率", "type": "int", "default": 8, "min": 1, "max": 25,
+        "group": "视频", "effect": "go2rtc/HLS 都不可用时的 MJPEG 帧率",
+    },
+
+    # ---- 平台 ----
+    "platform.name": {
+        "label": "平台名称", "type": "str", "default": "智能巡检机器人管理平台",
+        "group": "平台", "effect": "顶栏标题显示",
+    },
+    "platform.site": {
+        "label": "默认场站", "type": "str", "default": "默认场站",
+        "group": "平台", "effect": "新建地图/设备时的默认场站",
+    },
+    "platform.banner_on_fault": {
+        "label": "能力异常时全站提示", "type": "bool", "default": True,
+        "group": "平台", "effect": "go2rtc/机器人不可达时顶部显示黄条",
+    },
+}
+
+
+def defaults() -> dict[str, Any]:
+    return {k: v["default"] for k, v in SCHEMA.items()}
+
+
+def cast(key: str, raw: Any) -> Any:
+    """按 schema 把值转成正确类型并校验范围。"""
+    spec = SCHEMA[key]
+    t = spec["type"]
+    if t == "bool":
+        if isinstance(raw, bool):
+            return raw
+        return str(raw).lower() in ("1", "true", "on", "yes")
+    if t == "int":
+        v = int(float(raw))
+    elif t == "float":
+        v = float(raw)
+    else:
+        return str(raw)[:200]
+    if "min" in spec and v < spec["min"]:
+        raise ValueError(f"{spec['label']} 不能小于 {spec['min']}")
+    if "max" in spec and v > spec["max"]:
+        raise ValueError(f"{spec['label']} 不能大于 {spec['max']}")
+    return v
+
+
+def describe() -> list[dict[str, Any]]:
+    return [
+        {"key": k, **{kk: vv for kk, vv in v.items() if kk != "default"}, "default": v["default"]}
+        for k, v in SCHEMA.items()
+    ]

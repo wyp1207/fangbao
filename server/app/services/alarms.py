@@ -58,6 +58,7 @@ class AlarmStore:
         self.offline_after_s = offline_after_s
         self._items: list[Alarm] = []
         self._last_raised: dict[str, float] = {}
+        self._first_seen: dict[str, float] = {}
         self._lock = threading.Lock()
         self._session_factory: Callable[[], Session] | None = None
 
@@ -66,32 +67,58 @@ class AlarmStore:
         self._session_factory = session_factory
 
     # ---- 求值 -----------------------------------------------------------
+    def _cfg(self) -> dict:
+        """阈值从平台设置读，改完立即生效（不重启）。"""
+        try:
+            from app.api.v1.settings import load_all
+            s = load_all()
+        except Exception:  # noqa: BLE001 - 设置读不到就用默认值
+            s = {}
+        return {
+            "warn": int(s.get("alarm.battery_warn", self.low_battery_warn)),
+            "critical": int(s.get("alarm.battery_critical", self.low_battery_critical)),
+            "offline": float(s.get("alarm.offline_after_s", self.offline_after_s)),
+            "dedupe": float(s.get("alarm.dedupe_s", self.dedupe_s)),
+            "sustain": float(s.get("alarm.sustain_s", 0)),
+        }
+
     def evaluate(self, *, status: dict, info: dict, age_s: float,
                  now: float | None = None,
                  camera_id: int | None = None, robot_id: int | None = None) -> list[Alarm]:
         now = time.monotonic() if now is None else now
+        cfg = self._cfg()
+        warn_at, crit_at = cfg["warn"], cfg["critical"]
         found: list[tuple[str, str, str, Any]] = []
 
         battery = info.get("battery")
         if isinstance(battery, (int, float)):
-            if battery < self.low_battery_critical:
+            if battery < crit_at:
                 found.append(("battery", "critical", f"电量仅 {battery}%，需要立即回充", battery))
-            elif battery < self.low_battery_warn:
+            elif battery < warn_at:
                 found.append(("battery", "warn", f"电量 {battery}%，低于提醒阈值", battery))
 
         if info.get("driver_port") is True:
             found.append(("estop", "critical", "硬件急停被按下", True))
 
-        if age_s < 0 or age_s > self.offline_after_s:
+        if age_s < 0 or age_s > cfg["offline"]:
             found.append(("offline", "critical",
                           f"机器人通信中断（{age_s:.0f}s 未更新）" if age_s >= 0 else "机器人通信中断",
                           round(age_s, 1)))
 
         new: list[Alarm] = []
         with self._lock:
+            # 本轮没出现的条件，把"首次出现时间"清掉，下次重新计时
+            active = {m for m, _, _, _ in found}
+            for k in list(self._first_seen):
+                if k not in active:
+                    self._first_seen.pop(k, None)
+
             for metric, level, message, value in found:
+                first = self._first_seen.setdefault(metric, now)
+                if cfg["sustain"] > 0 and now - first < cfg["sustain"]:
+                    continue  # 还没持续够久，先不报（防抖）
                 last = self._last_raised.get(metric)
-                if last is not None and now - last < self.dedupe_s:
+                if last is not None and now - last < cfg["dedupe"]:
                     continue
                 self._last_raised[metric] = now
                 alarm = Alarm(id=0, metric=metric, level=level, message=message, value=value)

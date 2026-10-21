@@ -13,6 +13,7 @@ from app.models.alarm import AlarmRecord  # noqa: F401
 from app.models.map_library import PlatformMap, PointDraft  # noqa: F401
 from app.models.message import MessageRecord  # noqa: F401
 from app.models.robot import Robot
+from app.models.setting import Setting  # noqa: F401
 from app.models.user import User
 from app.models.video_source import VideoSource  # noqa: F401  create_all 需要先导入
 
