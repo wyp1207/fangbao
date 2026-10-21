@@ -88,6 +88,7 @@ defineExpose({ currentLabel })
 
 .nav-tab {
   display: inline-flex; align-items: center; gap: 5px;
+  white-space: nowrap;
   padding: 6px 20px;
   font-size: 14px;
   color: #cfe8ff;
@@ -151,3 +152,15 @@ defineExpose({ currentLabel })
 .drop-enter-active, .drop-leave-active { transition: all 0.14s ease; }
 .drop-enter-from, .drop-leave-to { opacity: 0; transform: translateY(-6px); }
 </style>
+
+@media (max-width: 1700px) {
+  .nav { gap: 4px; }
+  .nav-tab { padding: 5px 12px; font-size: 13px; }
+}
+@media (max-width: 1500px) {
+  .nav-tab { padding: 4px 9px; font-size: 12.5px; }
+  .caret { display: none; }
+}
+@media (max-width: 1280px) {
+  .nav-tab { padding: 3px 7px; font-size: 12px; }
+}

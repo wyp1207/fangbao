@@ -15,7 +15,8 @@ const router = createRouter({
         // 实时监控
         { path: 'robot-status', name: 'robot-status', component: () => import('@/pages/RobotStatus.vue') },
         { path: 'map', name: 'map', component: () => import('@/pages/MapPage.vue') },
-        { path: 'video', name: 'video', component: () => import('@/pages/PlaceholderPage.vue') },
+        { path: 'video', name: 'video', component: () => import('@/pages/VideoLive.vue') },
+        { path: 'room', name: 'room', component: () => import('@/pages/VideoLive.vue'), props: { group: '充电房' } },
         { path: 'env', name: 'env', component: () => import('@/pages/PlaceholderPage.vue') },
 
         // 巡检管理
@@ -32,6 +33,15 @@ const router = createRouter({
         { path: 'history/tasks', name: 'history-tasks', component: () => import('@/pages/History.vue'), meta: { tab: 'tasks' } },
         { path: 'history/alarms', name: 'history-alarms', component: () => import('@/pages/History.vue'), meta: { tab: 'alarms' } },
         { path: 'run-data', name: 'run-data', component: () => import('@/pages/PlaceholderPage.vue') },
+
+        // 设备管理
+        { path: 'robots', name: 'robots', component: () => import('@/pages/RobotProfile.vue') },
+        { path: 'cameras', name: 'cameras', component: () => import('@/pages/Cameras.vue') },
+        { path: 'env-device', name: 'env-device', component: () => import('@/pages/PlaceholderPage.vue') },
+
+        // 录像管理
+        { path: 'record/plan', name: 'record-plan', component: () => import('@/pages/PlaceholderPage.vue') },
+        { path: 'record/playback', name: 'record-playback', component: () => import('@/pages/PlaceholderPage.vue') },
 
         // 系统管理
         { path: 'users', name: 'users', component: () => import('@/pages/Users.vue') },

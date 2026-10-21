@@ -26,7 +26,8 @@ export const NAV: NavGroup[] = [
     items: [
       { name: 'robot-status', label: '机器人状态', real: true },
       { name: 'map', label: '地图监控', real: true },
-      { name: 'video', label: '视频监控' },
+      { name: 'video', label: '视频监控', real: true },
+      { name: 'room', label: '充电房监控', real: true },
       { name: 'env', label: '环境监测' },
     ],
   },
@@ -51,6 +52,21 @@ export const NAV: NavGroup[] = [
       { name: 'history-tasks', label: '任务数据', real: true },
       { name: 'history-alarms', label: '告警数据', real: true },
       { name: 'run-data', label: '运行数据' },
+    ],
+  },
+  {
+    key: 'device', label: '设备管理',
+    items: [
+      { name: 'robots', label: '机器人', real: true },
+      { name: 'cameras', label: '摄像头', real: true },
+      { name: 'env-device', label: '环境传感器' },
+    ],
+  },
+  {
+    key: 'record', label: '录像管理',
+    items: [
+      { name: 'record-plan', label: '录像计划' },
+      { name: 'record-playback', label: '录像回放' },
     ],
   },
   {

@@ -36,6 +36,17 @@ export interface UserRow {
   last_login_at: string | null
 }
 
+export interface VideoRow {
+  id: number
+  name: string
+  group_name: string
+  vendor: 'hikvision' | 'dahua' | 'other'
+  url: string
+  enabled: boolean
+  note: string | null
+  play_url: string | null
+}
+
 export interface RobotRow {
   id: number
   name: string
@@ -90,6 +101,16 @@ export const api = {
   me: () => request<User>('/auth/me'),
 
   robots: () => request<RobotRow[]>('/robots'),
+
+  videos: () => request<VideoRow[]>('/videos'),
+  createVideo: (body: { name: string; group_name: string; vendor: string; url: string; note?: string | null }) =>
+    request<VideoRow>('/videos', { method: 'POST', body }),
+  updateVideo: (id: number, body: Partial<{ name: string; group_name: string; vendor: string; url: string; enabled: boolean; note: string | null }>) =>
+    request<VideoRow>(`/videos/${id}`, { method: 'PATCH', body }),
+  snapshotUrl: (id: number, tick: number) => `/api/v1/videos/${id}/snapshot?t=${tick}`,
+  testVideo: (id: number) =>
+    request<{ ok: boolean; target: string; message: string }>(`/videos/${id}/test`, { method: 'POST' }),
+  deleteVideo: (id: number) => request<{ ok: boolean }>(`/videos/${id}`, { method: 'DELETE' }),
 
   users: () => request<UserRow[]>('/users'),
   createUser: (body: { username: string; password: string; role: string }) =>

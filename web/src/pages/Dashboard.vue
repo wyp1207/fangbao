@@ -598,8 +598,13 @@ async function logout() {
   .board { grid-template-rows: 54px 40px minmax(620px, 1fr) 26px; }
 }
 
+@media (max-width: 1780px) {
+  .board-title h1 { font-size: 20px; letter-spacing: 0.1em; }
+  .wing { width: 26px; }
+}
 @media (max-width: 1600px) {
-  .board-title h1 { font-size: 21px; letter-spacing: 0.14em; }
+  .board-title { display: none; }
+  .hdr { grid-template-columns: auto 1fr auto; }
   .wing { width: 46px; }
   .tab { padding: 5px 13px; font-size: 13px; }
   .logo-text i { display: none; }

@@ -34,7 +34,9 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     # 机器人
-    robot_mode: str = "mock"  # mock | http
+    robot_mode: str = "mock"
+    # 转流服务（MediaMTX 等）的 HLS 前缀；空 = 没配转流，前端不做假播放
+    video_hls_base: str = ""
     jcrob_base_url: str = "http://127.0.0.1:3546"
     jcrob_ws_url: str = "ws://127.0.0.1:3547"
     jcrob_username: str = "admin"

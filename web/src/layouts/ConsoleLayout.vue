@@ -122,7 +122,7 @@ async function onLogout() {
   display: inline-block;
 }
 
-.right { display: flex; align-items: center; gap: 14px; justify-content: flex-end; }
+.right { display: flex; align-items: center; gap: 12px; justify-content: flex-end; margin-left: auto; flex: none; }
 .state {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 4px 11px; font-size: 12.5px;
@@ -157,12 +157,21 @@ async function onLogout() {
   .tab { padding: 5px 13px; font-size: 13px; }
   .logo-text i { display: none; }
 }
-@media (max-width: 1180px) {
+@media (max-width: 1700px) {
   .state { display: none; }
+  .logo-text i { display: none; }
+  .user { display: none; }
+  .hdr { gap: 8px; padding: 0 10px; }
+  .logout { padding: 3px 9px; font-size: 11.5px; }
+}
+@media (max-width: 1500px) {
+  .user { display: none; }
+}
+@media (max-width: 1180px) {
   .tab { padding: 5px 10px; font-size: 12.5px; }
   .hdr { gap: 10px; }
 }
-@media (max-width: 980px) {
+@media (max-width: 1500px) {
   .mini-title { display: none; }
   .logo { min-width: 0; }
 }
