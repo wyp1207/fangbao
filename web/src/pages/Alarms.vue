@@ -1,11 +1,27 @@
-﻿<script setup lang="ts">
-import { onMounted, ref } from 'vue'
+<script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
 import { useRobotStore } from '@/stores/robot'
 import { useAuthStore } from '@/stores/auth'
 
 const robot = useRobotStore()
 const auth = useAuthStore()
 const message = ref('')
+
+const keyword = ref('')
+const levelFilter = ref('')
+const ackFilter = ref('')
+
+const levelText: Record<string, string> = { critical: '严重', warn: '提醒' }
+
+const filtered = computed(() =>
+  robot.alarms.filter((a) => {
+    if (keyword.value && !a.message.includes(keyword.value)) return false
+    if (levelFilter.value && a.level !== levelFilter.value) return false
+    if (ackFilter.value === 'unacked' && a.acked_at) return false
+    if (ackFilter.value === 'acked' && !a.acked_at) return false
+    return true
+  }),
+)
 
 const rules = [
   { metric: 'lel（可燃气体）', threshold: '未标定', note: '需要现场安全员给定 ppm 阈值' },
@@ -25,69 +41,97 @@ async function ack(id: number) {
   }
 }
 
-onMounted(() => {
-  void robot.refreshAlarms()
-})
+function reset() {
+  keyword.value = ''
+  levelFilter.value = ''
+  ackFilter.value = ''
+}
+
+onMounted(() => { void robot.refreshAlarms() })
 </script>
 
 <template>
   <div class="page">
     <section class="panel">
       <div class="panel-title">
-        <span>告警（{{ robot.alarms.length }}）</span>
-        <button class="btn" @click="robot.refreshAlarms()">刷新</button>
+        <span>告警列表</span>
+        <span class="muted">确认不等于恢复，恢复由数据判断</span>
+      </div>
+
+      <div class="toolbar">
+        <label>关键词</label>
+        <input class="input" v-model="keyword" placeholder="输入告警内容搜索" />
+        <label>级别</label>
+        <select class="select" v-model="levelFilter">
+          <option value="">全部</option>
+          <option value="critical">严重</option>
+          <option value="warn">提醒</option>
+        </select>
+        <label>状态</label>
+        <select class="select" v-model="ackFilter">
+          <option value="">全部</option>
+          <option value="unacked">未确认</option>
+          <option value="acked">已确认</option>
+        </select>
+        <button class="btn btn-sm" @click="robot.refreshAlarms()">查询</button>
+        <button class="btn btn-sm" @click="reset">重置</button>
+        <span class="grow" />
+        <button class="btn btn-sm" @click="robot.refreshAlarms()">刷新</button>
+        <button class="btn btn-sm" disabled>导出</button>
       </div>
 
       <table class="grid">
         <thead>
-          <tr><th>时间</th><th>级别</th><th>告警</th><th>状态</th><th></th></tr>
+          <tr>
+            <th style="width: 60px">序号</th>
+            <th style="width: 150px">时间</th>
+            <th style="width: 90px">级别</th>
+            <th>告警内容</th>
+            <th style="width: 160px">状态</th>
+            <th style="width: 100px">操作</th>
+          </tr>
         </thead>
         <tbody>
-          <tr v-for="a in robot.alarms" :key="a.id">
-            <td class="mono muted">{{ a.started_at.slice(11, 19) }}</td>
+          <tr v-for="(a, i) in filtered" :key="a.id">
+            <td>{{ i + 1 }}</td>
+            <td class="num dim">{{ a.started_at.replace('T', ' ').slice(0, 19) }}</td>
             <td>
-              <span class="tag" :class="a.level === 'critical' ? 'danger' : 'warn'">
-                {{ a.level === 'critical' ? '严重' : '提醒' }}
-              </span>
+              <span class="tag" :class="a.level === 'critical' ? 'danger' : 'warn'">{{ levelText[a.level] }}</span>
             </td>
             <td>{{ a.message }}</td>
             <td>
-              <span v-if="a.acked_at" class="muted">
-                已确认 · {{ a.acked_by }} · {{ a.acked_at.slice(11, 19) }}
-              </span>
+              <span v-if="a.acked_at" class="dim">已确认 · {{ a.acked_by }} · {{ a.acked_at.slice(11, 19) }}</span>
               <span v-else class="danger">未确认</span>
             </td>
             <td>
-              <button
-                class="btn"
-                :disabled="!!a.acked_at || !auth.canWrite"
-                @click="ack(a.id)"
-              >确认</button>
+              <button class="link-btn" :disabled="!!a.acked_at || !auth.canWrite" @click="ack(a.id)">确认</button>
             </td>
           </tr>
-          <tr v-if="!robot.alarms.length">
-            <td colspan="5" class="muted">暂无告警</td>
+          <tr v-if="!filtered.length">
+            <td colspan="6" class="dim">暂无告警 · 环境类阈值未标定，不会产生环境告警</td>
           </tr>
         </tbody>
       </table>
+
+      <div class="pager">
+        <span>共 {{ filtered.length }} 条</span>
+        <span class="spacer" />
+        <button class="on">1</button>
+        <button disabled>下一页</button>
+      </div>
+
       <p v-if="message" class="danger small">{{ message }}</p>
-      <p class="muted small">
-        告警确认不等于恢复：这里记的是“人看到了”，恢复由数据自己判断。
-        告警目前存内存，重启即清空——W5 落库后才做历史检索。
-      </p>
     </section>
 
     <section class="panel">
-      <div class="panel-title">规则与阈值</div>
+      <div class="panel-title"><span>规则与阈值</span></div>
       <table class="grid">
-        <thead>
-          <tr><th>指标</th><th>阈值</th><th>说明</th></tr>
-        </thead>
+        <thead><tr><th>指标</th><th style="width: 220px">阈值</th><th>说明</th></tr></thead>
         <tbody>
           <tr v-for="r in rules" :key="r.metric">
             <td>{{ r.metric }}</td>
             <td><span class="tag" :class="r.threshold === '未标定' ? 'warn' : ''">{{ r.threshold }}</span></td>
-            <td class="muted">{{ r.note }}</td>
+            <td class="dim">{{ r.note }}</td>
           </tr>
         </tbody>
       </table>
@@ -102,5 +146,5 @@ onMounted(() => {
 .page { display: flex; flex-direction: column; gap: 12px; min-height: 100%; }
 .page > .panel:first-of-type { flex: 1; min-height: 0; overflow: auto; }
 .small { font-size: 12px; line-height: 1.6; }
-.mono { font-variant-numeric: tabular-nums; }
+.num { font-variant-numeric: tabular-nums; }
 </style>

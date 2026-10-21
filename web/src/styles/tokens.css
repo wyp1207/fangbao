@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   /* 科技蓝 HUD：底色 #005da4 一挂，面板半透明渐变，青色描边 */
   --bg-0: #005da4;
   --bg-1: rgba(0, 78, 145, 0.72);
@@ -177,3 +177,43 @@ table.grid tbody tr:hover td { background: rgba(41, 212, 255, 0.16); }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: rgba(111, 227, 255, 0.35); border-radius: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
+
+/* ---------- 列表页工具条 / 筛选栏 ---------- */
+.toolbar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  background: linear-gradient(180deg, rgba(0, 110, 190, 0.45), rgba(0, 66, 124, 0.6));
+  border: 1px solid rgba(111, 227, 255, 0.28);
+}
+.toolbar .grow { flex: 1; }
+.toolbar label { font-size: 12.5px; color: #9fd2ff; }
+.input, .select {
+  padding: 5px 10px;
+  font-size: 12.5px;
+  color: #eaf7ff;
+  background: rgba(0, 45, 90, 0.65);
+  border: 1px solid rgba(111, 227, 255, 0.4);
+  outline: none;
+}
+.input:focus, .select:focus { border-color: #7fe9ff; box-shadow: 0 0 8px rgba(80, 200, 255, 0.4); }
+.input { min-width: 160px; }
+.btn-sm { padding: 4px 12px; font-size: 12.5px; }
+.pager {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 4px 0;
+  font-size: 12px; color: #9fd2ff;
+}
+.pager .spacer { flex: 1; }
+.pager button {
+  min-width: 26px; padding: 2px 6px; font-size: 12px;
+  color: #cfe8ff; background: rgba(0, 90, 170, 0.6);
+  border: 1px solid rgba(111, 227, 255, 0.35); cursor: pointer;
+}
+.pager button.on { color: #062f66; font-weight: 700; background: linear-gradient(180deg, #b9ecff, #4fc3ff); }
+.row-actions { display: flex; gap: 6px; }
+.link-btn {
+  background: none; border: none; cursor: pointer;
+  color: #7fe9ff; font-size: 12px; padding: 0;
+}
+.link-btn[disabled] { color: #5d8fc4; cursor: not-allowed; }
