@@ -148,6 +148,12 @@ class AlarmStore:
             db.refresh(rec)
             alarm.id = rec.id
             alarm.started_at = rec.started_at.isoformat(timespec="seconds")
+            # 落库后立即入队外发（非阻塞）
+            try:
+                from app.services import notify as notify_svc
+                notify_svc.on_alarm(alarm.to_dict())
+            except Exception:  # noqa: BLE001 - 外发失败不能影响告警主流程
+                pass
 
     def raise_external(self, *, metric: str, level: str, message: str,
                        value: Any = None, camera_id: int | None = None,

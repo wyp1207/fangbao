@@ -100,3 +100,49 @@ def test_deep_health(auth_client):
     body = r.json()
     assert "cache" in body and "services" in body
     assert any(s["name"] == "status_poller" for s in body["services"])
+
+
+def test_notify_channel_validation(auth_client):
+    """通道类型/必填项校验：坏数据要 400，不要落库。"""
+    bad_type = auth_client.post("/api/v1/notify/channels",
+                                json={"name": "x", "type": "sms", "config": {}})
+    assert bad_type.status_code == 400
+
+    no_url = auth_client.post("/api/v1/notify/channels",
+                              json={"name": "x", "type": "wecom", "config": {}})
+    assert no_url.status_code == 400
+
+    no_smtp = auth_client.post("/api/v1/notify/channels",
+                               json={"name": "x", "type": "email", "config": {}})
+    assert no_smtp.status_code == 400
+
+
+def test_notify_channel_flow(auth_client):
+    """建通道 → 列表里能看到 → 配置里的 URL 被打码 → 删除。"""
+    r = auth_client.post("/api/v1/notify/channels", json={
+        "name": "值班群", "type": "wecom",
+        "config": {"url": "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=abcdefgh12345678"},
+        "min_level": "warn", "min_interval_min": 5,
+    })
+    assert r.status_code == 200
+    body = r.json()
+    assert body["name"] == "值班群"
+    assert "***" in body["config"]["url"]          # 不能把 key 原样吐出来
+
+    listed = auth_client.get("/api/v1/notify/channels").json()
+    assert any(c["id"] == body["id"] for c in listed)
+
+    # 测试发送指向一个必然连不上的地址：应该返回 ok=False 而不是抛 500
+    r = auth_client.post(f"/api/v1/notify/channels/{body['id']}/test")
+    assert r.status_code == 200
+    assert r.json()["ok"] is False
+
+    assert auth_client.delete(f"/api/v1/notify/channels/{body['id']}").status_code == 200
+    assert all(c["id"] != body["id"] for c in auth_client.get("/api/v1/notify/channels").json())
+
+
+def test_notify_logs_endpoint(auth_client):
+    r = auth_client.get("/api/v1/notify/logs?limit=5")
+    assert r.status_code == 200
+    body = r.json()
+    assert "total" in body and isinstance(body["items"], list)

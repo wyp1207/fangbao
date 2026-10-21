@@ -47,6 +47,7 @@ const router = createRouter({
         { path: 'messages', name: 'messages', component: () => import('@/pages/Messages.vue') },
         { path: 'users', name: 'users', component: () => import('@/pages/Users.vue') },
         { path: 'settings', name: 'settings', component: () => import('@/pages/Settings.vue') },
+        { path: 'notify', name: 'notify', component: () => import('@/pages/NotifyChannels.vue') },
         { path: 'oplog', name: 'oplog', component: () => import('@/pages/AuditLogs.vue') },
       ],
     },

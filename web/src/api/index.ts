@@ -244,6 +244,24 @@ export const api = {
       .join('&')
     return request<{ total: number; items: AuditItem[] }>(`/audit-logs${qs ? `?${qs}` : ''}`)
   },
+  // 告警通知
+  notifyMeta: () => request<{ types: { value: string; label: string }[]; levels: { value: string; label: string }[] }>('/notify/meta'),
+  notifyChannels: () => request<Record<string, unknown>[]>('/notify/channels'),
+  createNotifyChannel: (body: Record<string, unknown>) =>
+    request<Record<string, unknown>>('/notify/channels', { method: 'POST', body }),
+  updateNotifyChannel: (id: number, body: Record<string, unknown>) =>
+    request<Record<string, unknown>>(`/notify/channels/${id}`, { method: 'PATCH', body }),
+  deleteNotifyChannel: (id: number) =>
+    request<{ ok: boolean }>(`/notify/channels/${id}`, { method: 'DELETE' }),
+  testNotifyChannel: (id: number) =>
+    request<{ ok: boolean; status: string }>(`/notify/channels/${id}/test`, { method: 'POST' }),
+  notifyLogs: (params: { limit?: number; offset?: number; only_failed?: boolean } = {}) => {
+    const qs = Object.entries(params)
+      .filter(([, v]) => v !== undefined)
+      .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
+      .join('&')
+    return request<{ total: number; items: Record<string, unknown>[] }>(`/notify/logs${qs ? `?${qs}` : ''}`)
+  },
   messages: () => request<{ items: { id: number; ts: number; level: string; source: string; title: string; body: string; link: Record<string, unknown> }[]; unread: number }>('/messages'),
 
   // 录像

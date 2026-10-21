@@ -74,7 +74,8 @@ export const NAV: NavGroup[] = [
     items: [
       { name: 'users', label: '用户管理', real: true },
       { name: 'settings', label: '系统设置', real: true },
-      { name: 'oplog', label: '系统日志' },
+      { name: 'notify', label: '告警通知' },
+          { name: 'oplog', label: '系统日志' },
     ],
   },
 ]
