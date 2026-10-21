@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import MapCanvas from '@/components/MapCanvas.vue'
 import { api, type MapMeta, type NavPoint } from '@/api'
@@ -56,7 +56,7 @@ onMounted(async () => {
       <ul class="points">
         <li v-for="(p, i) in points" :key="i" @click="selectedPoint = p">
           <span class="mono">{{ i + 1 }}</span>
-          <span>{{ p.name || '未命名' }}</span>
+          <span>{{ p.name || `点位 ${String(i + 1).padStart(2, '0')}` }}</span>
           <span class="muted mono">{{ p.x.toFixed(1) }}, {{ p.y.toFixed(1) }}</span>
         </li>
       </ul>

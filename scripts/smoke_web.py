@@ -120,6 +120,12 @@ def main() -> int:
             page.click(".board .tabs >> text=监控中心")
             page.wait_for_timeout(900)
             page.screenshot(path=str(SHOTS / "alarms.png"), full_page=True)
+
+            # 其余管理页也各出一张，确认科技蓝主题铺到了子页面
+            for route, name in (("map", "map"), ("tasks", "tasks"), ("settings", "settings")):
+                page.goto(f"http://127.0.0.1:{FRONTEND_PORT}/{route}", wait_until="networkidle")
+                page.wait_for_timeout(900)
+                page.screenshot(path=str(SHOTS / f"page-{name}.png"), full_page=True)
             browser.close()
 
         # 登录页的 /auth/me 返回 401 是正常的“未登录”探测，不算错误

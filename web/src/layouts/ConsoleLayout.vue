@@ -1,5 +1,5 @@
-<script setup lang="ts">
-import { computed } from 'vue'
+﻿<script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useRobotStore } from '@/stores/robot'
@@ -10,12 +10,12 @@ const route = useRoute()
 const router = useRouter()
 
 const nav = [
-  { name: 'dashboard', label: '驾驶舱' },
-  { name: 'map', label: '地图与点位' },
+  { name: 'dashboard', label: '首页' },
+  { name: 'map', label: '巡检管理' },
   { name: 'tasks', label: '任务与巡航' },
-  { name: 'alarms', label: '告警中心' },
+  { name: 'alarms', label: '监控中心' },
   { name: 'history', label: '数据查询' },
-  { name: 'settings', label: '系统设置' },
+  { name: 'settings', label: '系统管理' },
 ]
 
 const state = computed(() => {
@@ -26,6 +26,10 @@ const state = computed(() => {
 
 const alarmCount = computed(() => robot.alarms.filter((a) => !a.acked_at).length)
 
+// 后台页也要有实时状态：轮询在布局层启动，子页面不用各自管
+onMounted(() => robot.start())
+onBeforeUnmount(() => robot.stop())
+
 async function onLogout() {
   await auth.logout()
   robot.stop()
@@ -35,22 +39,20 @@ async function onLogout() {
 
 <template>
   <div class="shell">
-    <header class="topbar">
-      <div class="brand">
-        <div class="mark">巡检</div>
-        <div class="brand-text">
-          <div class="title">防爆机器人巡检平台</div>
-          <div class="sub">JCROB · 单机</div>
+    <header class="hdr">
+      <div class="logo">
+        <span class="mark">◈</span>
+        <div class="logo-text">
+          <b>防爆巡检</b>
+          <i>JCROB PLATFORM</i>
         </div>
       </div>
 
-      <nav class="nav">
+      <nav class="tabs">
         <router-link
-          v-for="item in nav"
-          :key="item.name"
+          v-for="item in nav" :key="item.name"
           :to="{ name: item.name }"
-          class="nav-item"
-          :class="{ active: route.name === item.name }"
+          class="tab" :class="{ active: route.name === item.name }"
         >
           {{ item.label }}
           <span v-if="item.name === 'alarms' && alarmCount" class="badge">{{ alarmCount }}</span>
@@ -59,14 +61,13 @@ async function onLogout() {
 
       <div class="right">
         <span class="state" :class="state.cls">
-          <i class="dot" :class="robot.online ? 'on' : 'off'" />
-          {{ state.text }}
+          <i class="dot" :class="robot.online ? 'on' : 'off'" />{{ state.text }}
         </span>
-        <div class="user">
-          <b>{{ auth.user?.username }}</b>
-          <em>{{ auth.user?.role }}</em>
-        </div>
-        <button class="btn" @click="onLogout">退出</button>
+        <span class="user">
+          <span class="avatar">{{ (auth.user?.username ?? 'A').slice(0, 1).toUpperCase() }}</span>
+          {{ auth.user?.username }}
+        </span>
+        <button class="logout" @click="onLogout">退出</button>
       </div>
     </header>
 
@@ -79,59 +80,73 @@ async function onLogout() {
 <style scoped>
 .shell { height: 100%; display: flex; flex-direction: column; }
 
-.topbar {
-  height: 60px; flex: none;
-  display: flex; align-items: center; gap: 28px;
-  padding: 0 24px;
-  background: #fff;
-  border-bottom: 1px solid var(--line);
-  box-shadow: 0 1px 6px rgba(15, 35, 60, 0.04);
-  position: relative; z-index: 2;
+.hdr {
+  flex: none; height: 54px;
+  display: flex; align-items: center; gap: 18px;
+  padding: 0 16px;
+  background: linear-gradient(180deg, #0a7ad0, #005da4);
+  border-bottom: 1px solid rgba(111, 227, 255, 0.5);
+  box-shadow: 0 2px 12px rgba(0, 40, 110, 0.5);
 }
-
-.brand { display: flex; align-items: center; gap: 10px; min-width: 220px; }
+.logo { display: flex; align-items: center; gap: 9px; min-width: 190px; }
 .mark {
   width: 30px; height: 30px; display: grid; place-items: center;
-  font-size: 12px; font-weight: 600; color: #fff;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #4d9bff, var(--accent));
+  color: #eaf7ff; font-size: 17px;
+  background: linear-gradient(180deg, #2fa9ff, #005da4);
+  border: 1px solid rgba(160, 230, 255, 0.8);
+  box-shadow: 0 0 12px rgba(80, 200, 255, 0.7);
 }
-.title { font-size: 15px; font-weight: 600; }
-.sub { font-size: 11px; color: var(--text-2); margin-top: 1px; }
+.logo-text { line-height: 1.15; }
+.logo-text b { display: block; font-size: 15px; color: #fff; letter-spacing: 0.08em; }
+.logo-text i { font-style: normal; font-size: 9.5px; color: #9fd2ff; letter-spacing: 0.18em; }
 
-.nav { display: flex; gap: 4px; flex: 1; height: 100%; align-items: flex-end; }
-.nav-item {
+.tabs { display: flex; gap: 6px; flex: 1; justify-content: center; }
+.tab {
   position: relative;
-  padding: 0 14px 16px;
-  font-size: 14px;
-  color: var(--text-1);
-  transition: color 0.15s;
+  padding: 6px 20px;
+  color: #cfe8ff; font-size: 14px;
+  background: linear-gradient(180deg, rgba(20, 130, 220, 0.6), rgba(0, 70, 140, 0.7));
+  border: 1px solid rgba(111, 227, 255, 0.45);
+  clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+  transition: all 0.15s;
 }
-.nav-item:hover { color: var(--accent); }
-.nav-item.active { color: var(--accent); font-weight: 500; }
-.nav-item.active::after {
-  content: ""; position: absolute; left: 14px; right: 14px; bottom: -1px; height: 2px;
-  background: var(--accent); border-radius: 2px 2px 0 0;
+.tab:hover { color: #fff; border-color: #6fe3ff; }
+.tab.active {
+  color: #082f66; font-weight: 700;
+  background: linear-gradient(180deg, #b9ecff, #4fc3ff);
+  box-shadow: 0 0 14px rgba(120, 220, 255, 0.8);
 }
 .badge {
   margin-left: 5px; padding: 0 6px; border-radius: 9px;
-  background: var(--danger); color: #fff; font-size: 11px; line-height: 16px;
+  background: #ff5a5a; color: #fff; font-size: 11px; line-height: 16px;
+  display: inline-block;
 }
 
-.right { display: flex; align-items: center; gap: 16px; }
+.right { display: flex; align-items: center; gap: 14px; min-width: 220px; justify-content: flex-end; }
 .state {
-  display: inline-flex; align-items: center; gap: 7px;
-  padding: 5px 12px; border-radius: 999px; font-size: 13px;
-  background: var(--bg-2); border: 1px solid var(--line);
-  color: var(--text-1);
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 11px; font-size: 12.5px;
+  border: 1px solid rgba(111, 227, 255, 0.5);
+  background: rgba(0, 60, 120, 0.55);
+  color: #cfe8ff;
 }
-.state.ok { color: var(--ok); background: var(--ok-soft); border-color: transparent; }
-.state.warn { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
-.state.danger { color: var(--danger); background: var(--danger-soft); border-color: transparent; }
+.state.ok { color: #9dffc4; border-color: rgba(56, 224, 123, 0.6); }
+.state.warn { color: #ffe08a; border-color: rgba(255, 207, 63, 0.6); }
+.state.danger { color: #ffb3b3; border-color: rgba(255, 90, 90, 0.6); }
 
-.user { display: flex; flex-direction: column; line-height: 1.3; font-size: 13px; }
-.user b { font-weight: 500; }
-.user em { font-style: normal; color: var(--text-2); font-size: 11px; }
+.user { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; }
+.avatar {
+  width: 24px; height: 24px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: linear-gradient(180deg, #7fd8ff, #2b9bff);
+  color: #062f66; font-weight: 700; font-size: 12px;
+}
+.logout {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(160, 220, 255, 0.5);
+  color: #eaf7ff; font-size: 12px; padding: 4px 10px; cursor: pointer;
+}
+.logout:hover { background: rgba(255, 255, 255, 0.2); }
 
-.content { flex: 1; min-height: 0; overflow: auto; padding: 18px 24px 24px; }
+.content { flex: 1; min-height: 0; overflow: auto; padding: 12px 14px 16px; }
 </style>
