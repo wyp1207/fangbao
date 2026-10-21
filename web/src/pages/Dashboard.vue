@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import MapCanvas from '@/components/MapCanvas.vue'
@@ -338,6 +338,7 @@ async function logout() {
   position: fixed; inset: 0; z-index: 40;
   display: grid;
   grid-template-rows: 54px 40px minmax(0, 1fr) 26px;
+  overflow: auto;
   color: #dff0ff;
   font-size: 13px;
   background:
@@ -492,6 +493,7 @@ async function logout() {
   padding: 10px 12px;
   min-height: 0;
 }
+.body { min-height: 0; }
 .col { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
 .grow { flex: 1; min-height: 0; }
 .col.center { display: grid; grid-template-rows: minmax(0, 1fr) auto; }
@@ -609,6 +611,64 @@ async function logout() {
 }
 .points .name { color: #eaf7ff; }
 .points .coord { margin-left: auto; color: #9fd2ff; font-size: 11px; }
+
+/* ---------- 响应式：窄屏/矮屏都不挤爆 ---------- */
+@media (max-height: 900px) {
+  .board { grid-template-rows: 54px 40px minmax(620px, 1fr) 26px; }
+}
+
+@media (max-width: 1600px) {
+  .board-title h1 { font-size: 21px; letter-spacing: 0.14em; }
+  .wing { width: 46px; }
+  .tab { padding: 5px 13px; font-size: 13px; }
+  .logo-text i { display: none; }
+  .stat { gap: 4px; font-size: 11.5px; }
+  .subbar { gap: 10px; }
+}
+
+@media (max-width: 1440px) {
+  .hdr { gap: 8px; }
+  .board-title h1 { font-size: 18px; letter-spacing: 0.1em; }
+  .wing { width: 28px; }
+  .tab { padding: 4px 10px; font-size: 12.5px; }
+  .user { display: none; }
+  .h-ctrl { height: 182px; }
+  .h-donut { height: 236px; }
+  .h-points { height: 208px; }
+  .h-msg { height: 168px; }
+}
+
+/* 窄屏：整块改成普通流式文档，面板从上到下排、整页滚动，绝不互相压 */
+@media (max-width: 1240px) {
+  .board { display: block; overflow: auto; }
+  .hdr { position: sticky; top: 0; z-index: 6; }
+  .subbar { flex-wrap: wrap; height: auto; padding: 6px 12px; gap: 8px; }
+  .sb-right { flex-wrap: wrap; }
+  .clock { min-width: auto; }
+
+  .body {
+    display: flex; flex-direction: column;
+    gap: 10px; padding: 10px 12px;
+    height: auto; min-height: 0;
+  }
+  /* 取消列容器本身，让面板直接排进 body */
+  .col, .col.center { display: contents; grid-template-rows: none; }
+  .t-panel {
+    flex: none; height: auto; min-height: 0;
+  }
+  .t-panel :deep(.video-box) { height: 210px; }
+  .t-panel :deep(.screen) { min-height: 150px; }
+  .map-frame { height: 46vh; min-height: 300px; }
+  .tabs .tab:nth-child(n + 3) { display: none; }
+  .footbar { position: static; }
+}
+
+@media (max-width: 860px) {
+  .hdr { grid-template-columns: auto 1fr; }
+  .board-title { display: none; }
+  .col.left, .col.right { grid-template-columns: minmax(0, 1fr); }
+  .icon-btn, .logout { display: none; }
+}
 
 /* 表格 */
 .tbl { width: 100%; border-collapse: collapse; font-size: 12px; }

@@ -94,6 +94,7 @@ async function onLogout() {
   flex: none; height: 54px;
   display: flex; align-items: center; gap: 18px;
   padding: 0 16px;
+  overflow: hidden;
   background: linear-gradient(180deg, #0a7ad0, #005da4);
   border-bottom: 1px solid rgba(111, 227, 255, 0.5);
   box-shadow: 0 2px 12px rgba(0, 40, 110, 0.5);
@@ -143,7 +144,7 @@ async function onLogout() {
   display: inline-block;
 }
 
-.right { display: flex; align-items: center; gap: 14px; min-width: 220px; justify-content: flex-end; }
+.right { display: flex; align-items: center; gap: 14px; justify-content: flex-end; }
 .state {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 4px 11px; font-size: 12.5px;
@@ -170,4 +171,26 @@ async function onLogout() {
 .logout:hover { background: rgba(255, 255, 255, 0.2); }
 
 .content { flex: 1; min-height: 0; overflow: auto; padding: 12px 14px 16px; }
+
+/* ---------- 窄屏 ---------- */
+@media (max-width: 1440px) {
+  .mini-title { font-size: 15px; letter-spacing: 0.1em; }
+  .mini-title .w { width: 22px; }
+  .tab { padding: 5px 13px; font-size: 13px; }
+  .logo-text i { display: none; }
+}
+@media (max-width: 1180px) {
+  .state { display: none; }
+  .tab { padding: 5px 10px; font-size: 12.5px; }
+  .hdr { gap: 10px; }
+}
+@media (max-width: 980px) {
+  .mini-title { display: none; }
+  .logo { min-width: 0; }
+}
+@media (max-width: 820px) {
+  .tabs .tab:nth-child(n + 3) { display: none; }
+  .user { display: none; }
+  .logo-text b { font-size: 13px; }
+}
 </style>
