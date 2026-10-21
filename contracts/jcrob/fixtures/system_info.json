@@ -1,0 +1,19 @@
+{
+  "battery": 78,
+  "camera_rgb": 19,
+  "camera_depth": 29,
+  "odom": 26,
+  "imu": 49,
+  "camera_processed": 30,
+  "driver_port": false,
+  "info": {
+    "version": "6.1.5",
+    "code_name": "chitu-noetic",
+    "id": "AE13B83EE2846276882EE47A99391C89CD2EF6B6878D5D309F80755F8E3B7D15CB0CB9BEF55D",
+    "mac": "00:15:00:b9:90:a6",
+    "port": 3546
+  },
+  "charge": false,
+  "loop": false,
+  "slam_type": "camera"
+}

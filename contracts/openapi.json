@@ -1,0 +1,745 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "防爆机器人巡检平台",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Health",
+        "description": "存活探针：不查库、不查机器人，给 docker/nginx 用。",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Health Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health/deep": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Health Deep",
+        "description": "深探针：链路是否在线、后台循环是否活着、事件循环有没有卡。\n\n注意 online 是“平台到机器人”的链路状态，不是 /system/is_online（那是机器人能不能上互联网）。",
+        "operationId": "health_deep_api_v1_health_deep_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Health Deep Api V1 Health Deep Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Login",
+        "operationId": "login_api_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Logout",
+        "operationId": "logout_api_v1_auth_logout_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Logout Api V1 Auth Logout Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Me",
+        "operationId": "me_api_v1_auth_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/robots": {
+      "get": {
+        "tags": [
+          "robots"
+        ],
+        "summary": "List Robots",
+        "operationId": "list_robots_api_v1_robots_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "type": "array",
+                  "title": "Response List Robots Api V1 Robots Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/robots/{robot_id}/status": {
+      "get": {
+        "tags": [
+          "robots"
+        ],
+        "summary": "Robot Status",
+        "description": "聚合状态：直接读 1s 轮询缓存，不在这里同步调机器人。",
+        "operationId": "robot_status_api_v1_robots__robot_id__status_get",
+        "parameters": [
+          {
+            "name": "robot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Robot Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Robot Status Api V1 Robots  Robot Id  Status Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/robots/{robot_id}/pose": {
+      "get": {
+        "tags": [
+          "robots"
+        ],
+        "summary": "Robot Pose",
+        "operationId": "robot_pose_api_v1_robots__robot_id__pose_get",
+        "parameters": [
+          {
+            "name": "robot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Robot Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Robot Pose Api V1 Robots  Robot Id  Pose Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/robots/{robot_id}/maps": {
+      "get": {
+        "tags": [
+          "robots"
+        ],
+        "summary": "List Maps",
+        "operationId": "list_maps_api_v1_robots__robot_id__maps_get",
+        "parameters": [
+          {
+            "name": "robot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Robot Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/robots/{robot_id}/map/current": {
+      "get": {
+        "tags": [
+          "robots"
+        ],
+        "summary": "Current Map",
+        "operationId": "current_map_api_v1_robots__robot_id__map_current_get",
+        "parameters": [
+          {
+            "name": "robot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Robot Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/robots/{robot_id}/map/png": {
+      "get": {
+        "tags": [
+          "robots"
+        ],
+        "summary": "Map Png",
+        "operationId": "map_png_api_v1_robots__robot_id__map_png_get",
+        "parameters": [
+          {
+            "name": "robot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Robot Id"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/robots/{robot_id}/nav-points": {
+      "get": {
+        "tags": [
+          "robots"
+        ],
+        "summary": "Nav Points",
+        "description": "点位：服务端解析一次，前端不再重复实现解析器。\n\n同时保留 path_data 原文——写回时未修改的行要原样保留，不能整文件重排。",
+        "operationId": "nav_points_api_v1_robots__robot_id__nav_points_get",
+        "parameters": [
+          {
+            "name": "robot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Robot Id"
+            }
+          },
+          {
+            "name": "map_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Map Name"
+            }
+          },
+          {
+            "name": "path_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Path Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Nav Points Api V1 Robots  Robot Id  Nav Points Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/robots/{robot_id}/tasks": {
+      "get": {
+        "tags": [
+          "robots"
+        ],
+        "summary": "Tasks",
+        "operationId": "tasks_api_v1_robots__robot_id__tasks_get",
+        "parameters": [
+          {
+            "name": "robot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Robot Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/robots/{robot_id}/capabilities": {
+      "get": {
+        "tags": [
+          "robots"
+        ],
+        "summary": "Capabilities",
+        "operationId": "capabilities_api_v1_robots__robot_id__capabilities_get",
+        "parameters": [
+          {
+            "name": "robot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Robot Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Capabilities Api V1 Robots  Robot Id  Capabilities Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/robots/{robot_id}/probe": {
+      "post": {
+        "tags": [
+          "robots"
+        ],
+        "summary": "Probe Robot",
+        "description": "重新做能力探测。只读接口，安全，但仍然记角色。",
+        "operationId": "probe_robot_api_v1_robots__robot_id__probe_post",
+        "parameters": [
+          {
+            "name": "robot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Robot Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Probe Robot Api V1 Robots  Robot Id  Probe Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/robots/{robot_id}/commands/precheck": {
+      "post": {
+        "tags": [
+          "robots"
+        ],
+        "summary": "Precheck",
+        "description": "写操作前置检查（只判断，不下发）。W1 用来验证闸门逻辑。",
+        "operationId": "precheck_api_v1_robots__robot_id__commands_precheck_post",
+        "parameters": [
+          {
+            "name": "robot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Robot Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Precheck Api V1 Robots  Robot Id  Commands Precheck Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "LoginIn": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "LoginIn"
+      },
+      "LoginOut": {
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/UserOut"
+          },
+          "csrf_token": {
+            "type": "string",
+            "title": "Csrf Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user",
+          "csrf_token"
+        ],
+        "title": "LoginOut"
+      },
+      "UserOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "username",
+          "role"
+        ],
+        "title": "UserOut"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

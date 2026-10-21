@@ -1,0 +1,80 @@
+# 防爆机器人巡检平台 · 部署编排
+# 目标机：192.168.8.40（共享机，已跑 52 个容器）
+# 约定：所有资源加 jc- 前缀；nginx 用宿主 8099；server/mysql 不发布宿主端口
+name: jcrob
+
+services:
+  jc-server:
+    build:
+      context: ..
+      dockerfile: deploy/server.Dockerfile
+    image: jc-server:0.1.0
+    container_name: jc-server
+    restart: unless-stopped
+    env_file:
+      - ./env
+    environment:
+      JC_ENV: prod
+      JC_DB_URL: mysql+pymysql://jcrob:${JC_DB_PASSWORD:-changeme}@jc-mysql:3306/jcrob?charset=utf8mb4
+    depends_on:
+      jc-mysql:
+        condition: service_healthy
+    networks: [jc-net]
+    # 共享机上必须限资源，否则 MySQL 吃满内存会连累邻居
+    mem_limit: 1g
+    cpus: 1.0
+    volumes:
+      - /data/jcrob-platform/data/uploads:/app/data/uploads
+      - /data/jcrob-platform/data/exports:/app/data/exports
+      - /data/jcrob-platform/data/logs:/app/logs
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+  jc-mysql:
+    image: mysql:8.4.4
+    container_name: jc-mysql
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+08:00
+      - --innodb-buffer-pool-size=384M
+    environment:
+      MYSQL_DATABASE: jcrob
+      MYSQL_USER: jcrob
+      MYSQL_PASSWORD: ${JC_DB_PASSWORD:-changeme}
+      MYSQL_ROOT_PASSWORD: ${JC_DB_ROOT_PASSWORD:-changeme-too}
+      TZ: Asia/Shanghai
+    networks: [jc-net]
+    mem_limit: 1g
+    cpus: 1.5
+    volumes:
+      - /data/jcrob-platform/data/mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-p${JC_DB_ROOT_PASSWORD:-changeme-too}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+  jc-nginx:
+    build:
+      context: ..
+      dockerfile: deploy/web.Dockerfile
+    image: jc-nginx:0.1.0
+    container_name: jc-nginx
+    restart: unless-stopped
+    depends_on: [jc-server]
+    networks: [jc-net]
+    mem_limit: 128m
+    # 只发布这一个端口；8099 在 8.40 上实测空闲
+    ports:
+      - "8099:80"
+
+networks:
+  jc-net:
+    name: jc-net
+    driver: bridge

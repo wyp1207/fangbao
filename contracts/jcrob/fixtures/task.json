@@ -1,0 +1,26 @@
+[
+  {
+    "name": "夜巡路线A",
+    "loop_flag": false,
+    "id": "47a97e4e-9327-4214-a780-fd5a2ae39ee3",
+    "state": "COMPLETE",
+    "progress": 0,
+    "current_task": null,
+    "sub_tasks": [
+      { "type": "nav_action", "x": -4, "y": 0, "theta": 1.570796 },
+      { "type": "sleep_action", "wait_time": 5 },
+      { "type": "image_action", "topic": "/camera_node/image_raw" }
+    ]
+  },
+  {
+    "name": "充电任务",
+    "loop_flag": false,
+    "id": "8bc1e6dd-df1f-4a78-a17b-c60911ce5a06",
+    "state": "WAITTING",
+    "progress": 0,
+    "current_task": null,
+    "sub_tasks": [
+      { "type": "charge_action", "x": -5.5, "y": -8.2, "theta": 0 }
+    ]
+  }
+]

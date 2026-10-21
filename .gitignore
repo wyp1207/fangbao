@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# 本地数据（不要把现场数据提交）
+server/data/
+probe_out/
+_backup/
+
+# 前端
+node_modules/
+web/dist/
+web/.vite/
+web/.npm-cache/
+*.tsbuildinfo
+
+# 环境与凭据
+.env
+deploy/env
+api.txt
+
+# 编辑器
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 模型评审产物里的临时文件
+*.tmp
+
+# 分析产物（非权威，可删；别占仓库体积）
+_screens_contact.png
+_ui_contact.jpg
+_xlsx_image1.png
+_tech_spec_dump.txt

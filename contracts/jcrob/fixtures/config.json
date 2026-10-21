@@ -1,0 +1,15 @@
+{
+  "default_map": "map1",
+  "maps": [{ "map": "map1", "path": "path1" }],
+  "auto_charge": false,
+  "slam_type": "camera",
+  "lf_linear_v": 0.6,
+  "lf_theta_max": 0.8,
+  "lf_xy_goal_tolerance": 0.2,
+  "robot_radius": 0.35,
+  "go_charge_percentage": 20,
+  "wifi_ssid": "factory-wifi",
+  "wifi_password": "should-never-reach-the-frontend",
+  "lagrange_id": "sched-001",
+  "weixin_id": "wx-openid"
+}

@@ -1,0 +1,27 @@
+{
+  "header": {
+    "seq": 542928,
+    "stamp": { "secs": 1624970817, "nsecs": 524690511 },
+    "frame_id": "map"
+  },
+  "navStatus": 0,
+  "visualStatus": 1,
+  "mapStatus": 0,
+  "gcStatus": 0,
+  "gbaStatus": 0,
+  "chargeStatus": 0,
+  "loopStatus": 0,
+  "power": 37.05,
+  "targetNumID": -1,
+  "targetStatus": 0,
+  "targetDistance": -1,
+  "angleGoalStatus": 1,
+  "controlSpeedX": 0,
+  "controlSpeedTheta": 0,
+  "currentSpeedX": 0.4,
+  "currentSpeedTheta": 0.05,
+  "currentPosX": 0.0,
+  "currentPosY": -2.0,
+  "currentAngle": 90.0,
+  "busyStatus": 0
+}

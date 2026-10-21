@@ -1,0 +1,14 @@
+[
+  { "id": "a1", "type": "nav_action", "params": { "x": "float", "y": "float", "theta": "float(rad)" } },
+  { "id": "a2", "type": "sleep_action", "params": { "wait_time": "float(sec)" } },
+  { "id": "a3", "type": "image_action", "params": { "topic": "string", "timestamp": "int" } },
+  { "id": "a4", "type": "tts_action", "params": { "text": "string" } },
+  { "id": "a5", "type": "callback_action", "params": { "url": "string", "method": "string", "data": "object" } },
+  { "id": "a6", "type": "charge_action", "params": { "x": "float", "y": "float", "theta": "float(rad)" } },
+  { "id": "a7", "type": "local_move_action", "params": { "distance": "float(m)", "angle": "float(rad)", "method": "int" } },
+  { "id": "a8", "type": "io_action", "params": { "level": "string", "port": "string" } },
+  { "id": "a9", "type": "switch_map_action", "params": { "map": "string", "path": "string", "start_index": "int" } },
+  { "id": "a10", "type": "wait_req_action", "params": { "timeout": "int" } },
+  { "id": "a11", "type": "none_stop_nav_action", "params": { "x": "float", "y": "float", "radius": "float" } },
+  { "id": "a12", "type": "onvif_camera_move_action", "params": { "ip": "string", "port": "int", "x": "float", "y": "float", "zoom": "float" } }
+]
