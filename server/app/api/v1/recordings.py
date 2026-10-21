@@ -51,6 +51,10 @@ def start_recording(
     v = db.get(VideoSource, video_id)
     if not v:
         raise NotFound("视频源不存在")
+    from app.core.config import get_settings
+
+    if not getattr(get_settings(), "recording_enabled", False):
+        raise BadRequest("录像已暂停：保留策略待定，暂不落盘", code="RECORDING_DISABLED")
     if not FFMPEG:
         raise BadRequest("服务端没有 ffmpeg，无法录像", code="FFMPEG_MISSING")
     rec = registry.start(video_id, v.name, v.url)

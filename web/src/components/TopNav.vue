@@ -83,7 +83,8 @@ defineExpose({ currentLabel })
 </template>
 
 <style scoped>
-.nav { display: flex; gap: 6px; align-items: center; }
+.nav { display: flex; gap: 6px; align-items: center; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.nav::-webkit-scrollbar { display: none; }
 
 .nav-item { position: relative; }
 

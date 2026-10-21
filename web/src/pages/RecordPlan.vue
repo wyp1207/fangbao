@@ -9,6 +9,7 @@ const running = ref<Record<number, boolean>>({})
 const storage = ref({ files: 0, bytes: 0, dir: '' })
 const ready = ref(false)
 const ffmpeg = ref(true)
+const paused = ref(true)   // 与后端 JC_RECORDING_ENABLED 对应；关闭时不写盘
 
 const totalMb = computed(() => (storage.value.bytes / 1024 / 1024).toFixed(1))
 
@@ -32,6 +33,10 @@ async function load() {
 }
 
 async function start(v: VideoRow) {
+  if (paused.value) {
+    toast('录像已暂停：保留策略待定，暂不落盘', 'warn', 3000)
+    return
+  }
   try {
     await api.startRecording(v.id)
     toast(`开始录制：${v.name}`, 'ok')
@@ -64,8 +69,8 @@ onBeforeUnmount(() => window.clearInterval(timer))
     <section class="panel">
       <div class="panel-title">
         <span>录像计划</span>
-        <span class="tag" :class="ffmpeg ? 'ok' : 'danger'">{{ ffmpeg ? 'ffmpeg 就绪' : '缺少 ffmpeg' }}</span>
-        <span class="muted">手动起停；定时计划在 W5 落库后再做</span>
+        <span class="tag warn">录像已暂停</span>
+        <span class="muted">保留策略待定，暂不落盘；已录的 {{ storage.files }} 段仍可回放</span>
       </div>
 
       <div class="summary">
@@ -96,7 +101,7 @@ onBeforeUnmount(() => window.clearInterval(timer))
             </td>
             <td>
               <div class="row-actions">
-                <button class="btn btn-sm" :disabled="running[v.id]" @click="start(v)">开始录制</button>
+                <button class="btn btn-sm" :disabled="paused || running[v.id]" :title="paused ? '保留策略待定，暂不落盘' : ''" @click="start(v)">开始录制</button>
                 <button class="btn btn-sm" :disabled="!running[v.id]" @click="stop(v)">停止</button>
                 <button class="link-btn" @click="$router.push({ name: 'record-playback' })">去回放</button>
               </div>
@@ -107,6 +112,8 @@ onBeforeUnmount(() => window.clearInterval(timer))
       </table>
 
       <p class="muted small">
+        当前状态：<b class="warn">暂停录制</b>（<code>JC_RECORDING_ENABLED=false</code>）。
+        要恢复时，先定下保留天数与容量上限（见 docs/录像保留策略-20261021.xlsx），再把这个开关打开。<br />
         录制是服务端 ffmpeg 把 RTSP 转成 H.264 分段落盘，每段 5 分钟（可配 <code>JC_RECORD_SEGMENT_SECONDS</code>）。
         1080p 转码约吃 0.3–0.5 核，所以同时最多录 2 路；要更多路建议在 go2rtc 侧录制或加转码机。
       </p>

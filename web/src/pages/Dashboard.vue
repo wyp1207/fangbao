@@ -319,7 +319,7 @@ async function logout() {
   position: fixed; inset: 0; z-index: 40;
   display: grid;
   grid-template-rows: 54px 40px minmax(0, 1fr) 26px;
-  overflow: auto;
+  overflow: hidden;   /* 整页固定，滚动只发生在面板内部 */
   color: #dff0ff;
   font-size: 13px;
   background:
@@ -519,7 +519,13 @@ async function logout() {
 .ctrl-meta div { display: flex; justify-content: space-between; gap: 12px; }
 .ctrl-meta span { color: #9fd2ff; }
 .ctrl-meta b { color: #eaf7ff; font-weight: 600; }
-.ctrl-meta p { margin: 4px 0 0; font-size: 10.5px; }
+.ctrl-meta p {
+  margin: 4px 0 0; font-size: 10.5px;
+  color: #8fc4f0;
+  max-width: 190px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 
 /* 地图扫码 */
 .map-frame { position: relative; flex: 1 1 auto; min-height: 0; }
@@ -586,6 +592,8 @@ async function logout() {
   padding: 5px 6px; font-size: 12.5px;
   border-bottom: 1px dashed rgba(140, 210, 255, 0.18);
 }
+/* 点位多时在面板内滚动，不把页面顶长 */
+.t-panel:has(.points) :deep(.t-body) { max-height: 100%; }
 .points .idx {
   width: 22px; height: 18px; display: grid; place-items: center;
   font-size: 10.5px; color: #062f66; font-weight: 700;
@@ -595,66 +603,85 @@ async function logout() {
 .points .coord { margin-left: auto; color: #9fd2ff; font-size: 11px; }
 
 /* ---------- 响应式：窄屏/矮屏都不挤爆 ---------- */
-@media (max-height: 900px) {
-  .board { grid-template-rows: 54px 40px minmax(620px, 1fr) 26px; }
+@media (max-width: 1780px) {
+  .board-title h1 { font-size: clamp(15px, 1.25vw, 20px); letter-spacing: 0.08em; }
+  .wing { width: 22px; }
+  .tab { padding: 5px 12px; font-size: 13px; }
+  .logo-text i { display: none; }
 }
 
-@media (max-width: 1780px) {
-  .board-title h1 { font-size: 20px; letter-spacing: 0.1em; }
-  .wing { width: 26px; }
-}
 @media (max-width: 1600px) {
-  .board-title { display: none; }
-  .hdr { grid-template-columns: auto 1fr auto; }
-  .wing { width: 46px; }
-  .tab { padding: 5px 13px; font-size: 13px; }
-  .logo-text i { display: none; }
+  .tab { padding: 4px 10px; font-size: 12.5px; }
+  .board-title { gap: 10px; }
+  .wing { width: 16px; }
   .stat { gap: 4px; font-size: 11.5px; }
   .subbar { gap: 10px; }
 }
 
 @media (max-width: 1440px) {
   .hdr { gap: 8px; }
-  .board-title h1 { font-size: 18px; letter-spacing: 0.1em; }
-  .wing { width: 28px; }
-  .tab { padding: 4px 10px; font-size: 12.5px; }
+  .board-title h1 { font-size: clamp(13px, 1.15vw, 16px); letter-spacing: 0.06em; }
   .user { display: none; }
   .h-ctrl { height: 182px; }
   .h-donut { height: 236px; }
-  .h-points { height: 208px; }
-  .h-msg { height: 168px; }
+  .h-points { height: 226px; }
+  .h-msg { height: 158px; }
 }
 
-/* 窄屏：整块改成普通流式文档，面板从上到下排、整页滚动，绝不互相压 */
+/* 窄屏：仍保持固定三列，靠压缩列宽 + 面板内滚，不整页滚 */
 @media (max-width: 1240px) {
-  .board { display: block; overflow: auto; }
-  .hdr { position: sticky; top: 0; z-index: 6; }
-  .subbar { flex-wrap: wrap; height: auto; padding: 6px 12px; gap: 8px; }
-  .sb-right { flex-wrap: wrap; }
-  .clock { min-width: auto; }
+  /* 列宽用 minmax(0,…)：宁可压缩内容，也不撑破整页 */
+  .body { grid-template-columns: minmax(0, 280px) minmax(0, 1fr) minmax(0, 250px); gap: 8px; padding: 8px; }
+  .col, .t-panel { min-width: 0; }
+  .logo-text { display: none; }
+  .hdr { grid-template-columns: auto auto minmax(0, 1fr) auto; }
+  .subbar { gap: 8px; overflow: hidden; }
+  .sb-left { min-width: 0; }
+  .sb-right { gap: 8px; }
+  .stat label { display: none; }        /* 状态带只留值，省宽度 */
+  .clock i { display: none; }
+  .tabs .tab:nth-child(n + 4) { display: none; }
+  .h-ctrl { height: 168px; }
+  .h-donut { height: 210px; }
+  .h-points { height: 180px; }
+  .h-msg { height: 150px; }
+}
 
-  .body {
-    display: flex; flex-direction: column;
-    gap: 10px; padding: 10px 12px;
-    height: auto; min-height: 0;
-  }
-  /* 取消列容器本身，让面板直接排进 body */
-  .col, .col.center { display: contents; grid-template-rows: none; }
-  .t-panel {
-    flex: none; height: auto; min-height: 0;
-  }
-  .t-panel :deep(.video-box) { height: 210px; }
-  .t-panel :deep(.screen) { min-height: 150px; }
-  .map-frame { height: 46vh; min-height: 300px; }
-  .tabs .tab:nth-child(n + 3) { display: none; }
-  .footbar { position: static; }
+@media (max-width: 1240px) {
+  /* 窄列里别让文字折行，宁可变小 */
+  .legend li, .env-label, .ctrl-meta div, .points .name { white-space: nowrap; }
+  .legend { font-size: 11px; gap: 5px; }
+  .legend b { font-size: 12px; }
+  .env-label { font-size: 10.5px; }
+  .env-value { font-size: 13px; }
+  .env-cell { padding: 5px 6px; }
+  .ctrl-meta { font-size: 11px; }
+  .ctrl-meta p { display: none; }
+  .stick { width: 64px; height: 64px; }
+  .donut { width: 92px; height: 92px; }
+  .donut-center { width: 92px; }
+  .donut-center b { font-size: 20px; }
+}
+
+@media (max-width: 1100px) {
+  .body { grid-template-columns: minmax(0, 230px) minmax(0, 1fr) minmax(0, 210px); }
+  .board-title h1 { font-size: 12px; letter-spacing: 0; }
+  .sb-right .stat:nth-child(n + 4) { display: none; }
 }
 
 @media (max-width: 860px) {
-  .hdr { grid-template-columns: auto 1fr; }
-  .board-title { display: none; }
+  .hdr { grid-template-columns: auto auto 1fr; }
+  .board-title h1 { font-size: 12px; letter-spacing: 0; }
+  .wing { display: none; }
   .col.left, .col.right { grid-template-columns: minmax(0, 1fr); }
   .icon-btn, .logout { display: none; }
+}
+
+/* 面板内容底部渐隐：暗示还能往下滚 */
+.t-panel :deep(.t-body) {
+  scrollbar-width: thin;
+  background-image: linear-gradient(180deg, transparent calc(100% - 18px), rgba(0, 30, 70, 0.55));
+  background-attachment: local;
 }
 
 /* 表格 */
