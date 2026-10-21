@@ -20,23 +20,56 @@ from app.adapters.jcrob.config_view import project_config
 
 
 def _make_png(width: int, height: int) -> bytes:
-    """生成占位底图：暗底 + 每 50px 一条网格线。
+    """生成一张"像楼层平面图"的占位底图：浅灰自由区 + 深灰墙体 + 几个房间。
 
     尺寸必须与 saved_maps 里的 width/height 一致——真机也是拿 PNG 像素尺寸
-    和 resolution/origin 配对算坐标的，尺寸不对，点位会全落到图外。
+    和 resolution/origin 配对算坐标，尺寸不对，点位会全落到图外。
+    纯网格太像草稿纸，画上墙体和房间，大屏才像一张真地图。
     """
     def chunk(tag: bytes, data: bytes) -> bytes:
         return (struct.pack(">I", len(data)) + tag + data
                 + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF))
 
-    # 浅色栅格：真机 SLAM 图也是“自由区浅、障碍深”，这样和浅色 UI 一致
-    bg, grid = (247, 249, 252), (205, 214, 226)
+    free, wall, room = (246, 248, 252), (58, 70, 88), (228, 233, 241)
+    px = [[free for _ in range(width)] for _ in range(height)]
+
+    def rect(x0: int, y0: int, x1: int, y1: int, color, fill=False) -> None:
+        for y in range(max(0, y0), min(height, y1)):
+            for x in range(max(0, x0), min(width, x1)):
+                if fill or y in (y0, y1 - 1) or x in (x0, x1 - 1):
+                    px[y][x] = color
+
+    # 外墙
+    rect(6, 6, width - 6, height - 6, wall)
+    # 房间：左上一间、右上两间、下方大厅
+    rect(20, 20, 130, 110, wall)
+    rect(150, 20, 210, 110, wall)
+    rect(220, 20, 285, 150, wall)
+    rect(20, 150, 285, 150, wall, fill=True)      # 走廊隔墙
+    rect(20, 200, 120, 300, wall)
+    rect(160, 200, 285, 300, wall)
+    # 门洞：把墙打断，看起来像真的平面图
+    for y in range(140, 165):
+        for x in range(140, 175):
+            px[y][x] = free
+    for y in range(200, 240):
+        for x in range(125, 155):
+            px[y][x] = free
+    # 房间地面稍微压深一点
+    for y0, x0, y1, x1 in ((22, 22, 108, 128), (152, 22, 108, 208),
+                           (222, 22, 148, 283), (22, 202, 298, 118), (162, 202, 298, 283)):
+        for y in range(y0, y1):
+            for x in range(x0, x1):
+                if px[y][x] == free:
+                    px[y][x] = room
+
     rows = []
     for y in range(height):
         row = bytearray()
         for x in range(width):
-            row += bytes(grid if (x % 50 == 0 or y % 50 == 0) else bg)
+            row += bytes(px[y][x])
         rows.append(b"\x00" + bytes(row))
+
     ihdr = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
     return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr)
             + chunk(b"IDAT", zlib.compress(b"".join(rows), 6)) + chunk(b"IEND", b""))

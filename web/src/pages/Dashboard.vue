@@ -16,10 +16,6 @@ const points = ref<NavPoint[]>([])
 const trail = ref<{ x: number; y: number }[]>([])
 const mapError = ref('')
 const now = ref(new Date())
-const scale = ref(1)
-
-const DESIGN_W = 1920
-const DESIGN_H = 1080
 
 const nav = [
   { name: 'dashboard', label: '驾驶舱' },
@@ -93,7 +89,7 @@ async function loadMap() {
 }
 
 function fit() {
-  scale.value = Math.min(window.innerWidth / DESIGN_W, window.innerHeight / DESIGN_H)
+  // 布局改成自适应撑满，不再做整体缩放；这里的函数仅为兼容调用点
 }
 
 let timers: number[] = []
@@ -101,8 +97,6 @@ let timers: number[] = []
 onMounted(async () => {
   robot.start()
   await loadMap()
-  fit()
-  window.addEventListener('resize', fit)
   timers.push(window.setInterval(() => { now.value = new Date() }, 1000))
   timers.push(window.setInterval(() => {
     const p = robot.pose
@@ -114,7 +108,6 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   robot.stop()
-  window.removeEventListener('resize', fit)
   timers.forEach((t) => window.clearInterval(t))
   timers = []
 })
@@ -132,10 +125,7 @@ async function logout() {
 
 <template>
   <div class="scada">
-    <div
-      class="screen"
-      :style="{ transform: `translate(-50%, -50%) scale(${scale})` }"
-    >
+    <div class="screen">
       <!-- 顶栏 -->
       <header class="hdr">
         <div class="brand">
@@ -334,12 +324,10 @@ async function logout() {
 }
 
 .screen {
-  position: absolute; left: 50%; top: 50%;
-  width: 1920px; height: 1080px;
-  transform-origin: center center;
-  padding: 14px 16px 12px;
+  position: absolute; inset: 0;
+  padding: 12px 16px 10px;
   display: grid;
-  grid-template-rows: 64px minmax(0, 1fr) 30px;
+  grid-template-rows: 60px minmax(0, 1fr) 28px;
   gap: 10px;
   color: #a9bbd6;
   font-size: 13px;
@@ -398,7 +386,7 @@ h1 { font-size: 21px; margin: 0; color: #eaf4ff; letter-spacing: 0.08em; font-we
 /* 主体三列 */
 .body {
   display: grid;
-  grid-template-columns: 380px minmax(0, 1fr) 420px;
+  grid-template-columns: clamp(300px, 21vw, 380px) minmax(0, 1fr) clamp(320px, 23vw, 420px);
   gap: 12px;
   min-height: 0;
 }

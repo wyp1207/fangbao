@@ -53,17 +53,31 @@ def main() -> int:
     env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
     env.pop("JC_DB_URL", None)
 
-    backend = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "app.main:app", "--port", str(BACKEND_PORT)],
-        cwd=ROOT / "server", env=env,
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-    )
-    frontend = subprocess.Popen(
-        ["npm", "run", "dev", "--", "--port", str(FRONTEND_PORT), "--strictPort",
-         "--host", "127.0.0.1"],
-        cwd=ROOT / "web", shell=True,
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-    )
+    # 端口已被占用（比如你自己开着 dev server）就直接复用，不重复起进程
+    def port_open(port: int) -> bool:
+        import socket
+        s = socket.socket()
+        s.settimeout(0.4)
+        try:
+            return s.connect_ex(("127.0.0.1", port)) == 0
+        finally:
+            s.close()
+
+    backend = None
+    frontend = None
+    if not port_open(BACKEND_PORT):
+        backend = subprocess.Popen(
+            [sys.executable, "-m", "uvicorn", "app.main:app", "--port", str(BACKEND_PORT)],
+            cwd=ROOT / "server", env=env,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    if not port_open(FRONTEND_PORT):
+        frontend = subprocess.Popen(
+            ["npm", "run", "dev", "--", "--port", str(FRONTEND_PORT), "--strictPort",
+             "--host", "127.0.0.1"],
+            cwd=ROOT / "web", shell=True,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
 
     from playwright.sync_api import sync_playwright
 
@@ -86,7 +100,15 @@ def main() -> int:
             page.wait_for_selector("canvas", timeout=20000)
             page.wait_for_timeout(2500)  # 让 1s 轮询跑两轮，地图和状态条有数据
 
-            page.screenshot(path=str(SHOTS / "dashboard.png"), full_page=True)
+            # 大屏按 1920×1080 设计，截图也用这个尺寸；1440 笔记本另出一张
+            page.set_viewport_size({"width": 1920, "height": 1080})
+            page.wait_for_timeout(1200)
+            page.screenshot(path=str(SHOTS / "dashboard.png"), full_page=False)
+
+            page.set_viewport_size({"width": 1440, "height": 900})
+            page.wait_for_timeout(800)
+            page.screenshot(path=str(SHOTS / "dashboard-1440.png"), full_page=False)
+
             # canvas 要在离开驾驶舱之前量，否则拿到的是 null
             canvas = page.evaluate(
                 "() => { const c = document.querySelector('canvas');"
@@ -112,8 +134,11 @@ def main() -> int:
         }, ensure_ascii=False, indent=2))
         return 0 if canvas and canvas[0] > 0 and not real_errors else 1
     finally:
-        # Windows 上 terminate() 只杀 shell，vite/uvicorn 的孙进程会漏下来占端口
+        # 只杀本次启动的进程；Windows 上 terminate() 只杀 shell，
+        # vite/uvicorn 的孙进程会漏下来占端口，所以用 taskkill /T
         for proc in (frontend, backend):
+            if proc is None:
+                continue
             subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)],
                            capture_output=True, check=False)
 
