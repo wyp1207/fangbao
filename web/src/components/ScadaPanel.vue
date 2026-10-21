@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { ref } from 'vue'
+
 withDefaults(defineProps<{
   title: string
   right?: string
@@ -7,12 +9,23 @@ withDefaults(defineProps<{
   /** 传了路由名，右侧文案就变成可点链接 */
   rightTo?: string
 }>(), { tone: 'blue' })
+
+// SpotlightCard 思路：鼠标位置写进 CSS 变量，用径向渐变做一层跟随光
+const root = ref<HTMLElement | null>(null)
+function onMove(e: MouseEvent) {
+  const el = root.value
+  if (!el) return
+  const r = el.getBoundingClientRect()
+  el.style.setProperty('--mx', `${e.clientX - r.left}px`)
+  el.style.setProperty('--my', `${e.clientY - r.top}px`)
+}
 </script>
 
 <template>
-  <section class="t-panel">
+  <section class="t-panel" ref="root" @mousemove="onMove">
     <span class="c tl" /><span class="c tr" /><span class="c bl" /><span class="c br" />
     <span class="flow" />
+    <span class="spot" />
 
     <header class="t-head">
       <span class="tag" :class="tone">{{ title }}</span>
@@ -36,6 +49,19 @@ withDefaults(defineProps<{
   border: 1px solid rgba(64, 196, 255, 0.55);
   box-shadow: inset 0 0 24px rgba(64, 196, 255, 0.1), 0 0 12px rgba(0, 80, 180, 0.35);
 }
+
+/* 聚光：鼠标移到哪，光就跟到哪（参考 react-bits 的 SpotlightCard） */
+.spot {
+  position: absolute; inset: 0; pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  background: radial-gradient(
+    220px circle at var(--mx, 50%) var(--my, 0%),
+    rgba(140, 230, 255, 0.16),
+    transparent 70%
+  );
+}
+.t-panel:hover .spot { opacity: 1; }
 
 /* 边框流光：沿顶部缓慢扫过的一条亮带 */
 .flow {

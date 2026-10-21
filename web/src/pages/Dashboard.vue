@@ -170,7 +170,6 @@ async function loadMap() {
 
 let timers: number[] = []
 onMounted(async () => {
-  document.addEventListener("fullscreenchange", onFsChange)
   robot.start()
   await loadMap()
   try {
@@ -188,7 +187,6 @@ onMounted(async () => {
   }, 1000))
 })
 onBeforeUnmount(() => {
-  document.removeEventListener("fullscreenchange", onFsChange)
   robot.stop()
   timers.forEach((t) => window.clearInterval(t))
   timers = []
@@ -253,11 +251,7 @@ async function logout() {
             </svg>
             <em v-if="msgUnread" class="ti-badge">{{ msgUnread }}</em>
           </button>
-          <button class="ti" type="button" title="全屏 / 退出全屏" @click="toggleFullscreen">
-            <svg viewBox="0 0 16 16" aria-hidden="true">
-              <path d="M6 2.5H2.5V6M10 2.5h3.5V6M6 13.5H2.5V10M10 13.5h3.5V10" />
-            </svg>
-          </button>
+
         </span>
       </div>
 
@@ -465,10 +459,20 @@ async function logout() {
 .logo { display: flex; align-items: center; gap: 9px; min-width: 0; }
 .brand {
   font-size: 18px; font-weight: 800; letter-spacing: 0.14em;
-  background: linear-gradient(180deg, #ffffff 30%, #9fe4ff 100%);
+  background-image: linear-gradient(
+    100deg,
+    #cfefff 0%, #ffffff 38%, #ffffff 46%, #7fe3ff 50%, #ffffff 54%, #ffffff 62%, #cfefff 100%
+  );
+  background-size: 300% 100%;
+  background-position: 100% 0;
   -webkit-background-clip: text; background-clip: text; color: transparent;
-  text-shadow: 0 0 14px rgba(90, 200, 255, 0.5);
+  filter: drop-shadow(0 0 8px rgba(90, 200, 255, 0.45));
   white-space: nowrap;
+  animation: brand-shine 6s ease-in-out infinite;
+}
+@keyframes brand-shine {
+  0%, 55% { background-position: 100% 0; }
+  100% { background-position: 0% 0; }
 }
 /* 透明底直接放蓝底上：靠外发光把轮廓托出来 */
 .logo-badge {
@@ -562,15 +566,17 @@ async function logout() {
 
 /* 状态带 */
 .subbar {
-  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;   /* 时钟固定在正中间，和标题对齐 */
+  align-items: center; gap: 14px;
   padding: 0 16px;
   background: linear-gradient(180deg, rgba(0, 74, 132, 0.94), rgba(0, 58, 110, 0.94));
   border-bottom: 1px solid rgba(64, 176, 255, 0.35);
   font-size: 12px;
   position: relative; z-index: 35;   /* 让场站/设备下拉能盖在主体之上 */
 }
-.sb-left { display: flex; align-items: center; gap: 12px; }
-.sb-right { display: flex; align-items: center; gap: 14px; }
+.sb-left { display: flex; align-items: center; gap: 12px; justify-self: start; min-width: 0; }
+.sb-right { display: flex; align-items: center; gap: 14px; justify-self: end; }
 .tool-icons { display: flex; gap: 6px; }
 .ti {
   position: relative;
