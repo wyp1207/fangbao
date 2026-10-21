@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import TopNav from '@/components/TopNav.vue'
+import UserMenu from '@/components/UserMenu.vue'
 import logoUrl from '@/assets/logo.png'
 import { useRobotStore } from '@/stores/robot'
 
@@ -48,11 +49,7 @@ async function onLogout() {
         <span class="state" :class="state.cls">
           <i class="dot" :class="robot.online ? 'on' : 'off'" />{{ state.text }}
         </span>
-        <span class="user">
-          <span class="avatar" :title="`当前账号：${auth.user?.username ?? '未登录'}`">{{ (auth.user?.username ?? 'A').slice(0, 1).toUpperCase() }}</span>
-          {{ auth.user?.username }}
-        </span>
-        <button class="logout" @click="onLogout">退出</button>
+        <UserMenu />
       </div>
     </header>
 

@@ -108,6 +108,8 @@ export const api = {
       body: { username, password },
     }),
   logout: () => request<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
+  changePassword: (old_password: string, new_password: string) =>
+    request<{ ok: boolean }>('/auth/password', { method: 'POST', body: { old_password, new_password } }),
   me: () => request<User>('/auth/me'),
 
   robots: () => request<RobotRow[]>('/robots'),

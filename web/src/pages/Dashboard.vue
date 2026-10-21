@@ -7,6 +7,7 @@ import VideoBox from '@/components/VideoBox.vue'
 import AnimatedNumber from '@/components/AnimatedNumber.vue'
 import DarkSelect from '@/components/DarkSelect.vue'
 import TopNav from '@/components/TopNav.vue'
+import UserMenu from '@/components/UserMenu.vue'
 import { toast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { useRobotStore } from '@/stores/robot'
@@ -157,10 +158,7 @@ async function logout() {
         <router-link class="icon-btn" :to="{ name: 'alarms' }" title="告警">
           <span class="bell" />{{ unacked.length }}
         </router-link>
-        <div class="user">
-          <span class="avatar" :title="`当前账号：${auth.user?.username ?? '未登录'}`">{{ (auth.user?.username ?? 'A').slice(0, 1).toUpperCase() }}</span>
-        </div>
-        <button class="logout" @click="logout">退出</button>
+        <UserMenu />
       </div>
     </header>
 
