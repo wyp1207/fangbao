@@ -50,13 +50,23 @@ async function onLogout() {
 
       <nav class="tabs">
         <router-link
-          v-for="item in nav" :key="item.name"
+          v-for="item in nav.slice(0, 3)" :key="item.name"
           :to="{ name: item.name }"
           class="tab" :class="{ active: route.name === item.name }"
         >
           {{ item.label }}
           <span v-if="item.name === 'alarms' && alarmCount" class="badge">{{ alarmCount }}</span>
         </router-link>
+      </nav>
+
+      <div class="mini-title"><span class="w" />智能巡检机器人管理平台<span class="w r" /></div>
+
+      <nav class="tabs">
+        <router-link
+          v-for="item in nav.slice(3)" :key="item.name"
+          :to="{ name: item.name }"
+          class="tab" :class="{ active: route.name === item.name }"
+        >{{ item.label }}</router-link>
       </nav>
 
       <div class="right">
@@ -100,7 +110,18 @@ async function onLogout() {
 .logo-text b { display: block; font-size: 15px; color: #fff; letter-spacing: 0.08em; }
 .logo-text i { font-style: normal; font-size: 9.5px; color: #9fd2ff; letter-spacing: 0.18em; }
 
-.tabs { display: flex; gap: 6px; flex: 1; justify-content: center; }
+.tabs { display: flex; gap: 6px; }
+.mini-title {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 10px;
+  font-size: 17px; font-weight: 800; letter-spacing: 0.16em;
+  background: linear-gradient(180deg, #ffffff 35%, #9fe4ff 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  white-space: nowrap;
+}
+.mini-title .w {
+  width: 40px; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(160, 235, 255, 0.8));
+}
 .tab {
   position: relative;
   padding: 6px 20px;

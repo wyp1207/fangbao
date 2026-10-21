@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import MapCanvas from '@/components/MapCanvas.vue'
@@ -113,48 +113,68 @@ async function logout() {
 
 <template>
   <div class="board">
-    <!-- 顶栏 -->
+    <!-- 顶栏：左 logo+标签 / 中间大标题 / 右标签+用户 -->
     <header class="hdr">
-      <div class="logo">
-        <span class="mark">◈</span>
-        <div class="logo-text">
-          <b>防爆巡检</b>
-          <i>JCROB PLATFORM</i>
+      <div class="hdr-left">
+        <div class="logo">
+          <span class="mark">◈</span>
+          <div class="logo-text">
+            <b>防爆巡检</b>
+            <i>JCROB</i>
+          </div>
         </div>
+        <nav class="tabs">
+          <router-link
+            v-for="item in nav.slice(0, 3)" :key="item.name"
+            :to="{ name: item.name }"
+            class="tab" :class="{ active: item.name === 'dashboard' }"
+          >{{ item.label }}</router-link>
+        </nav>
       </div>
 
-      <nav class="tabs">
-        <router-link
-          v-for="item in nav" :key="item.name"
-          :to="{ name: item.name }"
-          class="tab" :class="{ active: item.name === 'dashboard' }"
-        >{{ item.label }}</router-link>
-      </nav>
+      <div class="board-title">
+        <span class="wing l" />
+        <h1>智能巡检机器人管理平台</h1>
+        <span class="wing r" />
+      </div>
 
       <div class="hdr-right">
+        <nav class="tabs">
+          <router-link
+            v-for="item in nav.slice(3)" :key="item.name"
+            :to="{ name: item.name }"
+            class="tab" :class="{ active: item.name === 'dashboard' }"
+          >{{ item.label }}</router-link>
+        </nav>
         <router-link class="icon-btn" :to="{ name: 'alarms' }" title="告警">
           <span class="bell" />{{ unacked.length }}
         </router-link>
         <div class="user">
           <span class="avatar">{{ (auth.user?.username ?? 'A').slice(0, 1).toUpperCase() }}</span>
-          <span>{{ auth.user?.username }}</span>
         </div>
         <button class="logout" @click="logout">退出</button>
       </div>
     </header>
 
-    <!-- 状态带 -->
+    <!-- 状态带：左选择器 / 中时钟 / 右状态（参考图就是靠右） -->
     <div class="subbar">
-      <div class="field"><label>当前场站</label><span class="select">泰安 · 泉州石化-04</span></div>
-      <div class="field"><label>当前设备</label><span class="select">JCROB-01（{{ mode }}）</span></div>
-      <span class="sep" />
+      <div class="sb-left">
+        <div class="field"><label>当前场站</label><span class="select">泰安 · 泉州石化-04</span></div>
+        <div class="field"><label>当前设备</label><span class="select">JCROB-01（{{ mode }}）</span></div>
+        <span class="tool-icons">
+          <i class="ti">🔒</i><i class="ti">🔔</i><i class="ti">✉</i>
+        </span>
+      </div>
+
       <div class="clock"><b>{{ clock.time }}</b><i>{{ clock.date }}</i></div>
-      <span class="sep" />
-      <div class="stat"><label>电量</label><b class="gold"><AnimatedNumber :value="battery" suffix="%" /></b><span class="battery"><i :style="{ width: (battery ?? 0) + '%' }" /></span></div>
-      <div class="stat"><label>在线状态</label><b :class="robot.online ? 'green' : 'red'">{{ robot.online ? '在线' : '离线' }}</b></div>
-      <div class="stat"><label>重定位状态</label><b class="green">{{ robot.online ? '定位成功' : '未知' }}</b></div>
-      <div class="stat"><label>机器人状态</label><b class="gold">{{ mode }}</b></div>
-      <div class="stat"><label>服务器状态</label><b class="green">已连接</b></div>
+
+      <div class="sb-right">
+        <div class="stat"><label>电量</label><b class="gold"><AnimatedNumber :value="battery" suffix="%" /></b><span class="battery"><i :style="{ width: (battery ?? 0) + '%' }" /></span></div>
+        <div class="stat"><label>在线状态</label><b :class="robot.online ? 'green' : 'red'">{{ robot.online ? '在线' : '离线' }}</b></div>
+        <div class="stat"><label>重定位状态</label><b class="green">{{ robot.online ? '定位成功' : '未知' }}</b></div>
+        <div class="stat"><label>机器人状态</label><b class="gold">{{ mode }}</b></div>
+        <div class="stat"><label>服务器状态</label><b class="green">已连接</b></div>
+      </div>
     </div>
 
     <!-- 主体：左视频 / 中地图 / 右统计 -->
@@ -304,13 +324,17 @@ async function logout() {
 /* 顶栏 */
 .hdr {
   position: relative;
-  display: flex; align-items: center; gap: 18px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
   padding: 0 16px;
   background: linear-gradient(180deg, #0a7ad0, #005da4);
   border-bottom: 1px solid rgba(111, 227, 255, 0.5);
   box-shadow: 0 2px 12px rgba(0, 40, 110, 0.5);
 }
-.logo { display: flex; align-items: center; gap: 9px; min-width: 190px; }
+.hdr-left { display: flex; align-items: center; gap: 14px; }
+.logo { display: flex; align-items: center; gap: 9px; }
 .mark {
   width: 30px; height: 30px; display: grid; place-items: center;
   color: #eaf7ff; font-size: 17px;
@@ -322,7 +346,7 @@ async function logout() {
 .logo-text b { display: block; font-size: 15px; color: #fff; letter-spacing: 0.08em; }
 .logo-text i { font-style: normal; font-size: 9.5px; color: #9fd2ff; letter-spacing: 0.18em; }
 
-.tabs { display: flex; gap: 6px; flex: 1; justify-content: center; }
+.tabs { display: flex; gap: 6px; }
 .tab {
   position: relative; padding: 6px 20px;
   color: #cfe8ff; font-size: 14px;
@@ -338,7 +362,34 @@ async function logout() {
   box-shadow: 0 0 14px rgba(120, 220, 255, 0.8);
 }
 
-.hdr-right { display: flex; align-items: center; gap: 14px; min-width: 190px; justify-content: flex-end; }
+.hdr-right { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
+
+/* 中间大标题（参考图那种带翼的标题组件） */
+.board-title { position: relative; display: flex; align-items: center; gap: 16px; }
+.board-title h1 {
+  margin: 0;
+  font-size: 26px; font-weight: 800; letter-spacing: 0.22em;
+  background: linear-gradient(180deg, #ffffff 35%, #9fe4ff 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-shadow: 0 0 22px rgba(80, 200, 255, 0.5);
+  white-space: nowrap;
+}
+.wing {
+  width: 78px; height: 22px; position: relative; opacity: 0.9;
+}
+.wing::before {
+  content: ""; position: absolute; top: 50%; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(160, 235, 255, 0.9));
+}
+.wing::after {
+  content: ""; position: absolute; top: 50%; width: 7px; height: 7px;
+  margin-top: -3.5px; background: #9fefff; transform: rotate(45deg);
+  box-shadow: 0 0 10px rgba(120, 230, 255, 0.9);
+}
+.wing.l::after { right: -2px; }
+.wing.r::after { left: -2px; }
+.wing.l::before { background: linear-gradient(90deg, transparent, rgba(160, 235, 255, 0.9)); }
+.wing.r::before { background: linear-gradient(90deg, rgba(160, 235, 255, 0.9), transparent); }
 .icon-btn {
   display: inline-flex; align-items: center; gap: 6px;
   color: #cfe8ff; font-size: 12px; padding: 4px 10px;
@@ -361,11 +412,20 @@ async function logout() {
 
 /* 状态带 */
 .subbar {
-  display: flex; align-items: center; gap: 14px;
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
   padding: 0 16px;
   background: linear-gradient(180deg, rgba(0, 74, 132, 0.94), rgba(0, 58, 110, 0.94));
   border-bottom: 1px solid rgba(64, 176, 255, 0.35);
   font-size: 12px; overflow: hidden;
+}
+.sb-left { display: flex; align-items: center; gap: 12px; }
+.sb-right { display: flex; align-items: center; gap: 14px; }
+.tool-icons { display: flex; gap: 6px; }
+.ti {
+  width: 22px; height: 20px; display: grid; place-items: center;
+  font-size: 11px; font-style: normal;
+  background: rgba(0, 90, 170, 0.6);
+  border: 1px solid rgba(111, 227, 255, 0.35);
 }
 .field { display: flex; align-items: center; gap: 6px; }
 .field label { color: #8fc4f0; }
