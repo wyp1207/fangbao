@@ -44,6 +44,7 @@ const router = createRouter({
         { path: 'record/playback', name: 'record-playback', component: () => import('@/pages/RecordPlayback.vue') },
 
         // 系统管理
+        { path: 'messages', name: 'messages', component: () => import('@/pages/Messages.vue') },
         { path: 'users', name: 'users', component: () => import('@/pages/Users.vue') },
         { path: 'settings', name: 'settings', component: () => import('@/pages/Settings.vue') },
         { path: 'oplog', name: 'oplog', component: () => import('@/pages/PlaceholderPage.vue') },

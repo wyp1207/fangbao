@@ -395,6 +395,11 @@ def register_go2rtc(
     v.stream_name = web_name
     db.commit()
     db.refresh(v)
+
+    from app.services.messages import store as msg_store
+    msg_store.add("info", "video", f"视频源已注册：{v.name}",
+                  f"go2rtc 流 {web_name}（厂商 {VENDORS.get(v.vendor, v.vendor)}）",
+                  {"to": "video", "query": {"source": str(v.id)}})
     return {"ok": True, "stream": name, "web_stream": web_name, "video": _out(v)}
 
 

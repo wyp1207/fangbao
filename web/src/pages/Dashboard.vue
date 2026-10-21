@@ -53,6 +53,17 @@ async function unlock() {
 
 // ---- 全屏 ----
 const isFull = ref(false)
+
+// 消息中心未读数（和消息页用同一个 localStorage 时间戳）
+const msgUnread = ref(0)
+const READ_KEY = 'jc_msg_read_ts'
+async function refreshMsgUnread() {
+  try {
+    const res = await api.messages()
+    const readTs = Number(localStorage.getItem(READ_KEY) ?? 0)
+    msgUnread.value = res.items.filter((m) => m.ts > readTs).length
+  } catch { /* 消息拿不到不影响大屏 */ }
+}
 function toggleFullscreen() {
   if (document.fullscreenElement) void document.exitFullscreen()
   else void document.documentElement.requestFullscreen()
@@ -167,6 +178,8 @@ onMounted(async () => {
     if (list.length) devices.value = list.map((r) => ({ value: String(r.id), label: r.name }))
   } catch { /* 设备列表失败不影响大屏 */ }
   timers.push(window.setInterval(() => { now.value = new Date() }, 1000))
+  void refreshMsgUnread()
+  timers.push(window.setInterval(refreshMsgUnread, 15000))
   timers.push(window.setInterval(() => {
     const p = robot.pose
     if (!p || typeof p.x !== 'number' || typeof p.y !== 'number') return
@@ -222,6 +235,9 @@ async function logout() {
           <button class="ti" type="button" title="锁定屏幕" @click="lockScreen">🔒</button>
           <button class="ti" type="button" :title="`告警：${unacked.length} 条未确认`" @click="goAlarms('unacked')">
             🔔<em v-if="unacked.length" class="ti-badge">{{ unacked.length }}</em>
+          </button>
+          <button class="ti" type="button" title="消息中心" @click="router.push({ name: 'messages' })">
+            ✉<em v-if="msgUnread" class="ti-badge">{{ msgUnread }}</em>
           </button>
           <button class="ti" type="button" title="全屏 / 退出全屏" @click="toggleFullscreen">⛶</button>
         </span>
@@ -369,7 +385,8 @@ async function logout() {
       <span>v0.1.0</span>
     </footer>
 
-    <!-- 锁屏：挡住了就要求输密码，避免值班时别人乱点 -->
+    <!-- 锁屏：Teleport 到 body 并压在所有浮层之上，锁住后连菜单都点不到 -->
+    <Teleport to="body">
     <div v-if="locked" class="lock-mask">
       <div class="lock-box">
         <div class="lock-icon">🔒</div>
@@ -381,11 +398,13 @@ async function logout() {
         />
         <p v-if="lockError" class="red small">{{ lockError }}</p>
         <div class="lock-actions">
-          <button class="btn btn-sm" @click="locked = false">取消</button>
+          <button class="btn btn-sm" @click="logout">退出登录</button>
           <button class="btn btn-sm primary" :disabled="lockBusy" @click="unlock">解锁</button>
         </div>
+        <p class="dim small" style="margin-top:10px">锁定期间无法操作大屏；忘记密码请让管理员在「用户管理」里重置</p>
       </div>
     </div>
+    </Teleport>
   </div>
 </template>
 
@@ -548,7 +567,7 @@ async function logout() {
 }
 
 .lock-mask {
-  position: absolute; inset: 0; z-index: 60;
+  position: fixed; inset: 0; z-index: 2147483100;
   display: grid; place-items: center;
   background: rgba(2, 12, 28, 0.72);
   backdrop-filter: blur(6px);

@@ -58,6 +58,9 @@ def start_recording(
     if not FFMPEG:
         raise BadRequest("服务端没有 ffmpeg，无法录像", code="FFMPEG_MISSING")
     rec = registry.start(video_id, v.name, v.url)
+    from app.services.messages import store as msg_store
+    msg_store.add("warn", "video", f"开始录像：{v.name}", "服务端 ffmpeg 正在分段落盘",
+                  {"to": "record-plan"})
     return {"ok": True, "video_id": rec.video_id, "running": rec.running}
 
 
@@ -67,6 +70,9 @@ def stop_recording(
     _: User = Depends(require_roles("admin", "operator")),
 ) -> dict:
     registry.stop(video_id)
+    from app.services.messages import store as msg_store
+    msg_store.add("info", "video", f"停止录像：视频源 #{video_id}", "",
+                  {"to": "record-plan"})
     return {"ok": True, "video_id": video_id}
 
 

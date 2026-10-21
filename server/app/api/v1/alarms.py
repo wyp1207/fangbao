@@ -21,6 +21,9 @@ def list_alarms(active: bool = Query(False, description="只看未确认"),
 def ack_alarm(alarm_id: int, store=Depends(get_alarms),
               user: User = Depends(require_roles("admin", "operator"))) -> dict:
     alarm = store.ack(alarm_id, who=user.username)
+    from app.services.messages import store as msg_store
+    msg_store.add("info", "alarm", f"告警已确认：{alarm.message}", f"确认人 {user.username}",
+                  {"to": "alarms", "query": {"status": "acked"}})
     if alarm is None:
         raise NotFound(f"告警 {alarm_id} 不存在")
     return alarm

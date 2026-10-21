@@ -129,6 +129,8 @@ export const api = {
     request<{ ok: boolean; target: string; message: string }>(`/videos/${id}/test`, { method: 'POST' }),
   deleteVideo: (id: number) => request<{ ok: boolean }>(`/videos/${id}`, { method: 'DELETE' }),
 
+  messages: () => request<{ items: { id: number; ts: number; level: string; source: string; title: string; body: string; link: Record<string, unknown> }[]; unread: number }>('/messages'),
+
   // 录像
   recordings: (videoId?: number) =>
     request<{ total: number; items: RecordingItem[]; recording: { video_id: number; name: string; running: boolean; started_at: number }[] }>(
