@@ -52,7 +52,17 @@ async function unlock() {
 }
 
 // ---- 全屏 ----
-const isFull = ref(false)
+// 首页内嵌视频：取第一路可用视频源（可见光/热红外分开挑）
+const videoRows = ref<{ id: number; name: string; group_name: string; stream_name: string; go2rtc_url: string | null }[]>([])
+const visibleStream = computed(() => {
+  const v = videoRows.value.find((x) => x.go2rtc_url && /充电房|可见光|车体/.test(x.group_name + x.name))
+    ?? videoRows.value.find((x) => x.go2rtc_url)
+  return v?.go2rtc_url ?? ''
+})
+const thermalStream = computed(() => {
+  const v = videoRows.value.find((x) => x.go2rtc_url && /热|红外|thermal/i.test(x.name + x.group_name))
+  return v?.go2rtc_url ?? ''
+})
 
 // 消息中心未读数（和消息页用同一个 localStorage 时间戳）
 const msgUnread = ref(0)
@@ -64,30 +74,36 @@ async function refreshMsgUnread() {
     msgUnread.value = res.items.filter((m) => m.ts > readTs).length
   } catch { /* 消息拿不到不影响大屏 */ }
 }
-function toggleFullscreen() {
-  if (document.fullscreenElement) void document.exitFullscreen()
-  else void document.documentElement.requestFullscreen()
-}
-function onFsChange() {
-  isFull.value = !!document.fullscreenElement
-}
-
-const sites = [
-  { value: 'qz-04', label: '泰安 · 泉州石化-04' },
-  { value: 'dy-03', label: '东营 · 泉州石化-03' },
-  { value: 'hb', label: '湖北荆州' },
-]
-const site = ref('qz-04')
+const devices = ref<{ id: number; name: string; station: string }[]>([])
+const site = ref('')
 const deviceId = ref('1')
-const devices = ref([{ value: '1', label: 'JCROB-01' }])
+
+const sites = computed(() => {
+  const names = [...new Set(devices.value.map((d) => d.station).filter(Boolean))]
+  return (names.length ? names : ['未分场站']).map((n) => ({ value: n, label: n }))
+})
+const deviceOptions = computed(() =>
+  devices.value
+    .filter((d) => !site.value || d.station === site.value)
+    .map((d) => ({ value: String(d.id), label: d.name })),
+)
 
 function onSite(v: string) {
   site.value = v
-  if (v !== 'qz-04') toast('该场站暂无机器人接入，仍显示当前设备', 'warn')
+  const first = deviceOptions.value[0]
+  if (first) {
+    deviceId.value = first.value
+    toast(`已切到场站 ${v}｜设备 ${first.label}`, 'ok')
+  } else {
+    toast('该场站暂无可控设备', 'warn')
+  }
 }
 function onDevice(v: string) {
   deviceId.value = v
-  toast('已切换到 ' + (devices.value.find((d) => d.value === v)?.label ?? v), 'ok')
+  const hit = devices.value.find((d) => String(d.id) === v)
+  toast('已切换到 ' + (hit?.name ?? v), 'ok')
+  // 换设备就刷新视频与地图，避免还显示上一台的画面
+  void api.videos().then((rows) => { videoRows.value = rows as never }).catch(() => undefined)
 }
 function goAlarms(status: 'unacked' | 'acked') {
   void router.push({ name: 'alarms', query: { status } })
@@ -171,11 +187,12 @@ async function loadMap() {
 let timers: number[] = []
 onMounted(async () => {
   robot.start()
+  void api.videos().then((rows) => { videoRows.value = rows as never }).catch(() => undefined)
+  void api.devices().then((rows) => {
+    devices.value = rows.map((d) => ({ id: d.id, name: d.name, station: d.station }))
+    site.value = rows[0]?.station ?? '未分场站'
+  }).catch(() => undefined)
   await loadMap()
-  try {
-    const list = await api.robots()
-    if (list.length) devices.value = list.map((r) => ({ value: String(r.id), label: r.name }))
-  } catch { /* 设备列表失败不影响大屏 */ }
   timers.push(window.setInterval(() => { now.value = new Date() }, 1000))
   void refreshMsgUnread()
   timers.push(window.setInterval(refreshMsgUnread, 15000))
@@ -229,7 +246,7 @@ async function logout() {
     <div class="subbar">
       <div class="sb-left">
         <div class="field"><label>当前场站</label><DarkSelect :model-value="site" :options="sites" width="190px" @update:model-value="onSite" /></div>
-        <div class="field"><label>当前设备</label><DarkSelect :model-value="deviceId" :options="devices" width="170px" @update:model-value="onDevice" /></div>
+        <div class="field"><label>当前设备</label><DarkSelect :model-value="deviceId" :options="deviceOptions" width="170px" @update:model-value="onDevice" /></div>
         <span class="tool-icons">
           <button class="ti" type="button" title="锁定屏幕" @click="lockScreen">
             <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -270,14 +287,25 @@ async function logout() {
     <div class="body">
       <aside class="col left">
         <ScadaPanel title="可见光视频" tone="cyan" class="grow" body-class="no-pad">
-          <div class="clickable" @click="goVideo('可见光')">
-            <VideoBox title="可见光" hint="海康可见光通道接入后播放" />
+          <div class="embed">
+            <iframe v-if="visibleStream" :src="visibleStream" title="可见光" allow="autoplay; fullscreen" />
+            <div v-else class="embed-empty">
+              <b>未配置可见光视频源</b>
+              <span>到「设备管理 → 摄像头」添加 RTSP 后自动出现</span>
+              <button class="btn btn-sm" @click="router.push({ name: 'cameras' })">去添加</button>
+            </div>
+            <button class="embed-expand" title="打开视频监控" @click="goVideo('可见光')">打开全屏页 ↗</button>
           </div>
         </ScadaPanel>
 
         <ScadaPanel title="热红外视频" tone="gold" class="grow" body-class="no-pad">
-          <div class="clickable" @click="goVideo('热红外')">
-            <VideoBox title="热红外" hint="热成像通道接入后播放" />
+          <div class="embed">
+            <iframe v-if="thermalStream" :src="thermalStream" title="热红外" allow="autoplay; fullscreen" />
+            <div v-else class="embed-empty">
+              <b>未接入热成像通道</b>
+              <span>热像仪接上后在这里直接显示</span>
+            </div>
+            <button class="embed-expand" title="打开视频监控" @click="goVideo('热红外')">打开全屏页 ↗</button>
           </div>
         </ScadaPanel>
 
@@ -901,4 +929,21 @@ async function logout() {
 .gold { color: #ffd54a; }
 .green { color: #7dff9a; }
 .red { color: #ff8a8a; }
+
+/* 首页内嵌视频 */
+.embed { position: relative; width: 100%; height: 100%; background: #04101f; }
+.embed iframe { width: 100%; height: 100%; border: 0; display: block; }
+.embed-empty {
+  height: 100%; display: flex; flex-direction: column; gap: 8px;
+  align-items: center; justify-content: center; text-align: center; padding: 12px;
+}
+.embed-empty b { color: #cfe9ff; font-size: 13px; }
+.embed-empty span { color: #7fa8cc; font-size: 11.5px; }
+.embed-expand {
+  position: absolute; right: 8px; bottom: 8px;
+  background: rgba(0, 40, 80, 0.78); color: #cfe9ff;
+  border: 1px solid rgba(111, 227, 255, 0.4); border-radius: 4px;
+  padding: 3px 8px; font-size: 11px; cursor: pointer;
+}
+.embed-expand:hover { border-color: #7fe9ff; color: #fff; }
 </style>

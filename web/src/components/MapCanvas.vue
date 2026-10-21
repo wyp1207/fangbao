@@ -204,7 +204,20 @@ function onWheel(e: WheelEvent) {
   draw()
 }
 
-function onDown(e: MouseEvent) { dragging = true; lastX = e.clientX; lastY = e.clientY }
+const emit = defineEmits<{ pick: [{ x: number; y: number }] }>()
+
+let downAt = 0
+let downX = 0
+let downY = 0
+
+function onDown(e: MouseEvent) {
+  dragging = true
+  downAt = Date.now()
+  downX = e.clientX
+  downY = e.clientY
+  lastX = e.clientX
+  lastY = e.clientY
+}
 function onMove(e: MouseEvent) {
   const el = canvas.value
   if (el) {
@@ -218,7 +231,19 @@ function onMove(e: MouseEvent) {
   lastY = e.clientY
   draw()
 }
-function onUp() { dragging = false }
+function onUp(e: MouseEvent) {
+  const wasDrag = Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY) > 4
+  dragging = false
+  // 短按且没怎么移动 = 一次点击，抛坐标给父组件（打点模式用）
+  if (!wasDrag && Date.now() - downAt < 400) {
+    const el = canvas.value
+    if (el) {
+      const rect = el.getBoundingClientRect()
+      const w = screenToWorld(e.clientX - rect.left, e.clientY - rect.top)
+      if (w) emit('pick', w)
+    }
+  }
+}
 function onLeave() { dragging = false; hover.value = null }
 
 watch(() => props.imageUrl, (url) => loadImage(url), { immediate: true })

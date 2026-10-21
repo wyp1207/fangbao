@@ -123,6 +123,32 @@ export interface AuditItem {
   detail: string | null
 }
 
+export interface LibraryMap {
+  id: number
+  name: string
+  floor: string
+  station: string
+  resolution: number
+  origin: [number, number, number]
+  width: number
+  height: number
+  robot_map_name: string | null
+  is_active: boolean
+  note: string | null
+  created_at: string | null
+  draft_points: number
+}
+
+export interface PointDraft {
+  id: number
+  name: string
+  x: number
+  y: number
+  theta: number
+  note: string | null
+  synced: boolean
+}
+
 export interface AlarmPage {
   total: number
   items: AlarmItem[]
@@ -220,6 +246,16 @@ export const api = {
   deleteUser: (id: number) => request<{ ok: boolean }>(`/users/${id}`, { method: 'DELETE' }),
   status: (id = 1) => request<StatusSnapshot>(`/robots/${id}/status`),
   maps: (id = 1) => request<MapMeta[]>(`/robots/${id}/maps`),
+
+  // 平台地图库（导入/标定/草稿点位）
+  libraryMaps: () => request<LibraryMap[]>('/maps/library'),
+  libraryImageUrl: (id: number) => `/api/v1/maps/library/${id}/image`,
+  importLibraryMap: (fd: FormData) => request<LibraryMap>('/maps/library', { method: 'POST', raw: fd }),
+  libraryPoints: (id: number) => request<PointDraft[]>(`/maps/library/${id}/points`),
+  addLibraryPoint: (id: number, body: { name: string; x: number; y: number; note?: string | null }) =>
+    request<PointDraft>(`/maps/library/${id}/points`, { method: 'POST', body }),
+  deleteLibraryPoint: (pointId: number) =>
+    request<{ ok: boolean }>(`/maps/library/points/${pointId}`, { method: 'DELETE' }),
   currentMap: (id = 1) => request<{ name: string; md5sum?: string }>(`/robots/${id}/map/current`),
   navPoints: (id = 1, mapName = '', pathName = '') =>
     request<{

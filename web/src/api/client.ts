@@ -19,6 +19,8 @@ function cookie(name: string): string {
 type Options = {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   body?: unknown
+  /** 文件上传用：直接传 FormData，不要 JSON 序列化，Content-Type 交给浏览器 */
+  raw?: FormData
   headers?: Record<string, string>
 }
 
@@ -26,7 +28,7 @@ export async function request<T>(path: string, options: Options = {}): Promise<T
   const method = options.method ?? 'GET'
   const headers: Record<string, string> = {
     Accept: 'application/json',
-    ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+    ...(options.body && !options.raw ? { 'Content-Type': 'application/json' } : {}),
     ...options.headers,
   }
   // 写接口走双提交 CSRF：cookie 与 header 必须一致
@@ -36,7 +38,7 @@ export async function request<T>(path: string, options: Options = {}): Promise<T
     method,
     headers,
     credentials: 'include',
-    body: options.body ? JSON.stringify(options.body) : undefined,
+    body: options.raw ?? (options.body ? JSON.stringify(options.body) : undefined),
   })
 
   if (!res.ok) {
