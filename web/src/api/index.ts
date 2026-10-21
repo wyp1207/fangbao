@@ -340,6 +340,14 @@ export const api = {
       `/sensors/${id}/history?hours=${hours}&points=${points}`),
   sensorSummary: () =>
     request<{ items: Record<string, { name: string; unit: string; value: number | null; ts: string | null; calibrated: boolean }>; count: number }>('/sensors/summary'),
+  telemetry: (hours = 24, points = 240) =>
+    request<{
+      count: number
+      hours: number
+      series: { ts: string; battery: number | null; speed: number | null; voltage: number | null; online: boolean }[]
+      stats: { battery_min: number | null; battery_max: number | null; battery_avg: number | null;
+               speed_max: number | null; distance_m: number; offline_ratio: number; from: string; to: string } | null
+    }>(`/telemetry?hours=${hours}&points=${points}`),
   deepHealth: () =>
     request<{
       cache: { online: boolean; age_s: number; consecutive_failures: number; last_error: string | null; poll_count: number }

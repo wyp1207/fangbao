@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 from app.adapters.jcrob import build_adapter
 from app.adapters.jcrob import errors as jerr
 from app.api.v1 import (alarms, audit, auth, devices, health, map_library,
-                        messages, recordings, robots, sensors,
+                        messages, recordings, robots, sensors, telemetry,
                         settings as settings_api, users, videos)
 from app.core.config import get_settings
 from app.core.errors import PlatformError
@@ -69,6 +69,13 @@ async def lifespan(app: FastAPI):
 
     record_janitor.start()
 
+    from app.db.session import SessionLocal as _SL
+    from app.api.v1.telemetry import TelemetryCollector, purge as telemetry_purge
+
+    collector = TelemetryCollector(lambda: app.state.cache.snapshot, _SL)
+    collector.start()
+    app.state.telemetry = collector
+
     poller_service.start()
     lag.start()
     try:
@@ -78,6 +85,10 @@ async def lifespan(app: FastAPI):
         from app.services.recorder import registry as recorder_registry
         recorder_registry.stop_all()
         record_janitor.stop()
+        try:
+            app.state.telemetry.stop()
+        except Exception:  # noqa: BLE001
+            pass
         await poller_service.stop()
         await lag.stop()
         await adapter.aclose()
@@ -120,6 +131,7 @@ def create_app() -> FastAPI:
     app.include_router(map_library.router, prefix=settings.api_prefix)
     app.include_router(settings_api.router, prefix=settings.api_prefix)
     app.include_router(sensors.router, prefix=settings.api_prefix)
+    app.include_router(telemetry.router, prefix=settings.api_prefix)
     return app
 
 
