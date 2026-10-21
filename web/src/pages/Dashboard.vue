@@ -452,23 +452,19 @@ async function logout() {
 /* 顶栏 */
 .hdr {
   position: relative;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
-  justify-content: center;
   gap: 12px;
-  padding: 0 16px;
+  padding: 0 14px;
   background: linear-gradient(180deg, #0a7ad0, #005da4);
   border-bottom: 1px solid rgba(111, 227, 255, 0.5);
   box-shadow: 0 2px 12px rgba(0, 40, 110, 0.5);
 }
-.hdr-center { display: flex; align-items: center; gap: 16px; }
-.logo {
-  position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
-  display: flex; align-items: center; gap: 9px;
-  z-index: 2;
-}
+.hdr-center { display: flex; align-items: center; gap: 14px; justify-self: center; }
+.logo { display: flex; align-items: center; gap: 9px; min-width: 0; }
 .brand {
-  font-size: 15px; font-weight: 800; letter-spacing: 0.12em;
+  font-size: 18px; font-weight: 800; letter-spacing: 0.14em;
   background: linear-gradient(180deg, #ffffff 30%, #9fe4ff 100%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
   text-shadow: 0 0 14px rgba(90, 200, 255, 0.5);
@@ -513,11 +509,7 @@ async function logout() {
   box-shadow: 0 0 14px rgba(120, 220, 255, 0.8);
 }
 
-.hdr-right {
-  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
-  display: flex; align-items: center; gap: 10px;
-  z-index: 2;
-}
+.hdr-right { display: flex; align-items: center; gap: 10px; justify-self: end; }
 
 /* 中间大标题（参考图那种带翼的标题组件） */
 .board-title {
@@ -788,6 +780,12 @@ async function logout() {
 .points .coord { margin-left: auto; color: #9fd2ff; font-size: 11px; }
 
 /* ---------- 响应式：窄屏/矮屏都不挤爆 ---------- */
+@media (max-width: 1560px) {
+  .brand { font-size: 16px; letter-spacing: 0.08em; }
+  .hdr-center { gap: 10px; }
+  .board-title h1 { font-size: 15px; letter-spacing: 0.04em; }
+  .wing { width: 14px; }
+}
 @media (max-width: 1780px) {
   .board-title h1 { font-size: clamp(15px, 1.25vw, 20px); letter-spacing: 0.08em; }
   .wing { width: 22px; }
@@ -795,10 +793,6 @@ async function logout() {
   .logo-text i { display: none; }
 }
 
-/* 1440 下标签要占位，品牌文字先收起，只留 logo，避免和「首页」挤在一起 */
-@media (max-width: 1560px) {
-  .brand { display: none; }
-}
 @media (max-width: 1600px) {
   .tab { padding: 4px 10px; font-size: 12.5px; }
   .board-title { gap: 10px; }

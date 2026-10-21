@@ -66,19 +66,17 @@ async function onLogout() {
 .hdr {
   flex: none; height: 54px;
   position: relative; z-index: 50;   /* 让下拉菜单盖在内容区之上 */
-  display: flex; align-items: center; justify-content: center; gap: 16px;
-  padding: 0 16px;
+  display: grid; grid-template-columns: auto 1fr auto;
+  align-items: center; gap: 12px;
+  padding: 0 14px;
   background: linear-gradient(180deg, #0a7ad0, #005da4);
   border-bottom: 1px solid rgba(111, 227, 255, 0.5);
   box-shadow: 0 2px 12px rgba(0, 40, 110, 0.5);
 }
-.hdr-center { display: flex; align-items: center; gap: 16px; }
-.logo {
-  position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
-  display: flex; align-items: center; gap: 9px; z-index: 2;
-}
+.hdr-center { display: flex; align-items: center; gap: 10px; justify-self: center; }
+.logo { display: flex; align-items: center; gap: 9px; min-width: 0; }
 .brand {
-  font-size: 14px; font-weight: 800; letter-spacing: 0.1em;
+  font-size: 17px; font-weight: 800; letter-spacing: 0.12em;
   background: linear-gradient(180deg, #ffffff 30%, #9fe4ff 100%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
   text-shadow: 0 0 12px rgba(90, 200, 255, 0.45);
@@ -133,10 +131,7 @@ async function onLogout() {
   display: inline-block;
 }
 
-.right {
-  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
-  display: flex; align-items: center; gap: 12px; z-index: 2;
-}
+.right { display: flex; align-items: center; gap: 10px; justify-self: end; }
 .state {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 4px 11px; font-size: 12.5px;
@@ -172,7 +167,8 @@ async function onLogout() {
   .logo-text i { display: none; }
 }
 @media (max-width: 1560px) {
-  .brand { display: none; }
+  .brand { display: none; }          /* 后台 8 个标签更占地方，这里只留 logo */
+  .mini-title { display: none; }
 }
 @media (max-width: 1700px) {
   .state { display: none; }
