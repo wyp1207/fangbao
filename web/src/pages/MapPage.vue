@@ -244,6 +244,20 @@ onMounted(async () => {
       </button>
       <p v-if="!library.length" class="muted small">还没有导入过地图。换场地时把客户图纸导进来。</p>
 
+      <div class="map-guide">
+        <details>
+          <summary>换场地怎么用？（点开看）</summary>
+          <ol>
+            <li>点上面「平台地图库 → 导入」，选客户给的图纸或现场截图</li>
+            <li>填分辨率：图上量一段已知长度（如 10 米）÷ 它的像素数</li>
+            <li>原点填机器人建图时的 map 原点，不知道先填 0，联调时再校</li>
+            <li>「对应机器人地图名」填机器人里那张图的名字，方便后面对照</li>
+            <li>导入后点「新增点位」，在地图上点一下就是该点的物理坐标</li>
+            <li>点位先存<b>草稿</b>（标「草」），下发要等真机联调 + 授权</li>
+          </ol>
+        </details>
+      </div>
+
       <div class="panel-title" style="margin-top: 14px">点位（{{ pointRows.length }}）</div>
       <ul class="points">
         <li v-for="p in pointRows" :key="p.key">
@@ -348,6 +362,16 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.map-guide { margin: 10px 0 4px; font-size: 12px; }
+.map-guide summary {
+  cursor: pointer; color: #7fe9ff; padding: 4px 0; list-style: none;
+}
+.map-guide summary::-webkit-details-marker { display: none; }
+.map-guide summary::before { content: '▸ '; }
+details[open] .map-guide summary::before, details[open] summary::before { content: '▾ '; }
+.map-guide ol { margin: 6px 0 0; padding-left: 18px; line-height: 1.9; color: #bcdcff; }
+.map-guide b { color: #ffe08a; }
+
 .page { display: grid; grid-template-columns: 300px 1fr; gap: 12px; height: 100%; }
 .side { overflow: auto; }
 .main { display: flex; flex-direction: column; min-height: 0; }
