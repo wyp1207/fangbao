@@ -12,6 +12,7 @@ from app.db.session import Base, SessionLocal, engine
 from app.models.alarm import AlarmRecord  # noqa: F401
 from app.models.map_library import PlatformMap, PointDraft  # noqa: F401
 from app.models.message import MessageRecord  # noqa: F401
+from app.models.record_plan import RecordPlan  # noqa: F401
 from app.models.robot import Robot
 from app.models.sensor import Sensor, SensorReading  # noqa: F401
 from app.models.setting import Setting  # noqa: F401

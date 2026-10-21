@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 from app.adapters.jcrob import build_adapter
 from app.adapters.jcrob import errors as jerr
 from app.api.v1 import (alarms, audit, auth, devices, health, map_library,
-                        messages, recordings, robots, sensors, telemetry,
+                        messages, record_plans, recordings, robots, sensors, telemetry,
                         settings as settings_api, users, videos)
 from app.core.config import get_settings
 from app.core.errors import PlatformError
@@ -74,6 +74,10 @@ async def lifespan(app: FastAPI):
 
     collector = TelemetryCollector(lambda: app.state.cache.snapshot, _SL)
     collector.start()
+
+    from app.api.v1.record_plans import scheduler as plan_scheduler
+    plan_scheduler._session_factory = _SL
+    plan_scheduler.start()
     app.state.telemetry = collector
 
     poller_service.start()
@@ -85,6 +89,10 @@ async def lifespan(app: FastAPI):
         from app.services.recorder import registry as recorder_registry
         recorder_registry.stop_all()
         record_janitor.stop()
+        try:
+            plan_scheduler.stop()
+        except Exception:  # noqa: BLE001
+            pass
         try:
             app.state.telemetry.stop()
         except Exception:  # noqa: BLE001
@@ -125,6 +133,7 @@ def create_app() -> FastAPI:
     app.include_router(users.router, prefix=settings.api_prefix)
     app.include_router(videos.router, prefix=settings.api_prefix)
     app.include_router(recordings.router, prefix=settings.api_prefix)
+    app.include_router(record_plans.router, prefix=settings.api_prefix)
     app.include_router(messages.router, prefix=settings.api_prefix)
     app.include_router(audit.router, prefix=settings.api_prefix)
     app.include_router(devices.router, prefix=settings.api_prefix)

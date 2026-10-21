@@ -250,6 +250,13 @@ export const api = {
   recordings: (videoId?: number) =>
     request<{ total: number; items: RecordingItem[]; recording: { video_id: number; name: string; running: boolean; started_at: number }[] }>(
       `/recordings${videoId ? `?video_id=${videoId}` : ''}`),
+  recordPlans: () => request<Record<string, unknown>[]>('/record-plans'),
+  createRecordPlan: (body: Record<string, unknown>) =>
+    request<Record<string, unknown>>('/record-plans', { method: 'POST', body }),
+  updateRecordPlan: (id: number, body: Record<string, unknown>) =>
+    request<Record<string, unknown>>(`/record-plans/${id}`, { method: 'PATCH', body }),
+  deleteRecordPlan: (id: number) =>
+    request<{ ok: boolean }>(`/record-plans/${id}`, { method: 'DELETE' }),
   recordingStatus: () =>
     request<{
       recorders: { video_id: number; name: string; running: boolean; started_at: number }[]
