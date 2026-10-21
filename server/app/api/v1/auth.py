@@ -38,6 +38,11 @@ def login(body: LoginIn, response: Response, db: Session = Depends(get_db)) -> L
     settings = get_settings()
     user = db.scalar(select(User).where(User.username == body.username))
     if not user or not user.is_active or not verify_password(body.password, user.password_hash):
+        from app.services.messages import store as msg_store
+
+        msg_store.add("warn", "user", f"登录失败：{body.username}",
+                      "账号不存在、已停用或密码错误" if user else "账号不存在",
+                      {"to": "users"} if user else {})
         raise Unauthorized("用户名或密码错误")
 
     token = create_access_token(
@@ -91,6 +96,8 @@ def change_own_password(
         raise Unauthorized("新密码不能和原密码相同")
     user.password_hash = hash_password(body.new_password)
     db.commit()
+    from app.services.messages import store as msg_store
+    msg_store.add("info", "user", f"密码已修改：{user.username}", "本人在线自助修改", {})
     return {"ok": True}
 
 

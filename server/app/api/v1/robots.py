@@ -104,7 +104,15 @@ async def probe_robot(robot_id: int, db: Session = Depends(get_db),
                       adapter=Depends(get_adapter),
                       _user: User = Depends(require_roles("admin", "operator"))) -> dict:
     """重新做能力探测。只读接口，安全，但仍然记角色。"""
-    caps = await adapter.probe_capabilities()
+    try:
+        caps = await adapter.probe_capabilities()
+    except Exception as exc:  # noqa: BLE001 - 探测失败要留痕，再往上抛
+        from app.services.messages import store as msg_store
+
+        msg_store.add("danger", "system", "能力探测失败",
+                      f"{exc.__class__.__name__}：接口不可达或返回异常",
+                      {"to": "settings"})
+        raise
     robot = db.get(Robot, robot_id)
     if robot:
         robot.capabilities_json = json.dumps(caps, ensure_ascii=False)

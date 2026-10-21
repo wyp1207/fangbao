@@ -328,11 +328,28 @@ def snapshot(
         raise ExternalUnavailable("抓帧超时，检查摄像头是否在线", code="SNAPSHOT_TIMEOUT")
     if proc.returncode != 0 or not proc.stdout:
         # 错误信息里可能带完整 URL（含密码），这里只回固定文案
+        _log_snapshot_fail(v.name)
         raise ExternalUnavailable("抓帧失败，检查地址/账号/网络", code="SNAPSHOT_FAILED")
 
     _SNAP_CACHE[video_id] = (time.time(), proc.stdout)
     return Response(content=proc.stdout, media_type="image/jpeg",
                     headers={"Cache-Control": "no-store"})
+
+
+_snap_fail_ts: dict[str, float] = {}
+
+
+def _log_snapshot_fail(name: str) -> None:
+    """抓帧失败留痕，但同一路 60 秒只记一条，避免每 2 秒刷一条。"""
+    import time as _t
+    from app.services.messages import store as msg_store
+
+    now = _t.time()
+    if now - _snap_fail_ts.get(name, 0) < 60:
+        return
+    _snap_fail_ts[name] = now
+    msg_store.add("warn", "video", f"抓帧失败：{name}", "检查摄像头地址/账号/网络",
+                  {"to": "cameras"})
 
 
 def _g2_base() -> str:
@@ -380,8 +397,15 @@ def register_go2rtc(
 
     name = _slug(v.name, v.id)
     web_name = f"{name}_web"
-    _g2_call("PUT", f"/api/streams?name={name}&src={quote(v.url, safe='')}")
-    _g2_call("PUT", f"/api/streams?name={web_name}&src={quote(f'ffmpeg:{name}#video=h264', safe='')}")
+    from app.services.messages import store as msg_store
+
+    try:
+        _g2_call("PUT", f"/api/streams?name={name}&src={quote(v.url, safe='')}")
+        _g2_call("PUT", f"/api/streams?name={web_name}&src={quote(f'ffmpeg:{name}#video=h264', safe='')}")
+    except Exception as exc:  # noqa: BLE001 - 失败要留痕，再往上抛
+        msg_store.add("danger", "video", f"go2rtc 注册失败：{v.name}",
+                      f"{exc.__class__.__name__}：检查 go2rtc 是否可达", {"to": "cameras"})
+        raise
 
     # 确认 go2rtc 真的认了这两个流
     import json as _json

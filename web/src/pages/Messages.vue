@@ -35,6 +35,7 @@ const filters = [
   { value: 'all', label: '全部' },
   { value: 'alarm', label: '告警' },
   { value: 'video', label: '视频' },
+  { value: 'user', label: '账号' },
   { value: 'system', label: '系统' },
 ]
 

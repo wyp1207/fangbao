@@ -20,6 +20,7 @@ from app.core.errors import BadRequest, NotFound
 from app.core.security import hash_password
 from app.db.session import get_db
 from app.models.user import User
+from app.services.messages import store as msg_store
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -89,6 +90,8 @@ def create_user(
     db.add(user)
     db.commit()
     db.refresh(user)
+    msg_store.add("info", "user", f"新建账号：{user.username}",
+                  f"角色 {user.role}", {"to": "users"})
     return _out(user)
 
 
@@ -112,6 +115,8 @@ def update_user(
         user.is_active = body.is_active
     db.commit()
     db.refresh(user)
+    msg_store.add("info", "user", f"修改账号：{user.username}",
+                  f"角色 {user.role} / {'启用' if user.is_active else '停用'}", {"to": "users"})
     return _out(user)
 
 
@@ -120,13 +125,15 @@ def reset_password(
     user_id: int,
     body: PasswordReset,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("admin")),
+    me: User = Depends(require_roles("admin")),
 ) -> dict:
     user = db.get(User, user_id)
     if not user:
         raise NotFound("用户不存在")
     user.password_hash = hash_password(body.password)
     db.commit()
+    msg_store.add("warn", "user", f"管理员重置密码：{user.username}",
+                  f"操作人 {me.username}", {"to": "users"})
     return {"ok": True}
 
 
@@ -146,4 +153,6 @@ def delete_user(
         raise BadRequest("至少要保留一个管理员", code="LAST_ADMIN")
     db.delete(user)
     db.commit()
+    msg_store.add("warn", "user", f"删除账号：{user.username}",
+                  f"操作人 {me.username}", {"to": "users"})
     return {"ok": True}
