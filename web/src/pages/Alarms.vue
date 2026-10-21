@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRobotStore } from '@/stores/robot'
 import { useAuthStore } from '@/stores/auth'
@@ -99,7 +99,8 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.page { display: flex; flex-direction: column; gap: 12px; }
+.page { display: flex; flex-direction: column; gap: 12px; min-height: 100%; }
+.page > .panel:first-of-type { flex: 1; min-height: 0; overflow: auto; }
 .small { font-size: 12px; line-height: 1.6; }
 .mono { font-variant-numeric: tabular-nums; }
 </style>

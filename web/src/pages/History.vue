@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed } from 'vue'
 import { useRobotStore } from '@/stores/robot'
 
@@ -54,7 +54,8 @@ const samples = computed(() => {
 </template>
 
 <style scoped>
-.page { display: flex; flex-direction: column; gap: 12px; }
+.page { display: flex; flex-direction: column; gap: 12px; min-height: 100%; }
+.page > .panel:first-of-type { flex: 1; min-height: 0; overflow: auto; }
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
 .card { background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
 .unit { font-size: 12px; margin-left: 4px; }

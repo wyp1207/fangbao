@@ -6,7 +6,16 @@ import { useAuthStore } from '@/stores/auth'
 const auth = useAuthStore()
 const caps = ref<Record<string, unknown> | null>(null)
 const health = ref<Awaited<ReturnType<typeof api.deepHealth>> | null>(null)
+const robot = ref<Awaited<ReturnType<typeof api.robots>>[number] | null>(null)
 const message = ref('')
+
+async function loadRobot() {
+  try {
+    robot.value = (await api.robots())[0] ?? null
+  } catch (e) {
+    message.value = e instanceof Error ? e.message : '机器人配置读取失败'
+  }
+}
 
 async function loadCaps() {
   try {
@@ -35,6 +44,7 @@ async function probe() {
 }
 
 onMounted(async () => {
+  await loadRobot()
   await loadCaps()
   await loadHealth()
 })
@@ -42,6 +52,30 @@ onMounted(async () => {
 
 <template>
   <div class="page">
+    <section class="panel">
+      <div class="panel-title"><span>机器人连接</span></div>
+      <table class="grid" v-if="robot">
+        <thead>
+          <tr><th>名称</th><th>IP</th><th>HTTP 端口</th><th>模式</th><th>固件</th><th>导航源</th><th>最后在线</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>{{ robot.name }}</td>
+            <td class="num">{{ robot.ip }}</td>
+            <td class="num">{{ robot.port }}</td>
+            <td><span class="tag" :class="robot.mode === 'mock' ? 'warn' : 'ok'">{{ robot.mode }}</span></td>
+            <td class="num">{{ robot.version ?? '待探测' }}</td>
+            <td>{{ robot.slam_type ?? '待探测' }}</td>
+            <td class="dim">{{ robot.last_seen ?? '—' }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p v-else class="muted small">读取中…</p>
+      <p class="muted small">
+        连接参数存在服务端配置里，改 IP/账号走 <code>server/.env</code>；页面只读展示，避免误改。
+      </p>
+    </section>
+
     <section class="panel">
       <div class="panel-title">
         <span>能力矩阵</span>
@@ -88,7 +122,7 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.page { display: flex; flex-direction: column; gap: 12px; }
+.page { display: flex; flex-direction: column; gap: 12px; min-height: 100%; }
 .json {
   background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px;
   padding: 12px; font-size: 12px; max-height: 320px; overflow: auto;

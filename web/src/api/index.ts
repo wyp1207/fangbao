@@ -27,6 +27,17 @@ export interface StatusSnapshot {
   poll_count: number
 }
 
+export interface RobotRow {
+  id: number
+  name: string
+  ip: string
+  port: number
+  mode: string
+  version: string | null
+  slam_type: string | null
+  last_seen: string | null
+}
+
 export interface MapMeta {
   name: string
   resolution: number
@@ -69,6 +80,7 @@ export const api = {
   logout: () => request<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
   me: () => request<User>('/auth/me'),
 
+  robots: () => request<RobotRow[]>('/robots'),
   status: (id = 1) => request<StatusSnapshot>(`/robots/${id}/status`),
   maps: (id = 1) => request<MapMeta[]>(`/robots/${id}/maps`),
   currentMap: (id = 1) => request<{ name: string; md5sum?: string }>(`/robots/${id}/map/current`),
