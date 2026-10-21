@@ -17,7 +17,8 @@ from fastapi.responses import JSONResponse
 from app.adapters.jcrob import build_adapter
 from app.adapters.jcrob import errors as jerr
 from app.api.v1 import (alarms, audit, auth, devices, health, map_library,
-                        messages, recordings, robots, settings as settings_api, users, videos)
+                        messages, recordings, robots, sensors,
+                        settings as settings_api, users, videos)
 from app.core.config import get_settings
 from app.core.errors import PlatformError
 from app.core.logging import setup_logging
@@ -118,6 +119,7 @@ def create_app() -> FastAPI:
     app.include_router(devices.router, prefix=settings.api_prefix)
     app.include_router(map_library.router, prefix=settings.api_prefix)
     app.include_router(settings_api.router, prefix=settings.api_prefix)
+    app.include_router(sensors.router, prefix=settings.api_prefix)
     return app
 
 

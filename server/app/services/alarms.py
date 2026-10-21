@@ -149,6 +149,25 @@ class AlarmStore:
             alarm.id = rec.id
             alarm.started_at = rec.started_at.isoformat(timespec="seconds")
 
+    def raise_external(self, *, metric: str, level: str, message: str,
+                       value: Any = None, camera_id: int | None = None,
+                       robot_id: int | None = None) -> Alarm | None:
+        """平台侧非遥测来源的告警（如环境传感器超限）。同样去重、同样落库。"""
+        now = time.monotonic()
+        with self._lock:
+            last = self._last_raised.get(metric)
+            if last is not None and now - last < self.dedupe_s:
+                return None
+            self._last_raised[metric] = now
+            alarm = Alarm(id=0, metric=metric, level=level, message=message, value=value)
+            alarm.camera_id = camera_id  # type: ignore[attr-defined]
+            if self._session_factory is not None:
+                self._persist(alarm, robot_id)
+            else:
+                alarm.id = len(self._items) + 1
+            self._items.append(alarm)
+            return alarm
+
     # ---- 查询与确认 -----------------------------------------------------
     def list(self, *, active_only: bool = False) -> list[dict]:
         if self._session_factory is not None:
@@ -188,10 +207,10 @@ class AlarmStore:
         with self._session_factory() as db:  # type: ignore[misc]
             total = db.scalar(select(func.count()).select_from(AlarmRecord).where(where)) if where is not None \
                 else db.scalar(select(func.count()).select_from(AlarmRecord))
-            rows = db.scalars(
-                select(AlarmRecord).where(where).order_by(AlarmRecord.started_at.desc())
-                .limit(limit).offset(offset)
-            ).all()
+            q = select(AlarmRecord).order_by(AlarmRecord.started_at.desc()).limit(limit).offset(offset)
+            if where is not None:
+                q = q.where(where)
+            rows = db.scalars(q).all()
             return {"total": total or 0, "items": [r.to_dict() for r in rows]}
 
     def ack(self, alarm_id: int, who: str) -> dict | None:

@@ -123,6 +123,31 @@ export interface AuditItem {
   detail: string | null
 }
 
+export interface SensorKind {
+  value: string
+  label: string
+  unit: string
+}
+
+export interface SensorItem {
+  id: number
+  name: string
+  kind: string
+  kind_label: string
+  unit: string
+  station: string
+  location: string | null
+  serial: string | null
+  warn_low: number | null
+  warn_high: number | null
+  crit_low: number | null
+  crit_high: number | null
+  enabled: boolean
+  note: string | null
+  calibrated: boolean
+  latest: { value: number; ts: string; source: string } | null
+}
+
 export interface LibraryMap {
   id: number
   name: string
@@ -289,6 +314,22 @@ export const api = {
     request<{ values: Record<string, unknown>; schema: Record<string, unknown>[]; meta: Record<string, unknown> }>('/settings'),
   saveSettings: (values: Record<string, unknown>) =>
     request<{ ok: boolean; values: Record<string, unknown>; changed: Record<string, unknown> }>('/settings', { method: 'PUT', body: { values } }),
+  // 环境传感器
+  sensors: () => request<SensorItem[]>('/sensors'),
+  sensorMeta: () => request<{ kinds: SensorKind[] }>('/sensors/meta'),
+  createSensor: (body: Record<string, unknown>) =>
+    request<SensorItem>('/sensors', { method: 'POST', body }),
+  updateSensor: (id: number, body: Record<string, unknown>) =>
+    request<SensorItem>(`/sensors/${id}`, { method: 'PATCH', body }),
+  deleteSensor: (id: number) => request<{ ok: boolean }>(`/sensors/${id}`, { method: 'DELETE' }),
+  addSensorReading: (id: number, value: number, source = 'manual') =>
+    request<{ ok: boolean; id: number; level: string | null; message: string; raised: boolean }>(
+      `/sensors/${id}/readings`, { method: 'POST', body: { value, source } }),
+  sensorHistory: (id: number, hours = 24, points = 60) =>
+    request<{ sensor_id: number; unit: string; points: { ts: string; value: number }[]; count: number }>(
+      `/sensors/${id}/history?hours=${hours}&points=${points}`),
+  sensorSummary: () =>
+    request<{ items: Record<string, { name: string; unit: string; value: number | null; ts: string | null; calibrated: boolean }>; count: number }>('/sensors/summary'),
   deepHealth: () =>
     request<{
       cache: { online: boolean; age_s: number; consecutive_failures: number; last_error: string | null; poll_count: number }

@@ -17,7 +17,7 @@ const router = createRouter({
         { path: 'map', name: 'map', component: () => import('@/pages/MapPage.vue') },
         { path: 'video', name: 'video', component: () => import('@/pages/VideoLive.vue') },
         { path: 'room', name: 'room', component: () => import('@/pages/VideoLive.vue'), props: { group: '充电房' } },
-        { path: 'env', name: 'env', component: () => import('@/pages/PlaceholderPage.vue') },
+        { path: 'env', name: 'env', component: () => import('@/pages/EnvMonitor.vue') },
 
         // 巡检管理
         { path: 'tasks', name: 'tasks', component: () => import('@/pages/Tasks.vue') },
@@ -37,7 +37,7 @@ const router = createRouter({
         // 设备管理
         { path: 'robots', name: 'robots', component: () => import('@/pages/RobotProfile.vue') },
         { path: 'cameras', name: 'cameras', component: () => import('@/pages/Cameras.vue') },
-        { path: 'env-device', name: 'env-device', component: () => import('@/pages/PlaceholderPage.vue') },
+        { path: 'env-device', name: 'env-device', component: () => import('@/pages/EnvDevices.vue') },
 
         // 录像管理
         { path: 'record/plan', name: 'record-plan', component: () => import('@/pages/RecordPlan.vue') },

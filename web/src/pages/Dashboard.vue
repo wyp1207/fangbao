@@ -104,6 +104,8 @@ function onDevice(v: string) {
   toast('已切换到 ' + (hit?.name ?? v), 'ok')
   // 换设备就刷新视频与地图，避免还显示上一台的画面
   void api.videos().then((rows) => { videoRows.value = rows as never }).catch(() => undefined)
+  void loadEnv()
+  timers.push(window.setInterval(loadEnv, 15000))
 }
 function goAlarms(status: 'unacked' | 'acked') {
   void router.push({ name: 'alarms', query: { status } })
@@ -160,14 +162,25 @@ const donut = computed(() => {
   }
 })
 
-const envCells = [
-  { label: '温度', unit: '℃' },
-  { label: '湿度', unit: '%RH' },
-  { label: '可燃气体', unit: 'ppm' },
-  { label: '烟雾', unit: 'ppm' },
-  { label: 'PM2.5', unit: 'μg/m³' },
-  { label: '噪声', unit: 'dB' },
-]
+type EnvSummary = Record<string, { name: string; unit: string; value: number | null; ts: string | null; calibrated: boolean }>
+const env = ref<EnvSummary>({})
+
+const envCells = computed(() => [
+  { label: '温度', unit: '℃', kind: 'temperature' },
+  { label: '湿度', unit: '%RH', kind: 'humidity' },
+  { label: '可燃气体', unit: '%LEL', kind: 'gas' },
+  { label: '烟雾', unit: '%obs', kind: 'smoke' },
+  { label: 'PM2.5', unit: 'μg/m³', kind: 'pm' },
+  { label: '噪声', unit: 'dB', kind: 'noise' },
+].map((c) => ({ ...c, hit: env.value[c.kind] })))
+
+const envCount = computed(() => Object.keys(env.value).length)
+
+async function loadEnv() {
+  try {
+    env.value = (await api.sensorSummary()).items
+  } catch { /* 环境没接不影响大屏 */ }
+}
 
 function num(v: unknown, digits = 2): string {
   return typeof v === 'number' ? v.toFixed(digits) : '—'
@@ -188,6 +201,8 @@ let timers: number[] = []
 onMounted(async () => {
   robot.start()
   void api.videos().then((rows) => { videoRows.value = rows as never }).catch(() => undefined)
+  void loadEnv()
+  timers.push(window.setInterval(loadEnv, 15000))
   void api.devices().then((rows) => {
     devices.value = rows.map((d) => ({ id: d.id, name: d.name, station: d.station }))
     site.value = rows[0]?.station ?? '未分场站'
@@ -388,14 +403,20 @@ async function logout() {
           </div>
         </ScadaPanel>
 
-        <ScadaPanel title="环境数据" tone="cyan" class="grow" right="未接入">
+        <ScadaPanel title="环境数据" tone="cyan" class="grow" :right="envCount ? `${envCount} 项` : '未接入'">
           <div class="env-grid">
             <div v-for="e in envCells" :key="e.label" class="env-cell">
               <span class="env-label">{{ e.label }}</span>
-              <span class="env-value">--<small>{{ e.unit }}</small></span>
+              <span class="env-value" v-if="e.hit && e.hit.value !== null">
+                {{ e.hit.value }}<small>{{ e.hit.unit || e.unit }}</small>
+              </span>
+              <span class="env-value dim" v-else>--<small>{{ e.unit }}</small></span>
             </div>
           </div>
-          <p class="dim small">环境传感 WebSocket 未接入，真机联调后自动呈现</p>
+          <p v-if="envCount" class="dim small">
+            来自 {{ envCount }} 台传感器；未标定阈值的只记录不告警
+          </p>
+          <p v-else class="dim small">环境传感器未接入，到「设备管理 → 环境传感器」登记后自动呈现</p>
         </ScadaPanel>
 
         <ScadaPanel title="巡检点位" class="h-points" :right="`${points.length} 点`">

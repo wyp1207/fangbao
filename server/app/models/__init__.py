@@ -4,8 +4,9 @@ from app.models.map_library import PlatformMap, PointDraft
 from app.models.message import MessageRecord
 from app.models.operation_log import OperationLog
 from app.models.robot import Robot
+from app.models.sensor import Sensor, SensorReading
 from app.models.setting import Setting
 from app.models.user import User
 from app.models.video_source import VideoSource
 
-__all__ = ["Base", "AlarmRecord", "PlatformMap", "PointDraft", "MessageRecord", "OperationLog", "Robot", "Setting", "User", "VideoSource"]
+__all__ = ["Base", "AlarmRecord", "PlatformMap", "PointDraft", "MessageRecord", "OperationLog", "Robot", "Sensor", "SensorReading", "Setting", "User", "VideoSource"]
