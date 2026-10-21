@@ -182,9 +182,14 @@ class NotifyDispatcher:
                 if level < LEVEL_ORDER.get(ch.min_level, 2):
                     continue
 
-                key = (ch.id, str(alarm.get("metric") or "unknown"))
+                # 静默期只压制"同级别重复"，且严重告警永不静默：
+                # 低级别进了静默期，后面来的急停/离线照样要发出去
+                metric = str(alarm.get("metric") or "unknown")
+                level_key = str(alarm.get("level") or "warn")
+                key = (ch.id, metric, level_key)
                 now = time.time()
-                if now - self._last_sent.get(key, 0) < max(ch.min_interval_min, 0) * 60:
+                silence = max(ch.min_interval_min, 0) * 60
+                if level_key != "critical" and now - self._last_sent.get(key, 0) < silence:
                     continue
 
                 ok, status = self._deliver_with_retry(ch, alarm)

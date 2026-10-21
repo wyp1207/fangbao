@@ -120,8 +120,23 @@ def update_sensor(
     s = db.get(Sensor, sensor_id)
     if not s:
         raise NotFound("传感器不存在")
+
     allowed = {"name", "station", "location", "serial", "warn_low", "warn_high",
                "crit_low", "crit_high", "note", "enabled"}
+
+    # 把已经标定的阈值清空 = 让这个测点永久静默，属于高危动作
+    threshold_keys = ("warn_low", "warn_high", "crit_low", "crit_high")
+    if any(k in body for k in threshold_keys):
+        before = any(getattr(s, k) is not None for k in threshold_keys)
+        after = any((body.get(k, getattr(s, k)) is not None) for k in threshold_keys)
+        if before and not after:
+            if me.role != "admin":
+                raise BadRequest("清空阈值会让该测点停止告警，只有管理员可以操作",
+                                 code="NEED_ADMIN")
+            from app.services.messages import store as msg_store
+            msg_store.add("danger", "system", f"传感器阈值被清空：{s.name}",
+                          f"{me.username} 清空了全部阈值，该测点将不再告警",
+                          {"to": "env-device"})
     for k, v in body.items():
         if k in allowed:
             setattr(s, k, v)

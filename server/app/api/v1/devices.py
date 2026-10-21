@@ -189,6 +189,17 @@ def test_device(
     if not r:
         raise NotFound("设备不存在")
 
+    # 只允许测试内网地址：乱填公网 IP 会被厂区工控防火墙当成扫描行为
+    import ipaddress
+
+    try:
+        ip = ipaddress.ip_address(r.ip)
+    except ValueError:
+        raise BadRequest("只能填 IP 地址（不支持域名），例如 192.168.1.105", code="BAD_IP") from None
+    if not (ip.is_private or ip.is_loopback):
+        raise BadRequest("只允许测试内网地址（10/172.16-31/192.168），避免触发网安扫描告警",
+                         code="PUBLIC_IP")
+
     result: dict[str, Any] = {"tcp": False, "http": False, "detail": ""}
     try:
         with socket.create_connection((r.ip, r.port), timeout=3):
