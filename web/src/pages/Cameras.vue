@@ -24,6 +24,47 @@ const vendorText: Record<string, string> = { hikvision: '海康', dahua: '大华
 
 const form = ref({ name: '', group_name: '默认分组', vendor: 'hikvision', url: '', note: '', enabled: true, stream_name: '' })
 
+const g2streams = ref<{ name: string; source: string; web: boolean; ready: boolean }[]>([])
+const g2reason = ref('')
+
+const g2Options = computed(() => [
+  { value: '', label: '（不使用 go2rtc）' },
+  ...g2streams.value.map((s) => ({
+    value: s.name,
+    label: s.web ? `${s.name} · 网页转码` : `${s.name}${s.ready ? '' : ' · 无源'}`,
+  })),
+])
+
+async function loadGo2rtc() {
+  try {
+    const res = await api.go2rtcStreams()
+    g2streams.value = res.streams
+    g2reason.value = res.ok ? '' : (res.reason ?? '')
+  } catch {
+    g2streams.value = []
+    g2reason.value = 'go2rtc 不可达'
+  }
+}
+
+/** 按 RTSP 地址自动找同源的 go2rtc 流（优先 _web） */
+function suggestStream(url: string): string {
+  const norm = (u: string) => u.replace(/^[a-z]+:\/\/[^@/]*@/i, '').toLowerCase()
+  const target = norm(url)
+  const hit = g2streams.value.find((s) => s.source && norm(s.source) === target)
+  if (!hit) return ''
+  const web = g2streams.value.find((s) => s.name === `${hit.name.replace(/_web$/, '')}_web`)
+  return (web ?? hit).name
+}
+
+function applySuggest() {
+  if (!form.value.url) return
+  const name = suggestStream(form.value.url)
+  if (name && !form.value.stream_name) {
+    form.value.stream_name = name
+    toast(`找到同源流：${name}`, 'ok')
+  }
+}
+
 const groups = computed(() => {
   const set = new Set(rows.value.map((r) => r.group_name))
   return [{ value: '', label: '全部' }, ...[...set].map((g) => ({ value: g, label: g }))]
@@ -125,7 +166,7 @@ async function remove(v: VideoRow) {
   }
 }
 
-onMounted(reload)
+onMounted(() => { void reload(); void loadGo2rtc() })
 </script>
 
 <template>
@@ -204,8 +245,13 @@ onMounted(reload)
           <input class="input" v-model="form.url" placeholder="rtsp://user:password@host:554/..." />
         </label>
         <label class="fld">
-          <span>go2rtc 流名（可选）</span>
-          <input class="input" v-model="form.stream_name" placeholder="如 camera_02；填了就能走 MSE/WebRTC 低延迟播放" />
+          <span>go2rtc 流名（选了就是实时 MSE 播放）</span>
+          <div class="row">
+            <DarkSelect v-model="form.stream_name" :options="g2Options" width="260px" />
+            <button class="btn btn-sm" type="button" @click="applySuggest">按地址自动匹配</button>
+          </div>
+          <em class="hint" v-if="g2reason">{{ g2reason }}</em>
+          <em class="hint" v-else>列表来自 go2rtc，带「网页转码」的才能被浏览器直接播放</em>
         </label>
         <label class="fld"><span>备注（可选）</span><input class="input" v-model="form.note" /></label>
         <div class="modal-actions">
@@ -227,7 +273,13 @@ onMounted(reload)
           <input class="input" v-model="form.url" />
           <em class="hint">密码显示为 ***，原样提交即保留原密码</em>
         </label>
-        <label class="fld"><span>go2rtc 流名</span><input class="input" v-model="form.stream_name" /></label>
+        <label class="fld">
+          <span>go2rtc 流名</span>
+          <div class="row">
+            <DarkSelect v-model="form.stream_name" :options="g2Options" width="260px" />
+            <button class="btn btn-sm" type="button" @click="applySuggest">按地址自动匹配</button>
+          </div>
+        </label>
         <div class="modal-actions">
           <button class="btn btn-sm" @click="editing = null">取消</button>
           <button class="btn btn-sm primary" @click="submitEdit">保存</button>
@@ -260,4 +312,5 @@ onMounted(reload)
 .fld .input { width: 100%; }
 .hint { display: block; margin-top: 4px; font-size: 11px; color: #8fc4f0; font-style: normal; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.row { display: flex; align-items: center; gap: 8px; }
 </style>

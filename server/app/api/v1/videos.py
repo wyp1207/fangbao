@@ -140,6 +140,42 @@ def list_videos(
     return [_out(v) for v in rows]
 
 
+@router.get("/go2rtc-streams")
+def list_go2rtc_streams(
+    _: User = Depends(require_roles("admin", "operator", "viewer")),
+) -> dict:
+    """把 go2rtc 里已有的流列出来，前端直接选，不用手打流名。
+
+    `_web` 结尾的是给浏览器用的（H265 已转 H264），优先选这些。
+    """
+    import json as _json
+    import urllib.request as _req
+
+    base = getattr(get_settings(), "go2rtc_base", "") or ""
+    if not base:
+        return {"ok": False, "reason": "未配置 JC_GO2RTC_BASE", "streams": []}
+    try:
+        with _req.urlopen(f"{base.rstrip('/')}/api/streams", timeout=5) as r:
+            data = _json.loads(r.read().decode("utf-8", "replace"))
+    except Exception as exc:  # noqa: BLE001 - 中继不可达只影响这个下拉
+        return {"ok": False, "reason": f"go2rtc 不可达：{exc.__class__.__name__}", "streams": []}
+
+    out = []
+    for name, info in data.items():
+        producers = info.get("producers") or []
+        source = ""
+        if producers:
+            source = producers[0].get("url") or producers[0].get("source") or ""
+        out.append({
+            "name": name,
+            "source": mask_url(source) if source else "",
+            "web": name.endswith("_web"),
+            "ready": bool(producers),
+        })
+    out.sort(key=lambda x: (not x["web"], x["name"]))
+    return {"ok": True, "streams": out}
+
+
 @router.post("", response_model=VideoOut, dependencies=[Depends(require_csrf)])
 def create_video(
     body: VideoIn,

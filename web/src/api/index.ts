@@ -105,6 +105,7 @@ export const api = {
   robots: () => request<RobotRow[]>('/robots'),
 
   videos: () => request<VideoRow[]>('/videos'),
+  go2rtcStreams: () => request<{ ok: boolean; reason?: string; streams: { name: string; source: string; web: boolean; ready: boolean }[] }>('/videos/go2rtc-streams'),
   createVideo: (body: { name: string; group_name: string; vendor: string; url: string; note?: string | null; stream_name?: string }) =>
     request<VideoRow>('/videos', { method: 'POST', body }),
   updateVideo: (id: number, body: Partial<{ name: string; group_name: string; vendor: string; url: string; enabled: boolean; note: string | null; stream_name: string }>) =>
