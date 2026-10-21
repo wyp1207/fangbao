@@ -432,7 +432,8 @@ async function logout() {
   padding: 0 16px;
   background: linear-gradient(180deg, rgba(0, 74, 132, 0.94), rgba(0, 58, 110, 0.94));
   border-bottom: 1px solid rgba(64, 176, 255, 0.35);
-  font-size: 12px; overflow: hidden;
+  font-size: 12px;
+  position: relative; z-index: 35;   /* 让场站/设备下拉能盖在主体之上 */
 }
 .sb-left { display: flex; align-items: center; gap: 12px; }
 .sb-right { display: flex; align-items: center; gap: 14px; }

@@ -134,6 +134,18 @@ async function submitEdit() {
   }
 }
 
+async function registerGo2rtc(v: VideoRow) {
+  try {
+    const res = await api.registerGo2rtc(v.id)
+    toast(`已注册到 go2rtc：${res.web_stream}（现在可以实时播放）`, 'ok', 3600)
+    if (editing.value?.id === v.id) editing.value = null
+    await reload()
+    await loadGo2rtc()
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : '注册失败', 'danger', 3600)
+  }
+}
+
 async function test(v: VideoRow) {
   testing.value = v.id
   try {
@@ -214,6 +226,7 @@ onMounted(() => { void reload(); void loadGo2rtc() })
             <td>
               <div class="row-actions">
                 <button class="act" title="编辑" @click="openEdit(v)">✎</button>
+                <button class="act" title="一键注册到 go2rtc（实时播放）" @click="registerGo2rtc(v)">⚡</button>
                 <button class="act" title="测试连通性" :disabled="testing === v.id" @click="test(v)">⇄</button>
                 <button class="act" :title="v.enabled ? '停用' : '启用'" @click="toggle(v)">{{ v.enabled ? '⏸' : '▶' }}</button>
                 <button class="act danger" title="删除" @click="remove(v)">🗑</button>
@@ -281,6 +294,7 @@ onMounted(() => { void reload(); void loadGo2rtc() })
           </div>
         </label>
         <div class="modal-actions">
+          <button class="btn btn-sm" type="button" @click="registerGo2rtc(editing)">一键注册到 go2rtc</button>
           <button class="btn btn-sm" @click="editing = null">取消</button>
           <button class="btn btn-sm primary" @click="submitEdit">保存</button>
         </div>

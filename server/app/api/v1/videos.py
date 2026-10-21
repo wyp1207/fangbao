@@ -335,6 +335,69 @@ def snapshot(
                     headers={"Cache-Control": "no-store"})
 
 
+def _g2_base() -> str:
+    base = getattr(get_settings(), "go2rtc_base", "") or ""
+    if not base:
+        raise BadRequest("未配置 JC_GO2RTC_BASE，无法注册到 go2rtc", code="NO_GO2RTC")
+    return base.rstrip("/")
+
+
+def _g2_call(method: str, path: str) -> int:
+    import urllib.request as _req
+
+    req = _req.Request(_g2_base() + path, method=method)
+    try:
+        with _req.urlopen(req, timeout=8) as r:
+            return r.status
+    except urllib.error.HTTPError as exc:
+        raise BadRequest(f"go2rtc 返回 {exc.code}", code="GO2RTC_ERROR") from exc
+    except OSError as exc:
+        raise BadRequest(f"go2rtc 不可达：{exc.__class__.__name__}", code="GO2RTC_UNREACHABLE") from exc
+
+
+def _slug(name: str, video_id: int) -> str:
+    import re as _re
+
+    s = _re.sub(r"[^a-zA-Z0-9_]+", "_", name).strip("_").lower()
+    return f"jc_{s}" if s else f"jc_{video_id}"
+
+
+@router.post("/{video_id}/register-go2rtc", dependencies=[Depends(require_csrf)])
+def register_go2rtc(
+    video_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles("admin")),
+) -> dict:
+    """把这一路视频源注册进 go2rtc：原始流 + `_web`（浏览器可放的 H264）。
+
+    调的是 go2rtc 的 PUT /api/streams，热生效，不用重启、不用改 yaml。
+    """
+    from urllib.parse import quote
+
+    v = db.get(VideoSource, video_id)
+    if not v:
+        raise NotFound("视频源不存在")
+
+    name = _slug(v.name, v.id)
+    web_name = f"{name}_web"
+    _g2_call("PUT", f"/api/streams?name={name}&src={quote(v.url, safe='')}")
+    _g2_call("PUT", f"/api/streams?name={web_name}&src={quote(f'ffmpeg:{name}#video=h264', safe='')}")
+
+    # 确认 go2rtc 真的认了这两个流
+    import json as _json
+    import urllib.request as _req
+
+    with _req.urlopen(_g2_base() + "/api/streams", timeout=8) as r:
+        streams = _json.loads(r.read().decode("utf-8", "replace"))
+    if web_name not in streams:
+        raise BadRequest("go2rtc 未确认新流", code="GO2RTC_NOT_CONFIRMED")
+
+    v.stream_name = web_name
+    db.commit()
+    db.refresh(v)
+    return {"ok": True, "stream": name, "web_stream": web_name, "video": _out(v)}
+
+
 @router.delete("/{video_id}", dependencies=[Depends(require_csrf)])
 def delete_video(
     video_id: int,
