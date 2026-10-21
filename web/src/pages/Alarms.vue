@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRobotStore } from '@/stores/robot'
 import { useAuthStore } from '@/stores/auth'
+import DarkSelect from '@/components/DarkSelect.vue'
 
 const robot = useRobotStore()
 const auth = useAuthStore()
@@ -12,6 +13,16 @@ const levelFilter = ref('')
 const ackFilter = ref('')
 
 const levelText: Record<string, string> = { critical: '严重', warn: '提醒' }
+const levelOptions = [
+  { value: '', label: '全部' },
+  { value: 'critical', label: '严重' },
+  { value: 'warn', label: '提醒' },
+]
+const ackOptions = [
+  { value: '', label: '全部' },
+  { value: 'unacked', label: '未确认' },
+  { value: 'acked', label: '已确认' },
+]
 
 const filtered = computed(() =>
   robot.alarms.filter((a) => {
@@ -62,17 +73,9 @@ onMounted(() => { void robot.refreshAlarms() })
         <label>关键词</label>
         <input class="input" v-model="keyword" placeholder="输入告警内容搜索" />
         <label>级别</label>
-        <select class="select" v-model="levelFilter">
-          <option value="">全部</option>
-          <option value="critical">严重</option>
-          <option value="warn">提醒</option>
-        </select>
+        <DarkSelect v-model="levelFilter" :options="levelOptions" width="110px" />
         <label>状态</label>
-        <select class="select" v-model="ackFilter">
-          <option value="">全部</option>
-          <option value="unacked">未确认</option>
-          <option value="acked">已确认</option>
-        </select>
+        <DarkSelect v-model="ackFilter" :options="ackOptions" width="110px" />
         <button class="btn btn-sm" @click="robot.refreshAlarms()">查询</button>
         <button class="btn btn-sm" @click="reset">重置</button>
         <span class="grow" />

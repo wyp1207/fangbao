@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { api, type TaskItem } from '@/api'
+import DarkSelect from '@/components/DarkSelect.vue'
 
 const tasks = ref<TaskItem[]>([])
 const loading = ref(false)
@@ -18,6 +19,16 @@ const stateText: Record<string, string> = {
   ERROR: '错误',
   COMPLETE: '已完成',
 }
+
+const stateOptions = [
+  { value: '', label: '全部' },
+  ...Object.entries(stateText).map(([value, label]) => ({ value, label })),
+]
+const loopOptions = [
+  { value: '', label: '全部' },
+  { value: 'true', label: '是' },
+  { value: 'false', label: '否' },
+]
 
 const stateTone: Record<string, string> = {
   COMPLETE: 'ok',
@@ -69,16 +80,9 @@ onMounted(reload)
         <label>任务名称</label>
         <input class="input" v-model="keyword" placeholder="输入任务名称搜索" />
         <label>状态</label>
-        <select class="select" v-model="stateFilter">
-          <option value="">全部</option>
-          <option v-for="(label, key) in stateText" :key="key" :value="key">{{ label }}</option>
-        </select>
+        <DarkSelect v-model="stateFilter" :options="stateOptions" width="130px" />
         <label>循环</label>
-        <select class="select" v-model="loopFilter">
-          <option value="">全部</option>
-          <option value="true">是</option>
-          <option value="false">否</option>
-        </select>
+        <DarkSelect v-model="loopFilter" :options="loopOptions" width="96px" />
         <button class="btn btn-sm" :disabled="loading" @click="reload">查询</button>
         <button class="btn btn-sm" @click="reset">重置</button>
         <span class="grow" />

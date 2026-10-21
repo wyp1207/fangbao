@@ -80,4 +80,6 @@ em { font-style: normal; font-size: 12px; color: #a9d8ff; }
 .t-body { flex: 1; min-height: 0; padding: 10px 12px; overflow: auto; }
 /* 地图面板：body 纵向 flex，画布才能拿到确定高度 */
 .map-panel .t-body { padding: 8px; display: flex; flex-direction: column; overflow: hidden; }
+/* 需要纵向堆叠多个块的面板 */
+.stack-panel .t-body { display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
 </style>

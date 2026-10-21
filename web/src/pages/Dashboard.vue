@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import MapCanvas from '@/components/MapCanvas.vue'
@@ -221,7 +221,7 @@ async function logout() {
       </main>
 
       <aside class="col right">
-        <ScadaPanel title="告警统计" tone="gold" class="h-donut">
+        <ScadaPanel title="告警统计" tone="gold" class="h-donut stack-panel">
           <div class="donut-row">
             <svg viewBox="0 0 100 100" class="donut">
               <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,.14)" stroke-width="13" />
@@ -236,6 +236,11 @@ async function logout() {
               <li><i class="dot gold" />未确认 <b>{{ donut.unacked }}</b></li>
               <li><i class="dot green" />已确认 <b>{{ donut.acked }}</b></li>
             </ul>
+          </div>
+
+          <div class="trend">
+            <div class="t-head"><span>近 7 日告警趋势</span><em>待接入</em></div>
+            <div class="t-plot"><span>历史数据未接入，接入后自动绘制</span></div>
           </div>
         </ScadaPanel>
 
@@ -397,7 +402,7 @@ async function logout() {
 .grow { flex: 1; min-height: 0; }
 .col.center { display: grid; grid-template-rows: minmax(0, 1fr) auto; }
 .h-ctrl { height: 172px; flex: none; }
-.h-donut { height: 180px; flex: none; }
+.h-donut { height: 262px; flex: none; }
 .h-points { height: 232px; flex: none; }
 .h-msg { height: 190px; flex: none; }
 
@@ -457,11 +462,11 @@ async function logout() {
 @keyframes radar { to { transform: rotate(360deg); } }
 
 /* 环形图 */
-.donut-row { display: flex; align-items: center; gap: 12px; height: 100%; position: relative; }
-.donut { width: 112px; height: 112px; flex: none; }
+.donut-row { display: flex; align-items: center; gap: 12px; position: relative; flex: none; }
+.donut { width: 128px; height: 128px; flex: none; }
 .donut-center {
   position: absolute; left: 0; top: 50%; transform: translateY(-50%);
-  width: 112px; text-align: center; pointer-events: none;
+  width: 128px; text-align: center; pointer-events: none;
 }
 .donut-center b { display: block; font-size: 24px; color: #ffd54a; font-weight: 800; }
 .donut-center em { font-style: normal; font-size: 10px; color: #9fd2ff; }
@@ -469,8 +474,22 @@ async function logout() {
 .legend li { display: flex; align-items: center; gap: 6px; color: #cfe8ff; }
 .legend b { margin-left: auto; color: #fff; font-size: 14px; }
 
+/* 告警趋势（空坐标系，不画假曲线） */
+.trend { margin-top: 4px; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.t-head { display: flex; justify-content: space-between; font-size: 11px; color: #9fd2ff; margin-bottom: 4px; }
+.t-head em { font-style: normal; color: #ffe08a; }
+.t-plot {
+  position: relative; flex: 1; min-height: 54px;
+  display: grid; place-items: center;
+  border: 1px solid rgba(111, 227, 255, 0.18);
+  background:
+    repeating-linear-gradient(0deg, rgba(111, 227, 255, 0.12) 0 1px, transparent 1px 20px),
+    linear-gradient(180deg, rgba(0, 90, 170, 0.25), rgba(0, 50, 100, 0.25));
+}
+.t-plot span { font-size: 11px; color: #6f9ec9; }
+
 /* 环境 */
-.env-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
+.env-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; align-content: center; flex: 1; }
 .env-cell {
   display: flex; align-items: center; justify-content: space-between;
   padding: 6px 8px;
