@@ -106,7 +106,6 @@ onMounted(reload)
         <button class="btn btn-sm warn" @click="reset">重置</button>
         <span class="grow" />
         <button class="btn btn-sm" @click="locked = '新建任务'">新建任务</button>
-        <button class="btn btn-sm" @click="locked = '批量删除任务'">批量删除</button>
       </div>
 
       <table class="grid">

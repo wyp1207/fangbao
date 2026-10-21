@@ -61,8 +61,8 @@ onMounted(async () => {
         <button class="btn btn-sm ok" :disabled="loading" @click="load">查询</button>
         <button class="btn btn-sm warn" @click="keyword = ''">重置</button>
         <span class="grow" />
-        <button class="btn btn-sm" disabled title="写操作未开放">新增点位</button>
-        <button class="btn btn-sm" disabled title="写操作未开放">同步到机器人</button>
+        <button class="btn btn-sm" title="到地图页在图上打点（存平台草稿）" @click="$router.push({ name: 'map' })">去地图打点</button>
+        <button class="btn btn-sm" disabled title="点位下发要等真机联调 + 现场授权">同步到机器人</button>
       </div>
 
       <table class="grid">
