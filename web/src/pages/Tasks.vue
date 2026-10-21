@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { api, type TaskItem } from '@/api'
 import DarkSelect from '@/components/DarkSelect.vue'
+import { toast } from '@/composables/useToast'
 
 const tasks = ref<TaskItem[]>([])
 const loading = ref(false)
@@ -59,6 +60,12 @@ async function reload() {
   }
 }
 
+const detail = ref<TaskItem | null>(null)
+
+function tryWrite(action: string) {
+  toast(`${action}未开放：需真机联调通过 + 现场授权签字`, 'warn', 3000)
+}
+
 function reset() {
   keyword.value = ''
   stateFilter.value = ''
@@ -114,9 +121,9 @@ onMounted(reload)
             <td class="num dim">{{ t.id.slice(0, 8) }}…</td>
             <td>
               <div class="row-actions">
-                <button class="link-btn" disabled>下发</button>
-                <button class="link-btn" disabled>暂停</button>
-                <button class="link-btn" disabled>取消</button>
+                <button class="link-btn" @click="detail = t">详情</button>
+                <button class="link-btn" @click="tryWrite('下发')">下发</button>
+                <button class="link-btn" @click="tryWrite('取消')">取消</button>
               </div>
             </td>
           </tr>
@@ -135,6 +142,27 @@ onMounted(reload)
 
       <p v-if="error" class="danger small">{{ error }}</p>
     </section>
+
+    <div v-if="detail" class="modal-mask" @click.self="detail = null">
+      <div class="modal">
+        <div class="panel-title"><span>任务详情</span></div>
+        <table class="grid">
+          <tbody>
+            <tr><th style="width: 120px">任务名</th><td>{{ detail.name }}</td></tr>
+            <tr><th>状态</th><td>{{ stateText[detail.state] ?? detail.state }}</td></tr>
+            <tr><th>任务 ID</th><td class="num">{{ detail.id }}</td></tr>
+            <tr><th>循环</th><td>{{ detail.loop_flag ? '是' : '否' }}</td></tr>
+            <tr><th>进度</th><td class="dim">未标定（原值 {{ detail.progress }}）</td></tr>
+          </tbody>
+        </table>
+        <div class="panel-title" style="margin-top: 12px"><span>动作序列</span></div>
+        <pre class="json">{{ JSON.stringify(detail.sub_tasks, null, 2) }}</pre>
+        <div class="modal-actions">
+          <button class="btn btn-sm" @click="tryWrite('下发')">下发</button>
+          <button class="btn btn-sm" @click="detail = null">关闭</button>
+        </div>
+      </div>
+    </div>
 
     <section class="panel">
       <div class="panel-title"><span>下发与执行</span></div>
@@ -158,4 +186,24 @@ onMounted(reload)
 .page { display: flex; flex-direction: column; gap: 12px; min-height: 100%; }
 .page > .panel:first-of-type { flex: 1; min-height: 0; overflow: auto; }
 .small { font-size: 12px; line-height: 1.6; }
+.modal-mask {
+  position: fixed; inset: 0; z-index: 120;
+  display: grid; place-items: center;
+  background: rgba(2, 14, 30, 0.66);
+}
+.modal {
+  width: 560px; max-height: 78vh; overflow: auto;
+  padding: 14px 16px 16px;
+  background: linear-gradient(180deg, rgba(0, 112, 200, 0.96), rgba(0, 60, 118, 0.98));
+  border: 1px solid rgba(111, 227, 255, 0.6);
+  box-shadow: 0 0 30px rgba(0, 60, 140, 0.7);
+}
+.json {
+  margin: 0; padding: 10px;
+  font-size: 12px; line-height: 1.6; color: #cfe8ff;
+  background: rgba(0, 40, 84, 0.7);
+  border: 1px solid rgba(111, 227, 255, 0.2);
+  max-height: 220px; overflow: auto;
+}
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 </style>

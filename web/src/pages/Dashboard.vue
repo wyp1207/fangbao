@@ -5,6 +5,8 @@ import MapCanvas from '@/components/MapCanvas.vue'
 import ScadaPanel from '@/components/ScadaPanel.vue'
 import VideoBox from '@/components/VideoBox.vue'
 import AnimatedNumber from '@/components/AnimatedNumber.vue'
+import DarkSelect from '@/components/DarkSelect.vue'
+import { toast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { useRobotStore } from '@/stores/robot'
 import { api, type MapMeta, type NavPoint } from '@/api'
@@ -19,6 +21,30 @@ const trail = ref<{ x: number; y: number }[]>([])
 const mapError = ref('')
 const now = ref(new Date())
 const controlTab = ref<'ptz' | 'chassis'>('ptz')
+
+const sites = [
+  { value: 'qz-04', label: '泰安 · 泉州石化-04' },
+  { value: 'dy-03', label: '东营 · 泉州石化-03' },
+  { value: 'hb', label: '湖北荆州' },
+]
+const site = ref('qz-04')
+const deviceId = ref('1')
+const devices = ref([{ value: '1', label: 'JCROB-01' }])
+
+function onSite(v: string) {
+  site.value = v
+  if (v !== 'qz-04') toast('该场站暂无机器人接入，仍显示当前设备', 'warn')
+}
+function onDevice(v: string) {
+  deviceId.value = v
+  toast('已切换到 ' + (devices.value.find((d) => d.value === v)?.label ?? v), 'ok')
+}
+function openVideo(which: string) {
+  toast(`${which}通道未接入：真机联调后按 RTSP / WebRTC 接入`, 'warn', 3000)
+}
+function tryControl() {
+  toast('写操作未开放：需真机联调通过 + 现场授权签字（采集表 01 表 15–17 行）', 'warn', 3200)
+}
 
 const nav = [
   { name: 'dashboard', label: '首页' },
@@ -91,6 +117,10 @@ let timers: number[] = []
 onMounted(async () => {
   robot.start()
   await loadMap()
+  try {
+    const list = await api.robots()
+    if (list.length) devices.value = list.map((r) => ({ value: String(r.id), label: r.name }))
+  } catch { /* 设备列表失败不影响大屏 */ }
   timers.push(window.setInterval(() => { now.value = new Date() }, 1000))
   timers.push(window.setInterval(() => {
     const p = robot.pose
@@ -159,8 +189,8 @@ async function logout() {
     <!-- 状态带：左选择器 / 中时钟 / 右状态（参考图就是靠右） -->
     <div class="subbar">
       <div class="sb-left">
-        <div class="field"><label>当前场站</label><span class="select">泰安 · 泉州石化-04</span></div>
-        <div class="field"><label>当前设备</label><span class="select">JCROB-01（{{ mode }}）</span></div>
+        <div class="field"><label>当前场站</label><DarkSelect :model-value="site" :options="sites" width="190px" @update:model-value="onSite" /></div>
+        <div class="field"><label>当前设备</label><DarkSelect :model-value="deviceId" :options="devices" width="170px" @update:model-value="onDevice" /></div>
         <span class="tool-icons">
           <i class="ti">🔒</i><i class="ti">🔔</i><i class="ti">✉</i>
         </span>
@@ -181,11 +211,15 @@ async function logout() {
     <div class="body">
       <aside class="col left">
         <ScadaPanel title="可见光视频" tone="cyan" class="grow" body-class="no-pad">
-          <VideoBox title="可见光" hint="海康可见光通道接入后播放" />
+          <div class="clickable" @click="openVideo('可见光')">
+            <VideoBox title="可见光" hint="海康可见光通道接入后播放" />
+          </div>
         </ScadaPanel>
 
         <ScadaPanel title="热红外视频" tone="gold" class="grow" body-class="no-pad">
-          <VideoBox title="热红外" hint="热成像通道接入后播放" />
+          <div class="clickable" @click="openVideo('热红外')">
+            <VideoBox title="热红外" hint="热成像通道接入后播放" />
+          </div>
         </ScadaPanel>
 
         <ScadaPanel title="实时控制" class="h-ctrl">
@@ -194,7 +228,7 @@ async function logout() {
             <button :class="{ on: controlTab === 'chassis' }" @click="controlTab = 'chassis'">车体控制</button>
           </div>
           <div class="ctrl-body">
-            <div class="stick"><span class="knob" /></div>
+            <div class="stick" title="点击查看为什么不能操作" @click="tryControl"><span class="knob" /></div>
             <div class="ctrl-meta">
               <div><span>电压</span><b>{{ num(galileo.power, 1) }} V</b></div>
               <div><span>速度</span><b>{{ num(galileo.currentSpeedX) }} m/s</b></div>
@@ -467,6 +501,7 @@ async function logout() {
 .h-msg { height: 190px; flex: none; }
 
 .no-pad { padding: 6px !important; }
+.clickable { height: 100%; cursor: pointer; }
 
 /* 控制面板 */
 .ctrl-tabs { display: flex; gap: 6px; margin-bottom: 8px; }

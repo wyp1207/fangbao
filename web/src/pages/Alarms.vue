@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRobotStore } from '@/stores/robot'
 import { useAuthStore } from '@/stores/auth'
 import DarkSelect from '@/components/DarkSelect.vue'
+import { toast } from '@/composables/useToast'
 
 const robot = useRobotStore()
 const auth = useAuthStore()
@@ -47,6 +48,7 @@ async function ack(id: number) {
   message.value = ''
   try {
     await robot.ackAlarm(id)
+    toast('告警已确认（恢复仍由数据判断）', 'ok')
   } catch (e) {
     message.value = e instanceof Error ? e.message : '确认失败'
   }
@@ -80,7 +82,7 @@ onMounted(() => { void robot.refreshAlarms() })
         <button class="btn btn-sm" @click="reset">重置</button>
         <span class="grow" />
         <button class="btn btn-sm" @click="robot.refreshAlarms()">刷新</button>
-        <button class="btn btn-sm" disabled>导出</button>
+        <button class="btn btn-sm" @click="toast('导出待 W5 落库后开放', 'warn')">导出</button>
       </div>
 
       <table class="grid">
