@@ -356,10 +356,9 @@ async function logout() {
 .logo-img {
   height: 28px; width: auto; max-width: 140px;
   object-fit: contain; display: block;
-  /* 提亮但不糊：保留蓝色相，只抬亮度 + 一圈淡青描边 */
-  filter: brightness(1.9) saturate(1.05)
-          drop-shadow(0 0 3px rgba(220, 250, 255, 0.95))
-          drop-shadow(0 0 10px rgba(110, 210, 255, 0.5));
+  /* 亮度保持原样，只拉对比度：边缘更实，蓝底上更容易看出形状 */
+  filter: contrast(1.55) saturate(1.1)
+          drop-shadow(0 0 5px rgba(190, 240, 255, 0.5));
 }
 .mark {
   width: 30px; height: 30px; display: grid; place-items: center;
