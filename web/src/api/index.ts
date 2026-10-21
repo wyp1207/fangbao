@@ -27,6 +27,14 @@ export interface StatusSnapshot {
   poll_count: number
 }
 
+export interface RecordingItem {
+  path: string
+  video_id: number
+  started_at: string
+  size: number
+  mtime: number
+}
+
 export interface UserRow {
   id: number
   username: string
@@ -116,6 +124,23 @@ export const api = {
   testVideo: (id: number) =>
     request<{ ok: boolean; target: string; message: string }>(`/videos/${id}/test`, { method: 'POST' }),
   deleteVideo: (id: number) => request<{ ok: boolean }>(`/videos/${id}`, { method: 'DELETE' }),
+
+  // 录像
+  recordings: (videoId?: number) =>
+    request<{ total: number; items: RecordingItem[]; recording: { video_id: number; name: string; running: boolean; started_at: number }[] }>(
+      `/recordings${videoId ? `?video_id=${videoId}` : ''}`),
+  recordingStatus: () =>
+    request<{ recorders: { video_id: number; name: string; running: boolean; started_at: number }[]; ffmpeg: boolean }>('/recordings/status'),
+  startRecording: (videoId: number) =>
+    request<{ ok: boolean; video_id: number; running: boolean }>(`/recordings/${videoId}/start`, { method: 'POST' }),
+  stopRecording: (videoId: number) =>
+    request<{ ok: boolean; video_id: number }>(`/recordings/${videoId}/stop`, { method: 'POST' }),
+  recordingFileUrl: (path: string) => `/api/v1/recordings/file?path=${encodeURIComponent(path)}`,
+  deleteRecording: (path: string) =>
+    request<{ ok: boolean }>(`/recordings/file?path=${encodeURIComponent(path)}`, { method: 'DELETE' }),
+  recordingStorage: () => request<{ files: number; bytes: number; dir: string }>('/recordings/storage'),
+  recordingDuration: (path: string) =>
+    request<{ path: string; duration: number | null }>(`/recordings/duration?path=${encodeURIComponent(path)}`),
 
   users: () => request<UserRow[]>('/users'),
   createUser: (body: { username: string; password: string; role: string }) =>

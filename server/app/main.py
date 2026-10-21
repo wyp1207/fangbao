@@ -1,4 +1,4 @@
-﻿"""应用入口。
+"""应用入口。
 
 单进程 + 进程内后台循环是刻意选择（见 docs/平台方案-定稿.md §3.1）：
 状态缓存、后台循环都在进程里，不引 Redis。代价是只能 --workers 1。
@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 
 from app.adapters.jcrob import build_adapter
 from app.adapters.jcrob import errors as jerr
-from app.api.v1 import alarms, auth, health, robots, users, videos
+from app.api.v1 import alarms, auth, health, recordings, robots, users, videos
 from app.core.config import get_settings
 from app.core.errors import PlatformError
 from app.core.logging import setup_logging
@@ -62,6 +62,9 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        # 录像进程是外部 ffmpeg，必须显式收掉，否则会变成孤儿进程
+        from app.services.recorder import registry as recorder_registry
+        recorder_registry.stop_all()
         await poller_service.stop()
         await lag.stop()
         await adapter.aclose()
@@ -97,6 +100,7 @@ def create_app() -> FastAPI:
     app.include_router(alarms.router, prefix=settings.api_prefix)
     app.include_router(users.router, prefix=settings.api_prefix)
     app.include_router(videos.router, prefix=settings.api_prefix)
+    app.include_router(recordings.router, prefix=settings.api_prefix)
     return app
 
 

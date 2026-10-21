@@ -40,8 +40,8 @@ const router = createRouter({
         { path: 'env-device', name: 'env-device', component: () => import('@/pages/PlaceholderPage.vue') },
 
         // 录像管理
-        { path: 'record/plan', name: 'record-plan', component: () => import('@/pages/PlaceholderPage.vue') },
-        { path: 'record/playback', name: 'record-playback', component: () => import('@/pages/PlaceholderPage.vue') },
+        { path: 'record/plan', name: 'record-plan', component: () => import('@/pages/RecordPlan.vue') },
+        { path: 'record/playback', name: 'record-playback', component: () => import('@/pages/RecordPlayback.vue') },
 
         // 系统管理
         { path: 'users', name: 'users', component: () => import('@/pages/Users.vue') },
