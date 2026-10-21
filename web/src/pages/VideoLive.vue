@@ -150,8 +150,17 @@ onBeforeUnmount(() => {
 .player { flex: 1; min-height: 260px; display: flex; }
 .player video { flex: 1; min-height: 0; background: #02101f; object-fit: contain; }
 .player .gz { flex: 1; min-height: 0; width: 100%; border: 0; background: #02101f; }
-.snap-wrap { position: relative; flex: 1; min-height: 0; display: flex; background: #02101f; }
-.snap-wrap img { width: 100%; height: 100%; object-fit: contain; }
+.snap-wrap {
+  position: relative; flex: 1; min-height: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: #02101f;
+}
+/* 不放大：按帧的原始尺寸显示，超宽超高才缩，避免 960 宽的帧被拉成 1380 而发糊 */
+.snap-wrap img {
+  max-width: 100%; max-height: 100%;
+  width: auto; height: auto;
+  object-fit: contain;
+}
 .snap-badge {
   position: absolute; left: 10px; bottom: 10px;
   padding: 2px 8px; font-size: 11px; color: #cfe8ff;

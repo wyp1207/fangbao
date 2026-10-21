@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     video_relay_url: str = ""
     # go2rtc 的 HTTP 地址（如 http://127.0.0.1:1984）；配了就用它的 MSE/WebRTC 播放器
     go2rtc_base: str = ""
+    # MJPEG 转码宽度：太小会糊、太大吃 CPU
+    video_scale_width: int = 1280
     jcrob_base_url: str = "http://127.0.0.1:3546"
     jcrob_ws_url: str = "ws://127.0.0.1:3547"
     jcrob_username: str = "admin"

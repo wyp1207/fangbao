@@ -23,6 +23,17 @@ log = logging.getLogger(__name__)
 
 FFMPEG = shutil.which("ffmpeg")
 FPS = 8
+
+
+def _scale_width() -> int:
+    try:
+        from app.core.config import get_settings
+        return int(getattr(get_settings(), "video_scale_width", 1280) or 1280)
+    except Exception:
+        return 1280
+
+
+SCALE_WIDTH = _scale_width()
 IDLE_SECONDS = 20.0
 SOI = b"\xff\xd8"
 EOI = b"\xff\xd9"
@@ -49,7 +60,7 @@ class VideoStream:
             "-fflags", "nobuffer", "-flags", "low_delay",
             "-probesize", "32768", "-analyzeduration", "0",
             "-i", self.url,
-            "-an", "-vf", f"fps={FPS},scale=960:-2",
+            "-an", "-vf", f"fps={FPS},scale={SCALE_WIDTH}:-2",
             "-f", "image2pipe", "-vcodec", "mjpeg", "-q:v", "7", "-",
         ]
         self._proc = subprocess.Popen(
