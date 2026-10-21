@@ -1,55 +1,73 @@
-# 防爆机器人平台
+# 防爆巡检机器人管理平台
 
-唯一机器人能力依据：`API接口导航2024_HTTP_20240619142112(1).pdf`（JCROB HTTP/WS，109 页）。
+单台 **JCROB 轮式防爆巡检机器人**的网页管理平台：实时驾驶舱、地图与点位、视频监控、
+告警中心、录像回放、设备台账、系统管理。
 
-> **接手项目先读 [HANDOFF.md](HANDOFF.md)。** 里面有项目背景、用户约束、已定技术方案、PDF 事实与页码、文件说明、脚本用法、真机联调顺序、已知错误和待确认问题。
+前端 Vue 3 + TypeScript + Vite，后端 FastAPI + SQLAlchemy，视频走 go2rtc（MSE），
+录像用 ffmpeg 分段落盘。单机 Docker Compose 部署，内网运行。
 
-## 当前定稿
+> 机器人能力依据：`API接口导航2024_HTTP_20240619142112(1).pdf`（JCROB HTTP/WS，109 页）。
+> 接手项目先读 [HANDOFF.md](HANDOFF.md)。
 
-| 文件 | 用途 |
+---
+
+## 现在的状态（诚实版）
+
+### 真能用（对接真实数据）
+
+| 模块 | 能力 |
 |---|---|
-| [HANDOFF.md](HANDOFF.md) | **交接入口**：上下文、决策、文件地图、联调步骤、风险清单 |
-| [docs/平台方案-定稿.md](docs/平台方案-定稿.md) | 平台架构、SDK Adapter、数据模型、API、任务状态机、UI、六周计划、验收 |
-| [docs/PDF-SDK能力与平台方案.md](docs/PDF-SDK能力与平台方案.md) | PDF 能力地图、能做什么/不能做什么、真机 12 项确认 |
-| [docs/PDF接口原文索引.md](docs/PDF接口原文索引.md) | 178 条 URL 的页码/方法/原文标题，机械提取（脚本生成，勿手改） |
-| [docs/JCROB实机兼容性.md](docs/JCROB实机兼容性.md) | URL 编码与兼容别名、字段补正、单位判定记录、待实机确认清单 |
-| [docs/真机取数清单.md](docs/真机取数清单.md) | **真机 11/10 直连时按这张表取数**：取什么、从哪个接口、解锁哪些决策、缺什么卡住什么 |
-| [真机联调数据采集表.xlsx](真机联调数据采集表.xlsx) | 现场按表填：基础信息、HTTP、WS、任务、能力、问题记录（v1.1） |
+| 首页驾驶舱 | 位姿/电量/急停/导航状态、SLAM 地图、机器人轨迹、**内嵌实时视频**、告警统计、消息、点位列表 |
+| 实时监控 | 机器人状态、地图（缩放/拖拽/点位）、视频（go2rtc MSE ~0.5s）、充电房 |
+| 告警中心 | 平台推导告警（电量/急停/在线）、筛选、分页、确认、一键回看录像、CSV 导出 |
+| 巡检管理 | 任务列表与动作序列、点位查询（只读） |
+| 数据查询 | 任务/告警检索与 CSV 导出 |
+| 设备管理 | 设备台账 CRUD、连接参数、连通性测试、协议适配器注册表（未实现的标「待接入」并列出缺什么） |
+| 地图库 | **导入 PNG 图纸 + 标定比例尺/原点**、点位草稿（点击地图打点）、与机器人地图映射 |
+| 录像管理 | 启停录制、分段回放（Range 点播）、下载、删除、保留策略（天数/容量/磁盘保护） |
+| 系统管理 | 用户 CRUD、角色、重置密码、能力探测、**操作审计日志** |
+| 消息中心 | 告警 + 视频/账号/系统事件，落库、未读、筛选 |
 
-## 复现接口清单
+### 占位（等设备或数据）
 
-```powershell
-python scripts/extract_pdf_endpoints.py
-```
+- 热红外视频（无热像仪）
+- 环境监测（无可燃气体/温湿度传感器）
+- 任务日历（无历史任务库）
+- 运行数据曲线（等历史库积累）
 
-脚本用 `pdfplumber` 逐页读取 PDF，保留原文空格和拼写，不做 URL 规范化。
+### 明确锁着（等真机联调 + 现场授权）
 
-方案里引用的 SDK 接口已与索引逐条对过；平台自建的 `/api/v1/...` 接口在文中单独标注为“我设计的，不是 PDF”。
+任务下发/暂停/取消、点位同步到机器人、地图下发、云台控制。
+点击有说明弹窗，写清「现在什么阶段 / 为什么锁 / 可以先怎么做 / 什么时候开」。
 
-## 本期范围
+### 没做（不在本期合同）
 
-- 做：状态驾驶舱、地图/点位、任务下发与巡航、告警、历史、审计、基础 RBAC；
-- 不做：视频/云台/测温（后续单独接）、BMS 单体电压、AI 识别、MQTT/GB28181、软件急停、多机器人、7×24 录像。
+AI 识别、3D 数字孪生、多机器人调度、GB28181/OPC UA 对接、应急管理局上报。
 
-## 历史资料
-
-以下文件保留作参考，但**不再作为机器人能力依据**：
-
-- `防爆机器人平台-实施方案v2.md`（v3.0，含 xlsx 模块矩阵与 UI 照片分析）
-- `docs/UI设计基线-实拍参考.md`
-- `docs/model_review_20261020-140309.md`
-- `docs/open-source-references.md`
+---
 
 ## 仓库结构
 
 ```text
 web/        Vue 3 + TS + Vite 前端（不直连机器人）
-server/     FastAPI 后端（Adapter / API / 后台循环 / 迁移）
-contracts/  OpenAPI + JCROB fixtures（前后端共用的契约）
+server/     FastAPI 后端（适配器 / API / 后台循环 / 迁移）
+contracts/  OpenAPI + JCROB fixtures（前后端共用契约）
 deploy/     docker-compose、nginx、两个 Dockerfile
-docs/       方案、清单、评审记录
+docs/       方案、接口清单、评审记录、截图
 scripts/    probe_jcrob.py 等一次性工具
 ```
+
+后端要点：
+
+```text
+server/app/
+  adapters/        jcrob(HTTP/Mock) + registry(多设备协议注册表)
+  api/v1/          auth devices maps/library alarms messages audit recordings users videos robots
+  services/        alarms messages recorder video_stream poller
+  models/          robot user video_source alarm message operation_log platform_map
+```
+
+---
 
 ## 快速开始（本地，Mock 机器人）
 
@@ -60,52 +78,42 @@ copy .env.example .env
 python -m uvicorn app.main:app --reload --port 8000
 ```
 
-- 健康检查：`http://127.0.0.1:8000/health`
-- 接口文档：`http://127.0.0.1:8000/docs`
-- 默认账号：`admin / admin123`（生产必须改）
-
-前端：
-
 ```powershell
 cd web
 npm install
-npm run dev     # http://127.0.0.1:5173，/api 已反代到 8000
+npm run dev          # http://127.0.0.1:5173
 ```
 
-测试：
+默认账号 `admin / admin123`（首次登录后请改密码）。
 
-```powershell
-cd server
-python -m pytest tests -q      # 32 项：单位、脱敏、Adapter、登录、CSRF、探针
-```
+视频需要 go2rtc：`JC_GO2RTC_BASE=http://<go2rtc>:1984`。
 
-## 依赖原则
+---
 
-前端只有 3 个包（`vue` / `vue-router` / `pinia`），后端只多 8 个（FastAPI、SQLAlchemy、Alembic、PyJWT、httpx、PyMySQL…）。
-组件库、图表库现在**不装**：没有页面用到它们，装了就是白背 400 KB 和一堆传递依赖。要用时再引，按需引入。
+## 关键约束（不要绕过）
 
-OpenAPI 契约由代码生成，不手写：
+1. **写操作锁定**：机器人执行类操作要等真机联调通过 + 现场授权签字（方案 §5.7）。
+2. **阈值未标定**：环境类告警一律显示「未标定」，不拿占位值冒充。
+3. **取消任务 ≠ 安全急停**：急停只能按车体硬件按钮，平台没有急停下发接口。
+4. **不造数据**：占位就写「未接入」，宁可空着也不填假值。
+5. **录像保留**：默认 30 天 / 800GB，低于 5GB 可用空间自动停录并告警。
 
-```powershell
-python scripts/export_openapi.py   # -> contracts/openapi.json
-```
+---
 
-## 当前进度
+## 文档
 
-- ✅ `server/`：配置、日志脱敏、JWT + CSRF、SQLite/MySQL、Alembic 初始迁移、JCROB HTTP Adapter（只读）、Mock Adapter、能力探测、1s 轮询、后台循环 supervisor、`/health` 深探针、**告警推导（电量/急停/离线）+ 告警确认接口**
-- ✅ `web/`：登录、驾驶舱（状态条 / Canvas 地图 / 位姿 / 新鲜度）、地图与点位、任务只读、告警中心（列表 + 确认 + 规则表）、数据查询、系统设置（能力矩阵 + 运行状态）；**`npm run build` 通过**（vue-tsc strict + vite），dist 134 KB
-- ✅ **浏览器冒烟**：`python scripts/smoke_web.py` 起后端 + vite + chromium，登录进驾驶舱截图，断言 canvas 有像素、无未预期 console error
-- ✅ `contracts/`：OpenAPI v0.1 + 12 个 PDF 示例 fixtures
-- ✅ `deploy/`：compose（`jc-` 前缀 / 8099 / `/data/jcrob-platform`）+ nginx（日志脱敏）+ 多阶段镜像
-- ⬜ 写操作（任务下发/暂停/继续/停止）：**刻意未开放**，等真机联调 + 现场授权签字
-- ⬜ 环境 WebSocket（`/bw_env_sensors/*`）：**等真机**。PDF 只给了 topic 名和字段，没给推送频率与 ping 语义（取数清单 D26/D29），现在写就是猜
-- ⬜ 告警落库、历史采样、CSV 导出、审计页（W5）
+| 文件 | 内容 |
+|---|---|
+| [HANDOFF.md](HANDOFF.md) | 交接入口：背景、决策、文件地图、联调步骤、风险 |
+| [docs/PDF-SDK能力与平台方案.md](docs/PDF-SDK能力与平台方案.md) | PDF 能力地图、能做什么/不能做什么 |
+| [docs/PDF接口原文索引.md](docs/PDF接口原文索引.md) | 178 条 URL 的页码/方法/标题 |
+| [docs/JCROB实机兼容性.md](docs/JCROB实机兼容性.md) | URL 编码、字段补正、单位判定、待确认清单 |
+| [docs/功能模块与接口清单-20261021.xlsx](docs/功能模块与接口清单-20261021.xlsx) | 模块 × 接口对照 |
+| [docs/录像保留策略-20261021.xlsx](docs/录像保留策略-20261021.xlsx) | 容量测算与保留规则 |
+| [docs/model_review_*.md](docs/) | 豆包 / GLM 的多轮评审记录 |
 
-## 下一步
+---
 
-交付日 **2026-12-01**，部署机 **192.168.8.40**（Ubuntu 22.04 + Docker Compose，nginx 用 8099）。
+## 版本
 
-1. 前端已能构建（`npm install && npm run build` 通过）；下一步补一次浏览器冒烟（Playwright 截图登录→驾驶舱）；
-2. W4 前做完驾驶舱与地图的细节，Mock 下 feature-complete；
-3. 11/10 真机只读冒烟，跑 `probe_jcrob.py --angle-check`，填采集表；
-4. 用真实字段锁定单位、任务语义和地图坐标。
+`0.1.0` —— 只读阶段。等真机到场（2026-11-10）联调后开放写操作。
