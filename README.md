@@ -92,12 +92,14 @@ python scripts/export_openapi.py   # -> contracts/openapi.json
 
 ## 当前进度
 
-- ✅ `server/`：配置、日志脱敏、JWT + CSRF、SQLite/MySQL、Alembic 初始迁移、JCROB HTTP Adapter（只读）、Mock Adapter、能力探测、1s 轮询、后台循环 supervisor、`/health` 深探针
-- ✅ `web/`：登录、驾驶舱（状态条 / Canvas 地图 / 位姿 / 新鲜度）、地图与点位、任务只读、告警规则页、数据查询、系统设置（能力矩阵 + 运行状态）；**`npm run build` 通过**（vue-tsc strict + vite），dist 134 KB
+- ✅ `server/`：配置、日志脱敏、JWT + CSRF、SQLite/MySQL、Alembic 初始迁移、JCROB HTTP Adapter（只读）、Mock Adapter、能力探测、1s 轮询、后台循环 supervisor、`/health` 深探针、**告警推导（电量/急停/离线）+ 告警确认接口**
+- ✅ `web/`：登录、驾驶舱（状态条 / Canvas 地图 / 位姿 / 新鲜度）、地图与点位、任务只读、告警中心（列表 + 确认 + 规则表）、数据查询、系统设置（能力矩阵 + 运行状态）；**`npm run build` 通过**（vue-tsc strict + vite），dist 134 KB
+- ✅ **浏览器冒烟**：`python scripts/smoke_web.py` 起后端 + vite + chromium，登录进驾驶舱截图，断言 canvas 有像素、无未预期 console error
 - ✅ `contracts/`：OpenAPI v0.1 + 12 个 PDF 示例 fixtures
 - ✅ `deploy/`：compose（`jc-` 前缀 / 8099 / `/data/jcrob-platform`）+ nginx（日志脱敏）+ 多阶段镜像
 - ⬜ 写操作（任务下发/暂停/继续/停止）：**刻意未开放**，等真机联调 + 现场授权签字
-- ⬜ WS 监听、告警引擎、历史采样、CSV 导出、审计页（W5）
+- ⬜ 环境 WebSocket（`/bw_env_sensors/*`）：**等真机**。PDF 只给了 topic 名和字段，没给推送频率与 ping 语义（取数清单 D26/D29），现在写就是猜
+- ⬜ 告警落库、历史采样、CSV 导出、审计页（W5）
 
 ## 下一步
 

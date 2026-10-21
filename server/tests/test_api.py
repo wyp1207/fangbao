@@ -51,6 +51,33 @@ def test_nav_points_are_parsed_server_side(auth_client):
     assert body["path_data"]  # 原文保留，写回时用
 
 
+def test_alarms_list_and_ack(auth_client):
+    r = auth_client.get("/api/v1/alarms")
+    assert r.status_code == 200
+    assert isinstance(r.json(), list)
+
+    # 伪造一条：确认接口对不存在的 id 返回 404，而不是静默成功
+    miss = auth_client.post("/api/v1/alarms/999999/ack")
+    assert miss.status_code == 404
+
+
+def test_alarm_flow_via_api(auth_client):
+    # 直接往 store 里造一条真实规则产生的告警（电量低），走完 列表 -> 确认 的链路
+    store = auth_client.app.state.alarms
+    store.evaluate(status={}, info={"battery": 5, "driver_port": False}, age_s=0)
+
+    items = auth_client.get("/api/v1/alarms").json()
+    assert items and items[0]["metric"] == "battery"
+    alarm_id = items[0]["id"]
+
+    acked = auth_client.post(f"/api/v1/alarms/{alarm_id}/ack").json()
+    assert acked["acked_by"] == "admin"
+    assert acked["acked_at"]
+
+    active = auth_client.get("/api/v1/alarms?active=true").json()
+    assert all(a["id"] != alarm_id for a in active)
+
+
 def test_probe_requires_csrf(client):
     client.post("/api/v1/auth/login", json={"username": "admin", "password": "admin123"})
     # 不带 X-CSRF-Token

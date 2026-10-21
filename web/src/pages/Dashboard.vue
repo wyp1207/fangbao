@@ -107,8 +107,20 @@ onBeforeUnmount(() => {
         </section>
 
         <section class="panel">
-          <div class="panel-title">最近告警</div>
-          <p class="muted small">暂无告警。阈值未标定前不产生环境类告警。</p>
+          <div class="panel-title">
+            <span>最近告警</span>
+            <span class="muted small">{{ robot.alarms.length }} 条</span>
+          </div>
+          <ul v-if="robot.alarms.length" class="alarm-list">
+            <li v-for="a in robot.alarms.slice(0, 5)" :key="a.id">
+              <span class="tag" :class="a.level === 'critical' ? 'danger' : 'warn'">{{ a.level === 'critical' ? '严重' : '提醒' }}</span>
+              <span class="msg">{{ a.message }}</span>
+              <span class="muted small">{{ a.started_at.slice(11, 19) }}</span>
+            </li>
+          </ul>
+          <p v-else class="muted small">
+            暂无告警。环境类阈值未标定，不会产生环境告警。
+          </p>
         </section>
 
         <section class="panel">
@@ -131,4 +143,7 @@ onBeforeUnmount(() => {
 .kv { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
 .kv span { color: var(--text-2); }
 .small { font-size: 12px; line-height: 1.6; }
+.alarm-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.alarm-list li { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; font-size: 12px; }
+.alarm-list .msg { color: var(--text-0); }
 </style>

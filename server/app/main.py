@@ -16,11 +16,12 @@ from fastapi.responses import JSONResponse
 
 from app.adapters.jcrob import build_adapter
 from app.adapters.jcrob import errors as jerr
-from app.api.v1 import auth, health, robots
+from app.api.v1 import alarms, auth, health, robots
 from app.core.config import get_settings
 from app.core.errors import PlatformError
 from app.core.logging import setup_logging
 from app.db.init import bootstrap, create_all
+from app.services.alarms import AlarmStore
 from app.services.state_cache import StateCache
 from app.tasks.poller import StatusPoller
 from app.tasks.runner import LoopLagMonitor, Service
@@ -46,12 +47,14 @@ async def lifespan(app: FastAPI):
 
     adapter = build_adapter(settings)
     cache = StateCache()
-    poller = StatusPoller(adapter, cache, settings.jcrob_poll_interval)
+    alarms = AlarmStore()
+    poller = StatusPoller(adapter, cache, settings.jcrob_poll_interval, alarms=alarms)
     poller_service = Service("status_poller", poller)
     lag = LoopLagMonitor()
 
     app.state.adapter = adapter
     app.state.cache = cache
+    app.state.alarms = alarms
     app.state.services = Services([poller_service], lag)
 
     poller_service.start()
@@ -91,6 +94,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(auth.router, prefix=settings.api_prefix)
     app.include_router(robots.router, prefix=settings.api_prefix)
+    app.include_router(alarms.router, prefix=settings.api_prefix)
     return app
 
 

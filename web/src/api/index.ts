@@ -49,6 +49,17 @@ export interface NavPoint {
   direction: string
 }
 
+export interface AlarmItem {
+  id: number
+  metric: string
+  level: 'warn' | 'critical'
+  message: string
+  value: unknown
+  started_at: string
+  acked_at: string | null
+  acked_by: string | null
+}
+
 export const api = {
   login: (username: string, password: string) =>
     request<{ user: User; csrf_token: string }>('/auth/login', {
@@ -73,6 +84,9 @@ export const api = {
       `/robots/${id}/nav-points?map_name=${encodeURIComponent(mapName)}&path_name=${encodeURIComponent(pathName)}`,
     ),
   tasks: (id = 1) => request<TaskItem[]>(`/robots/${id}/tasks`),
+  alarms: (activeOnly = false) => request<AlarmItem[]>(`/alarms?active=${activeOnly}`),
+  ackAlarm: (alarmId: number) =>
+    request<AlarmItem>(`/alarms/${alarmId}/ack`, { method: 'POST' }),
   capabilities: (id = 1) => request<Record<string, unknown>>(`/robots/${id}/capabilities`),
   probe: (id = 1) => request<Record<string, unknown>>(`/robots/${id}/probe`, { method: 'POST' }),
   precheck: (id = 1) =>

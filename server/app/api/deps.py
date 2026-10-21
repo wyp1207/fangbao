@@ -61,3 +61,7 @@ def get_cache(request: Request):
 
 def get_services(request: Request):
     return request.app.state.services
+
+
+def get_alarms(request: Request):
+    return request.app.state.alarms

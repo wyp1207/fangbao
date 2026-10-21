@@ -87,11 +87,16 @@ def main() -> int:
             page.wait_for_timeout(2500)  # 让 1s 轮询跑两轮，地图和状态条有数据
 
             page.screenshot(path=str(SHOTS / "dashboard.png"), full_page=True)
+            # canvas 要在离开驾驶舱之前量，否则拿到的是 null
             canvas = page.evaluate(
                 "() => { const c = document.querySelector('canvas');"
                 " return c ? [c.width, c.height] : null }"
             )
             text = page.inner_text("body")
+
+            page.click("text=告警中心")
+            page.wait_for_timeout(900)
+            page.screenshot(path=str(SHOTS / "alarms.png"), full_page=True)
             browser.close()
 
         # 登录页的 /auth/me 返回 401 是正常的“未登录”探测，不算错误
