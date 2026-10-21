@@ -141,7 +141,7 @@ async function logout() {
     <header class="hdr">
       <div class="hdr-left">
         <div class="logo">
-          <img class="logo-img" :src="logoUrl" alt="logo" />
+          <span class="logo-badge"><img class="logo-img" :src="logoUrl" alt="logo" /></span>
         </div>
         <TopNav :start="0" :end="4" />
       </div>
@@ -348,7 +348,16 @@ async function logout() {
 }
 .hdr-left { display: flex; align-items: center; gap: 14px; }
 .logo { display: flex; align-items: center; gap: 9px; }
-.logo-img { height: 34px; width: auto; max-width: 200px; object-fit: contain; display: block; }
+/* 和之前那个 30×30 的小图标保持同样体量 */
+.logo-badge {
+  display: flex; align-items: center; justify-content: center;
+  height: 30px;
+  padding: 0 6px;
+  background: #fff;
+  border-radius: 2px;
+  box-shadow: 0 0 10px rgba(0, 40, 100, 0.35);
+}
+.logo-img { height: 20px; width: auto; max-width: 120px; object-fit: contain; display: block; }
 .mark {
   width: 30px; height: 30px; display: grid; place-items: center;
   color: #eaf7ff; font-size: 17px;

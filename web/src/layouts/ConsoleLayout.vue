@@ -35,7 +35,7 @@ async function onLogout() {
   <div class="shell">
     <header class="hdr">
       <div class="logo">
-        <img class="logo-img" :src="logoUrl" alt="logo" />
+        <span class="logo-badge"><img class="logo-img" :src="logoUrl" alt="logo" /></span>
       </div>
 
       <TopNav :start="0" :end="4" />
