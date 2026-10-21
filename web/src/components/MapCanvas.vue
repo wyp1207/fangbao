@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { MapMeta, NavPoint } from '@/api'
 
@@ -83,7 +83,7 @@ function draw() {
   if (!ctx) return
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
   ctx.clearRect(0, 0, w, h)
-  ctx.fillStyle = props.dark ? '#040a14' : '#f7f9fc'
+  ctx.fillStyle = props.dark ? '#040a14' : '#dbe4ee'
   ctx.fillRect(0, 0, w, h)
 
   if (!img || !ready) {
@@ -100,7 +100,7 @@ function draw() {
   if (props.dark) ctx.filter = 'invert(1) hue-rotate(172deg) saturate(0.55) brightness(1.25)'
   ctx.drawImage(img, 0, 0)
   ctx.filter = 'none'
-  ctx.fillStyle = props.dark ? 'rgba(4, 10, 20, 0.18)' : 'rgba(255, 255, 255, 0.18)'
+  ctx.fillStyle = props.dark ? 'rgba(4, 10, 20, 0.18)' : 'rgba(255, 255, 255, 0.05)'
   ctx.fillRect(0, 0, img.width, img.height)
   ctx.restore()
 

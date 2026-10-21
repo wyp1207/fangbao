@@ -117,7 +117,7 @@ def main() -> int:
             text = page.inner_text("body")
 
             # 大屏是覆盖层，要点它自己的导航，不能点底层后台的
-            page.click(".scada .nav >> text=告警中心")
+            page.click(".board .tabs >> text=监控中心")
             page.wait_for_timeout(900)
             page.screenshot(path=str(SHOTS / "alarms.png"), full_page=True)
             browser.close()
