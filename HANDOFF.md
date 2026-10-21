@@ -627,8 +627,12 @@ python scripts\probe_jcrob.py --base http://<robot-ip>:3546 --token <token> --an
 
 ### 9.3 网络
 
-- GitHub API 直连可能被重置；本机可用 `http://127.0.0.1:9876` 代理（不保证一直可用）。
-- 豆包/GLM API 之前可直连。
+- **GitHub 必须走本地代理** `http://127.0.0.1:9876`（2026-10-21 实测，原说明见 `docs/screenshots/Agent-GitHub访问说明.md`）：
+  - Python（urllib/httpx）设 `HTTP_PROXY`/`HTTPS_PROXY` 即可，实测 `api.github.com`、`raw.githubusercontent.com` 都 200；
+  - **`curl.exe` 走不通**：Schannel 报 `SEC_E_NO_CREDENTIALS (0x8009030e)`，别拿 curl 判断网络通不通；
+  - **git 必须带两个 `-c`**：`git -c http.sslBackend=openssl -c http.proxy=http://127.0.0.1:9876 …`，实测 `ls-remote` 成功；
+  - 进程继承到的代理变量可能是不可用的 `127.0.0.1:9`，用前先覆盖。
+- 豆包/GLM API 可直连（不需要代理）。
 - 机器人网络尚未接通：8.40 同时有 192.168.8.0/24 与 192.168.1.0/24 两块网段，**接哪段待现场确认**。
 - 纯内网部署；将来上公网要先加反代 + HTTPS，本期不做。
 
