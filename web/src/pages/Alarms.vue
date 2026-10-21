@@ -14,8 +14,10 @@ const router = useRouter()
 /** 从首页/铃铛跳过来时带筛选：?status=unacked&level=critical&q=xx */
 function applyQuery() {
   const { status, level, q } = route.query
-  if (status === 'unacked' || status === 'acked') ackFilter.value = status
-  if (level === 'critical' || level === 'warn') levelFilter.value = level
+  const st = typeof status === 'string' ? status : ''
+  if (st === 'unacked') ackFilter.value = 'new'
+  else if (['new', 'acked', 'handled', 'closed'].includes(st)) ackFilter.value = st
+  if (level === 'critical' || level === 'warn') levelFilter.value = String(level)
   if (typeof q === 'string' && q) keyword.value = q
 }
 const auth = useAuthStore()
@@ -35,9 +37,17 @@ const levelOptions = [
 ]
 const ackOptions = [
   { value: '', label: '全部' },
-  { value: 'unacked', label: '未确认' },
+  { value: 'new', label: '待确认' },
   { value: 'acked', label: '已确认' },
+  { value: 'handled', label: '已处置' },
+  { value: 'closed', label: '已关闭' },
 ]
+const STATUS_TEXT: Record<string, string> = {
+  new: '待确认', acked: '已确认', handled: '已处置', closed: '已关闭',
+}
+const STATUS_TONE: Record<string, string> = {
+  new: 'danger', acked: 'warn', handled: '', closed: 'ok',
+}
 
 const rows = ref<AlarmItem[]>([])
 const total = ref(0)
@@ -64,14 +74,29 @@ async function goto(p: number) {
   await reload()
 }
 
-const rules = [
-  { metric: 'lel（可燃气体）', threshold: '未标定', note: '需要现场安全员给定 ppm 阈值' },
-  { metric: 'smoke（烟雾）', threshold: '未标定', note: '现场标定' },
-  { metric: 'temperature（温度）', threshold: '未标定', note: '现场标定' },
-  { metric: 'battery（电量）', threshold: '20% 提醒 / 10% 严重', note: '平台建议值，可改' },
-  { metric: 'offline（通信中断）', threshold: '10s', note: '轮询连续失败' },
+const cfg = ref<Record<string, unknown>>({})
+
+const rules = computed(() => [
+  { metric: 'lel（可燃气体）', threshold: '见传感器标定', note: '在「环境传感器」里填阈值，留空不报' },
+  { metric: 'smoke（烟雾）', threshold: '见传感器标定', note: '在「环境传感器」里填阈值' },
+  { metric: 'temperature（温度）', threshold: '见传感器标定', note: '在「环境传感器」里填阈值' },
+  {
+    metric: 'battery（电量）',
+    threshold: `${cfg.value['alarm.battery_warn'] ?? 20}% 提醒 / ${cfg.value['alarm.battery_critical'] ?? 10}% 严重`,
+    note: '可在「系统设置 → 告警」里改，立即生效',
+  },
+  {
+    metric: 'offline（通信中断）',
+    threshold: `${cfg.value['alarm.offline_after_s'] ?? 10}s`,
+    note: '超过这个时间没收到数据就报',
+  },
+  {
+    metric: 'sustain（持续确认）',
+    threshold: cfg.value['alarm.sustain_s'] ? `${cfg.value['alarm.sustain_s']}s` : '不启用',
+    note: '条件持续够久才报，防抖',
+  },
   { metric: 'estop（driver_port）', threshold: '立即', note: '硬件按钮，只读' },
-]
+])
 
 async function ack(id: number) {
   message.value = ''
@@ -84,6 +109,43 @@ async function ack(id: number) {
   }
 }
 
+// ---- 处置 / 关闭 ----
+const acting = ref<AlarmItem | null>(null)
+const actMode = ref<'handle' | 'close'>('handle')
+const actNote = ref('')
+const actResolution = ref('handled')
+const resolutionOptions = [
+  { value: 'handled', label: '已处理（恢复/人工解决）' },
+  { value: 'defect', label: '设备缺陷（需维修）' },
+  { value: 'misreport', label: '误报' },
+  { value: 'ignored', label: '忽略（不处理）' },
+]
+
+function openAct(a: AlarmItem, mode: 'handle' | 'close') {
+  acting.value = a
+  actMode.value = mode
+  actNote.value = ''
+  actResolution.value = 'handled'
+}
+
+async function submitAct() {
+  if (!acting.value) return
+  if (!actNote.value.trim()) return
+  try {
+    if (actMode.value === 'handle') {
+      await api.handleAlarm(acting.value.id, actNote.value.trim())
+      toast('已处置并记录', 'ok')
+    } else {
+      await api.closeAlarm(acting.value.id, actResolution.value, actNote.value.trim())
+      toast('已关闭', 'ok')
+    }
+    acting.value = null
+    await reload()
+  } catch (e) {
+    toast(e instanceof Error ? e.message : '操作失败', 'danger')
+  }
+}
+
 function reset() {
   keyword.value = ''
   levelFilter.value = ''
@@ -91,7 +153,12 @@ function reset() {
   page.value = 1
 }
 
-onMounted(async () => { applyQuery(); await reload(); void robot.refreshAlarms() })
+onMounted(async () => {
+  applyQuery()
+  await reload()
+  void robot.refreshAlarms()
+  try { cfg.value = (await api.settings()).values } catch { /* 设置读不到就显示默认 */ }
+})
 watch(() => route.fullPath, async () => { if (route.name === 'alarms') { applyQuery(); page.value = 1; await reload() } })
 watch([levelFilter, ackFilter], async () => { page.value = 1; await reload() })
 </script>
@@ -138,12 +205,15 @@ watch([levelFilter, ackFilter], async () => { page.value = 1; await reload() })
             </td>
             <td>{{ a.message }}</td>
             <td>
-              <span v-if="a.acked_at" class="dim">已确认 · {{ a.acked_by }} · {{ a.acked_at.slice(11, 19) }}</span>
-              <span v-else class="danger">未确认</span>
+              <span class="tag" :class="STATUS_TONE[a.status ?? 'new']">{{ STATUS_TEXT[a.status ?? 'new'] }}</span>
+              <div class="dim small" v-if="a.handled_at">{{ a.handled_by }} · {{ a.handle_note }}</div>
+              <div class="dim small" v-if="a.closed_at">{{ a.closed_by }} · {{ a.resolution }}</div>
             </td>
             <td>
               <div class="row-actions">
                 <button class="act" title="确认告警" :disabled="!!a.acked_at || !auth.canWrite" @click="ack(a.id)">✓</button>
+                <button class="act" title="处置（写清做了什么）" :disabled="!auth.canWrite || !!a.closed_at" @click="openAct(a, 'handle')">✎</button>
+                <button class="act danger" title="关闭（给结论）" :disabled="!auth.canWrite || !!a.closed_at" @click="openAct(a, 'close')">⏹</button>
                 <button class="act" title="回看这个时刻的录像" @click="router.push({ name: 'record-playback', query: { date: a.started_at.slice(0, 10), t: a.started_at.slice(11, 19) } })">⟲</button>
               </div>
             </td>
@@ -184,10 +254,50 @@ watch([levelFilter, ackFilter], async () => { page.value = 1; await reload() })
         未标定的指标一律不求值，也不显示 0 或“正常”来冒充——这是有意的。
       </p>
     </section>
+
+    <!-- 处置 / 关闭 -->
+    <div v-if="acting" class="modal-mask" @click.self="acting = null">
+      <div class="modal">
+        <div class="panel-title">
+          <span>{{ actMode === 'handle' ? '处置告警' : '关闭告警' }}</span>
+        </div>
+        <p class="dim small" style="margin: 0 0 10px">{{ acting.message }}</p>
+
+        <label v-if="actMode === 'close'" class="fld">
+          <span>结论</span>
+          <DarkSelect v-model="actResolution" :options="resolutionOptions" width="100%" />
+        </label>
+        <label class="fld">
+          <span>{{ actMode === 'handle' ? '处置说明（必填）' : '备注' }}</span>
+          <textarea class="input area" v-model="actNote" rows="3"
+                    :placeholder="actMode === 'handle' ? '例：已通知班组现场确认，充电后电量回到 45%' : '例：已恢复，无需处理'" />
+        </label>
+
+        <div class="modal-actions">
+          <button class="btn" @click="acting = null">取消</button>
+          <button class="btn primary" :disabled="!actNote.trim()" @click="submitAct">
+            {{ actMode === 'handle' ? '提交处置' : '确认关闭' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <style scoped>
+.modal-mask { position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; background: rgba(2, 14, 30, 0.66); }
+.modal {
+  width: 480px; padding: 14px 16px 16px;
+  background: linear-gradient(180deg, rgba(0, 112, 200, 0.97), rgba(0, 60, 118, 0.98));
+  border: 1px solid rgba(111, 227, 255, 0.6);
+}
+.fld { display: block; margin-bottom: 11px; }
+.fld > span { display: block; font-size: 12px; color: #9fd2ff; margin-bottom: 5px; }
+.fld .input { width: 100%; }
+.input.area { resize: vertical; font-family: inherit; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.small { font-size: 11.5px; }
+
 .page { display: flex; flex-direction: column; gap: 12px; min-height: 100%; }
 .page > .panel:first-of-type { flex: 1; min-height: 0; overflow: auto; }
 .small { font-size: 12px; line-height: 1.6; }

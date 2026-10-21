@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query, Request
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 
 from app.api.deps import get_alarms, get_current_user, require_csrf, require_roles
-from app.core.errors import NotFound
+from app.core.errors import BadRequest, NotFound
 from app.models.user import User
 from app.services.messages import audit
 
@@ -45,6 +46,64 @@ def latest_alarms(
     """驾驶舱用：最近的告警（数组形状，前端直接渲染）。"""
     res = store.query(limit=limit, status="unacked" if active else None)
     return res
+
+
+class _HandleIn(BaseModel):
+    note: str = Field(min_length=1, max_length=500)
+
+
+class _CloseIn(BaseModel):
+    resolution: str = Field(default="handled")   # handled/defect/misreport/ignored
+    note: str = Field(default="", max_length=500)
+
+
+@router.post("/{alarm_id}/handle", dependencies=[Depends(require_csrf)])
+def handle_alarm(
+    alarm_id: int,
+    body: _HandleIn,
+    request: Request,
+    db: Session = Depends(get_db),
+    store=Depends(get_alarms),
+    user: User = Depends(require_roles("admin", "operator")),
+) -> dict:
+    """处置：写清做了什么，区别于"点一下确认"。"""
+    alarm = store.handle(alarm_id, who=user.username, note=body.note)
+    if alarm is None:
+        raise NotFound(f"告警 {alarm_id} 不存在")
+    from app.services.messages import store as msg_store
+
+    msg_store.add("info", "alarm", f"告警已处置：{alarm['message']}",
+                  f"{user.username}：{body.note}", {"to": "alarms"})
+    audit(db=db, action="alarm.handle", target=f"alarm:{alarm_id}", user=user,
+          client_ip=request.client.host if request.client else None,
+          detail={"note": body.note}, summary=body.note)
+    return alarm
+
+
+@router.post("/{alarm_id}/close", dependencies=[Depends(require_csrf)])
+def close_alarm(
+    alarm_id: int,
+    body: _CloseIn,
+    request: Request,
+    db: Session = Depends(get_db),
+    store=Depends(get_alarms),
+    user: User = Depends(require_roles("admin", "operator")),
+) -> dict:
+    """关闭：给出结论（已处理/设备缺陷/误报/忽略）。"""
+    allowed = {"handled", "defect", "misreport", "ignored"}
+    if body.resolution not in allowed:
+        raise BadRequest(f"结论只能是 {', '.join(sorted(allowed))}", code="BAD_RESOLUTION")
+    alarm = store.close(alarm_id, who=user.username, resolution=body.resolution, note=body.note)
+    if alarm is None:
+        raise NotFound(f"告警 {alarm_id} 不存在")
+    from app.services.messages import store as msg_store
+
+    msg_store.add("info", "alarm", f"告警已关闭：{alarm['message']}",
+                  f"{user.username} · {body.resolution}", {"to": "alarms"})
+    audit(db=db, action="alarm.close", target=f"alarm:{alarm_id}", user=user,
+          client_ip=request.client.host if request.client else None,
+          detail={"resolution": body.resolution, "note": body.note}, summary=body.resolution)
+    return alarm
 
 
 @router.get("/stats")

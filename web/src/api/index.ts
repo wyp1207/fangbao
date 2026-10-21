@@ -180,6 +180,14 @@ export interface AlarmPage {
 }
 
 export interface AlarmItem {
+  status?: 'new' | 'acked' | 'handled' | 'closed'
+  handled_at?: string | null
+  handled_by?: string | null
+  handle_note?: string | null
+  closed_at?: string | null
+  closed_by?: string | null
+  resolution?: string | null
+  close_note?: string | null
   id: number
   metric: string
   level: 'warn' | 'critical'
@@ -306,6 +314,10 @@ export const api = {
   alarmStats: (days = 7) =>
     request<{ days: number; series: { date: string; warn: number; critical: number; total: number }[];
               total: number; unacked: number; acked: number; peak: number }>(`/alarms/stats?days=${days}`),
+  handleAlarm: (id: number, note: string) =>
+    request<AlarmItem>(`/alarms/${id}/handle`, { method: 'POST', body: { note } }),
+  closeAlarm: (id: number, resolution: string, note: string) =>
+    request<AlarmItem>(`/alarms/${id}/close`, { method: 'POST', body: { resolution, note } }),
   alarmQuery: (params: Record<string, string | number | undefined>) => {
     const qs = Object.entries(params)
       .filter(([, v]) => v !== undefined && v !== '')

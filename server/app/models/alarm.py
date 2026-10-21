@@ -28,6 +28,16 @@ class AlarmRecord(Base):
     acked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     acked_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
+    # 处置流程：确认 → 处置 → 关闭；每一步都留人和时间，供追溯与统计
+    handled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    handled_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    handle_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    closed_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    resolution: Mapped[str | None] = mapped_column(String(32), nullable=True)  # handled/misreport/ignored
+    close_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     robot_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     camera_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     meta_json: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -44,6 +54,18 @@ class AlarmRecord(Base):
             "started_at": self.started_at.isoformat(timespec="seconds") if self.started_at else None,
             "acked_at": self.acked_at.isoformat(timespec="seconds") if self.acked_at else None,
             "acked_by": self.acked_by,
+            "handled_at": self.handled_at.isoformat(timespec="seconds") if self.handled_at else None,
+            "handled_by": self.handled_by,
+            "handle_note": self.handle_note,
+            "closed_at": self.closed_at.isoformat(timespec="seconds") if self.closed_at else None,
+            "closed_by": self.closed_by,
+            "resolution": self.resolution,
+            "close_note": self.close_note,
+            "status": (
+                "closed" if self.closed_at else
+                "handled" if self.handled_at else
+                "acked" if self.acked_at else "new"
+            ),
             "robot_id": self.robot_id,
             "camera_id": self.camera_id,
         }

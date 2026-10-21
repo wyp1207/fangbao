@@ -188,10 +188,18 @@ class AlarmStore:
             return {"total": len(items), "items": items[offset:offset + limit]}
 
         conds = []
-        if status == "unacked":
+        if status == "unacked" or status == "new":
             conds.append(AlarmRecord.acked_at.is_(None))
         elif status == "acked":
             conds.append(AlarmRecord.acked_at.is_not(None))
+            conds.append(AlarmRecord.closed_at.is_(None))
+        elif status == "handled":
+            conds.append(AlarmRecord.handled_at.is_not(None))
+            conds.append(AlarmRecord.closed_at.is_(None))
+        elif status == "closed":
+            conds.append(AlarmRecord.closed_at.is_not(None))
+        elif status == "open":
+            conds.append(AlarmRecord.closed_at.is_(None))
         if level:
             conds.append(AlarmRecord.level == level)
         if metric:
@@ -212,6 +220,46 @@ class AlarmStore:
                 q = q.where(where)
             rows = db.scalars(q).all()
             return {"total": total or 0, "items": [r.to_dict() for r in rows]}
+
+    def handle(self, alarm_id: int, who: str, note: str) -> dict | None:
+        """处置：说明"为什么报警、做了什么"，不同于确认。"""
+        if self._session_factory is not None:
+            from app.models.alarm import AlarmRecord
+
+            with self._session_factory() as db:  # type: ignore[misc]
+                rec = db.get(AlarmRecord, alarm_id)
+                if not rec:
+                    return None
+                rec.handled_at = _now()
+                rec.handled_by = who
+                rec.handle_note = note
+                if rec.acked_at is None:      # 处置即视为已确认
+                    rec.acked_at = rec.handled_at
+                    rec.acked_by = who
+                db.commit()
+                db.refresh(rec)
+                return rec.to_dict()
+        return None
+
+    def close(self, alarm_id: int, who: str, resolution: str, note: str) -> dict | None:
+        if self._session_factory is not None:
+            from app.models.alarm import AlarmRecord
+
+            with self._session_factory() as db:  # type: ignore[misc]
+                rec = db.get(AlarmRecord, alarm_id)
+                if not rec:
+                    return None
+                rec.closed_at = _now()
+                rec.closed_by = who
+                rec.resolution = resolution
+                rec.close_note = note
+                if rec.acked_at is None:
+                    rec.acked_at = rec.closed_at
+                    rec.acked_by = who
+                db.commit()
+                db.refresh(rec)
+                return rec.to_dict()
+        return None
 
     def ack(self, alarm_id: int, who: str) -> dict | None:
         if self._session_factory is not None:
