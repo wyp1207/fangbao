@@ -199,6 +199,99 @@ def add_point(
     return {"id": p.id, "name": p.name, "x": p.x, "y": p.y, "synced": p.synced}
 
 
+@router.post("/{map_id}/points/import", dependencies=[Depends(require_csrf)])
+def import_points(
+    map_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    me: User = Depends(require_roles("admin", "operator")),
+) -> dict:
+    """CSV 批量导入点位草稿。
+
+    表头：name,x,y,theta,note（name/x/y 必填，theta 默认 0）。
+    同名点位视为更新，不会重复插入；单行出错不影响其他行。
+    """
+    import csv
+
+    if not db.get(PlatformMap, map_id):
+        raise NotFound("地图不存在")
+
+    raw = file.file.read()
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = raw.decode("gbk", "replace")
+
+    rows = list(csv.DictReader(io.StringIO(text)))
+    if not rows:
+        raise BadRequest("CSV 是空的", code="EMPTY_CSV")
+
+    existing = {p.name: p for p in db.query(PointDraft).filter(PointDraft.map_id == map_id).all()}
+    created = updated = 0
+    errors: list[str] = []
+
+    for i, row in enumerate(rows, start=2):
+        name = (row.get("name") or "").strip()
+        if not name:
+            errors.append(f"第 {i} 行：缺 name")
+            continue
+        try:
+            x = float(row.get("x") or "")
+            y = float(row.get("y") or "")
+        except ValueError:
+            errors.append(f"第 {i} 行（{name}）：x/y 不是数字")
+            continue
+        theta = 0.0
+        if (row.get("theta") or "").strip():
+            try:
+                theta = float(row["theta"])
+            except ValueError:
+                errors.append(f"第 {i} 行（{name}）：theta 不是数字，按 0 处理")
+
+        if name in existing:
+            p = existing[name]
+            p.x, p.y, p.theta = x, y, theta
+            p.note = row.get("note") or p.note
+            updated += 1
+        else:
+            p = PointDraft(map_id=map_id, name=name, x=x, y=y, theta=theta,
+                           note=row.get("note") or None)
+            db.add(p)
+            existing[name] = p
+            created += 1
+
+    db.commit()
+    audit(db=db, action="point.import", target=f"map{map_id}", user=me,
+          detail={"created": created, "updated": updated, "errors": len(errors)})
+    return {"created": created, "updated": updated, "errors": errors[:20],
+            "total": created + updated}
+
+
+@router.get("/{map_id}/points/export")
+def export_points(map_id: int, db: Session = Depends(get_db),
+                  _: User = Depends(get_current_user)):
+    """导出点位 CSV（含模板列），可直接拿去改完再导入。"""
+    import csv
+
+    if not db.get(PlatformMap, map_id):
+        raise NotFound("地图不存在")
+    rows = db.query(PointDraft).filter(PointDraft.map_id == map_id).order_by(PointDraft.id).all()
+
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["name", "x", "y", "theta", "note"])
+    for r in rows:
+        w.writerow([r.name, r.x, r.y, r.theta, r.note or ""])
+
+    from fastapi.responses import Response
+
+    return Response(
+        content=buf.getvalue().encode("utf-8-sig"),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="points_map{map_id}.csv"'},
+    )
+
+
 @router.delete("/points/{point_id}", dependencies=[Depends(require_csrf)])
 def delete_point(point_id: int, db: Session = Depends(get_db),
                  me: User = Depends(require_roles("admin", "operator"))) -> dict:

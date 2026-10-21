@@ -34,6 +34,40 @@ const impForm = ref({
 })
 const impFile = ref<File | null>(null)
 const impBusy = ref(false)
+const csvInput = ref<HTMLInputElement | null>(null)
+
+function pickCsv() { csvInput.value?.click() }
+
+async function onCsv(e: Event) {
+  const f = (e.target as HTMLInputElement).files?.[0]
+  if (!f || !libId.value) return
+  try {
+    const res = await api.importPoints(libId.value, f)
+    const bad = res.errors.length ? `，${res.errors.length} 行有问题：${res.errors.slice(0, 2).join('；')}` : ''
+    toast(`导入完成：新增 ${res.created}，更新 ${res.updated}${bad}`, res.errors.length ? 'warn' : 'ok', 5000)
+    await loadDrafts(libId.value)
+    await refreshLibrary()
+  } catch (err) {
+    toast(err instanceof ApiError ? err.message : '导入失败', 'danger')
+  } finally {
+    if (csvInput.value) csvInput.value.value = ''
+  }
+}
+
+function exportCsv() {
+  if (!libId.value) return
+  window.open(api.exportPointsUrl(libId.value), '_blank')
+}
+
+function downloadTemplate() {
+  const csv = 'name,x,y,theta,note\n示例点位A,3.5,2.0,0,正对配电柜\n'
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'points_template.csv'
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
 const libMap = computed(() => library.value.find((m) => m.id === libId.value) ?? null)
 const robotMap = computed(() => robotMaps.value.find((m) => m.name === selectedName.value) ?? null)
@@ -250,6 +284,12 @@ onMounted(async () => {
           新增点位
         </button>
         <button class="btn" :disabled="!picking" @click="picking = false">退出打点</button>
+        <template v-if="libId">
+          <button class="btn" title="CSV 列：name,x,y,theta,note" @click="pickCsv">导入点位 CSV</button>
+          <button class="btn" :disabled="!pointRows.length" @click="exportCsv">导出 CSV</button>
+          <button class="btn" title="下载一个只有表头的模板" @click="downloadTemplate">模板</button>
+          <input ref="csvInput" type="file" accept=".csv,text/csv" style="display: none" @change="onCsv" />
+        </template>
         <span class="spacer" />
         <span class="muted small" v-if="libId">
           这张图是平台台账，未下发给机器人；{{ libMap?.robot_map_name ? `已映射机器人地图 ${libMap.robot_map_name}` : '还没和机器人地图对应' }}

@@ -279,6 +279,13 @@ export const api = {
   libraryPoints: (id: number) => request<PointDraft[]>(`/maps/library/${id}/points`),
   addLibraryPoint: (id: number, body: { name: string; x: number; y: number; note?: string | null }) =>
     request<PointDraft>(`/maps/library/${id}/points`, { method: 'POST', body }),
+  importPoints: (mapId: number, file: File) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return request<{ created: number; updated: number; errors: string[]; total: number }>(
+      `/maps/library/${mapId}/points/import`, { method: 'POST', raw: fd })
+  },
+  exportPointsUrl: (mapId: number) => `/api/v1/maps/library/${mapId}/points/export`,
   deleteLibraryPoint: (pointId: number) =>
     request<{ ok: boolean }>(`/maps/library/points/${pointId}`, { method: 'DELETE' }),
   currentMap: (id = 1) => request<{ name: string; md5sum?: string }>(`/robots/${id}/map/current`),
