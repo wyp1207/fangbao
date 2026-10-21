@@ -91,7 +91,9 @@ defineExpose({ currentLabel })
 .nav-tab {
   display: inline-flex; align-items: center; gap: 5px;
   white-space: nowrap;
-  padding: 6px 20px;
+  min-width: 104px;
+  justify-content: center;
+  padding: 6px 14px;
   font-size: 14px;
   color: #cfe8ff;
   cursor: pointer;

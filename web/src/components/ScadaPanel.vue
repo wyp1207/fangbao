@@ -4,6 +4,8 @@ withDefaults(defineProps<{
   right?: string
   bodyClass?: string
   tone?: 'blue' | 'cyan' | 'gold' | 'violet'
+  /** 传了路由名，右侧文案就变成可点链接 */
+  rightTo?: string
 }>(), { tone: 'blue' })
 </script>
 
@@ -15,7 +17,8 @@ withDefaults(defineProps<{
     <header class="t-head">
       <span class="tag" :class="tone">{{ title }}</span>
       <span class="dash" />
-      <em v-if="right">{{ right }}</em>
+      <router-link v-if="rightTo" class="right-link" :to="{ name: rightTo }">{{ right }}</router-link>
+      <em v-else-if="right">{{ right }}</em>
     </header>
 
     <div class="t-body" :class="bodyClass">
@@ -76,6 +79,8 @@ withDefaults(defineProps<{
   opacity: 0.5;
 }
 em { font-style: normal; font-size: 12px; color: #a9d8ff; }
+.right-link { font-size: 12px; color: #7fe9ff; text-decoration: none; white-space: nowrap; }
+.right-link:hover { color: #fff; text-shadow: 0 0 8px rgba(120, 230, 255, 0.9); }
 
 .t-body { flex: 1; min-height: 0; padding: 10px 12px; overflow: auto; }
 /* 地图面板：body 纵向 flex，画布才能拿到确定高度 */

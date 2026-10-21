@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import TopNav from '@/components/TopNav.vue'
+import logoUrl from '@/assets/logo.png'
 import { useRobotStore } from '@/stores/robot'
 
 const auth = useAuthStore()
@@ -34,18 +35,14 @@ async function onLogout() {
   <div class="shell">
     <header class="hdr">
       <div class="logo">
-        <span class="mark">◈</span>
-        <div class="logo-text">
-          <b>防爆巡检</b>
-          <i>JCROB PLATFORM</i>
-        </div>
+        <img class="logo-img" :src="logoUrl" alt="logo" />
       </div>
 
-      <TopNav :start="0" :end="3" />
+      <TopNav :start="0" :end="4" />
 
       <div class="mini-title"><span class="w" />智能巡检机器人管理平台<span class="w r" /></div>
 
-      <TopNav :start="3" />
+      <TopNav :start="4" />
 
       <div class="right">
         <span class="state" :class="state.cls">

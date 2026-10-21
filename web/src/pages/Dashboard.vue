@@ -11,6 +11,7 @@ import { toast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { useRobotStore } from '@/stores/robot'
 import { api, type MapMeta, type NavPoint } from '@/api'
+import logoUrl from '@/assets/logo.png'
 
 const robot = useRobotStore()
 const auth = useAuthStore()
@@ -140,13 +141,9 @@ async function logout() {
     <header class="hdr">
       <div class="hdr-left">
         <div class="logo">
-          <span class="mark">◈</span>
-          <div class="logo-text">
-            <b>防爆巡检</b>
-            <i>JCROB</i>
-          </div>
+          <img class="logo-img" :src="logoUrl" alt="logo" />
         </div>
-        <TopNav :start="0" :end="3" />
+        <TopNav :start="0" :end="4" />
       </div>
 
       <div class="board-title">
@@ -156,7 +153,7 @@ async function logout() {
       </div>
 
       <div class="hdr-right">
-        <TopNav :start="3" />
+        <TopNav :start="4" />
         <router-link class="icon-btn" :to="{ name: 'alarms' }" title="告警">
           <span class="bell" />{{ unacked.length }}
         </router-link>
@@ -237,7 +234,7 @@ async function logout() {
           <p v-if="mapError" class="red small">{{ mapError }}</p>
         </ScadaPanel>
 
-        <ScadaPanel title="实时消息" tone="violet" class="h-msg" right="查看全部 →">
+        <ScadaPanel title="实时消息" tone="violet" class="h-msg" right="查看全部 →" right-to="alarms">
           <table class="tbl">
             <thead><tr><th>时间</th><th>级别</th><th>内容</th><th>状态</th></tr></thead>
             <tbody>
@@ -341,7 +338,7 @@ async function logout() {
 .hdr {
   position: relative;
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: 1fr 1fr;
   align-items: center;
   gap: 12px;
   padding: 0 16px;
@@ -351,6 +348,7 @@ async function logout() {
 }
 .hdr-left { display: flex; align-items: center; gap: 14px; }
 .logo { display: flex; align-items: center; gap: 9px; }
+.logo-img { height: 34px; width: auto; max-width: 200px; object-fit: contain; display: block; }
 .mark {
   width: 30px; height: 30px; display: grid; place-items: center;
   color: #eaf7ff; font-size: 17px;
@@ -381,7 +379,12 @@ async function logout() {
 .hdr-right { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
 
 /* 中间大标题（参考图那种带翼的标题组件） */
-.board-title { position: relative; display: flex; align-items: center; gap: 16px; }
+.board-title {
+  position: absolute; left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex; align-items: center; gap: 16px;
+  pointer-events: none;
+}
 .board-title h1 {
   margin: 0;
   font-size: 26px; font-weight: 800; letter-spacing: 0.22em;
@@ -480,9 +483,9 @@ async function logout() {
 .grow { flex: 1; min-height: 0; }
 .col.center { display: grid; grid-template-rows: minmax(0, 1fr) auto; }
 .h-ctrl { height: 172px; flex: none; }
-.h-donut { height: 262px; flex: none; }
-.h-points { height: 232px; flex: none; }
-.h-msg { height: 190px; flex: none; }
+.h-donut { height: 208px; flex: none; }
+.h-points { height: 176px; flex: none; }
+.h-msg { height: 196px; flex: none; }
 
 .no-pad { padding: 6px !important; }
 .clickable { height: 100%; cursor: pointer; }
@@ -587,6 +590,7 @@ async function logout() {
 
 /* 点位 */
 .points { list-style: none; margin: 0; padding: 0; }
+.t-panel:has(.points) :deep(.t-body) { overflow-y: auto; }
 .points li {
   display: flex; align-items: center; gap: 9px;
   padding: 5px 6px; font-size: 12.5px;
@@ -623,8 +627,8 @@ async function logout() {
   .board-title h1 { font-size: clamp(13px, 1.15vw, 16px); letter-spacing: 0.06em; }
   .user { display: none; }
   .h-ctrl { height: 182px; }
-  .h-donut { height: 236px; }
-  .h-points { height: 226px; }
+  .h-donut { height: 196px; }
+  .h-points { height: 168px; }
   .h-msg { height: 158px; }
 }
 
@@ -642,8 +646,8 @@ async function logout() {
   .clock i { display: none; }
   .tabs .tab:nth-child(n + 4) { display: none; }
   .h-ctrl { height: 168px; }
-  .h-donut { height: 210px; }
-  .h-points { height: 180px; }
+  .h-donut { height: 190px; }
+  .h-points { height: 160px; }
   .h-msg { height: 150px; }
 }
 
