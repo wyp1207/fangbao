@@ -18,11 +18,13 @@ const nav = [
   { name: 'settings', label: '系统设置' },
 ]
 
-const stateTag = computed(() => {
+const state = computed(() => {
   if (!robot.online) return { text: '通信中断', cls: 'danger' }
   if (robot.stale) return { text: '数据过期', cls: 'warn' }
   return { text: robot.robotState, cls: 'ok' }
 })
+
+const alarmCount = computed(() => robot.alarms.filter((a) => !a.acked_at).length)
 
 async function onLogout() {
   await auth.logout()
@@ -35,10 +37,10 @@ async function onLogout() {
   <div class="shell">
     <header class="topbar">
       <div class="brand">
-        <span class="logo">◈</span>
-        <div>
+        <div class="mark">巡检</div>
+        <div class="brand-text">
           <div class="title">防爆机器人巡检平台</div>
-          <div class="sub muted">单机 · 二维作业管控</div>
+          <div class="sub">JCROB · 单机</div>
         </div>
       </div>
 
@@ -51,12 +53,19 @@ async function onLogout() {
           :class="{ active: route.name === item.name }"
         >
           {{ item.label }}
+          <span v-if="item.name === 'alarms' && alarmCount" class="badge">{{ alarmCount }}</span>
         </router-link>
       </nav>
 
       <div class="right">
-        <span class="tag" :class="stateTag.cls">{{ stateTag.text }}</span>
-        <span class="muted">{{ auth.user?.username }}（{{ auth.user?.role }}）</span>
+        <span class="state" :class="state.cls">
+          <i class="dot" :class="robot.online ? 'on' : 'off'" />
+          {{ state.text }}
+        </span>
+        <div class="user">
+          <b>{{ auth.user?.username }}</b>
+          <em>{{ auth.user?.role }}</em>
+        </div>
         <button class="btn" @click="onLogout">退出</button>
       </div>
     </header>
@@ -69,23 +78,60 @@ async function onLogout() {
 
 <style scoped>
 .shell { height: 100%; display: flex; flex-direction: column; }
+
 .topbar {
-  height: 60px;
-  display: flex; align-items: center; gap: 24px;
-  padding: 0 20px;
-  background: linear-gradient(180deg, #0c1a2b, #0a1523);
+  height: 60px; flex: none;
+  display: flex; align-items: center; gap: 28px;
+  padding: 0 24px;
+  background: #fff;
   border-bottom: 1px solid var(--line);
+  box-shadow: 0 1px 6px rgba(15, 35, 60, 0.04);
+  position: relative; z-index: 2;
 }
-.brand { display: flex; align-items: center; gap: 10px; min-width: 240px; }
-.logo { font-size: 22px; color: var(--accent); }
-.title { font-size: 15px; font-weight: 600; letter-spacing: .04em; }
-.sub { font-size: 11px; }
-.nav { display: flex; gap: 4px; flex: 1; }
+
+.brand { display: flex; align-items: center; gap: 10px; min-width: 220px; }
+.mark {
+  width: 30px; height: 30px; display: grid; place-items: center;
+  font-size: 12px; font-weight: 600; color: #fff;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #4d9bff, var(--accent));
+}
+.title { font-size: 15px; font-weight: 600; }
+.sub { font-size: 11px; color: var(--text-2); margin-top: 1px; }
+
+.nav { display: flex; gap: 4px; flex: 1; height: 100%; align-items: flex-end; }
 .nav-item {
-  padding: 8px 14px; border-radius: 8px; color: var(--text-1); font-size: 13px;
+  position: relative;
+  padding: 0 14px 16px;
+  font-size: 14px;
+  color: var(--text-1);
+  transition: color 0.15s;
 }
-.nav-item:hover { background: var(--bg-2); color: var(--text-0); }
-.nav-item.active { background: #12314f; color: #fff; box-shadow: inset 0 -2px 0 var(--accent); }
-.right { display: flex; align-items: center; gap: 12px; font-size: 12px; }
-.content { flex: 1; overflow: auto; padding: 16px; }
+.nav-item:hover { color: var(--accent); }
+.nav-item.active { color: var(--accent); font-weight: 500; }
+.nav-item.active::after {
+  content: ""; position: absolute; left: 14px; right: 14px; bottom: -1px; height: 2px;
+  background: var(--accent); border-radius: 2px 2px 0 0;
+}
+.badge {
+  margin-left: 5px; padding: 0 6px; border-radius: 9px;
+  background: var(--danger); color: #fff; font-size: 11px; line-height: 16px;
+}
+
+.right { display: flex; align-items: center; gap: 16px; }
+.state {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 5px 12px; border-radius: 999px; font-size: 13px;
+  background: var(--bg-2); border: 1px solid var(--line);
+  color: var(--text-1);
+}
+.state.ok { color: var(--ok); background: var(--ok-soft); border-color: transparent; }
+.state.warn { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
+.state.danger { color: var(--danger); background: var(--danger-soft); border-color: transparent; }
+
+.user { display: flex; flex-direction: column; line-height: 1.3; font-size: 13px; }
+.user b { font-weight: 500; }
+.user em { font-style: normal; color: var(--text-2); font-size: 11px; }
+
+.content { flex: 1; min-height: 0; overflow: auto; padding: 18px 24px 24px; }
 </style>

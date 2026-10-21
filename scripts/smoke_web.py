@@ -82,7 +82,7 @@ def main() -> int:
             page.screenshot(path=str(SHOTS / "login.png"))
             page.fill('input[autocomplete="username"]', "admin")
             page.fill('input[type="password"]', "admin123")
-            page.click("button:has-text('登录')")
+            page.click("button.submit")
             page.wait_for_selector("canvas", timeout=20000)
             page.wait_for_timeout(2500)  # 让 1s 轮询跑两轮，地图和状态条有数据
 

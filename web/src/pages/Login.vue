@@ -23,12 +23,12 @@ async function submit() {
 
 <template>
   <div class="login-page">
-    <div class="card panel">
+    <div class="card">
       <div class="head">
-        <div class="logo">◈</div>
+        <div class="mark">巡检</div>
         <div>
           <h1>防爆机器人巡检平台</h1>
-          <p class="muted">单机 · 二维作业管控 · 一期</p>
+          <p class="sub">JCROB · 单机 · 二维作业管控</p>
         </div>
       </div>
 
@@ -43,35 +43,61 @@ async function submit() {
 
       <p v-if="error" class="danger small">{{ error }}</p>
 
-      <button class="btn wide" :disabled="auth.loading" @click="submit">
-        {{ auth.loading ? '登录中…' : '登录' }}
+      <button class="btn primary submit" :disabled="auth.loading" @click="submit">
+        {{ auth.loading ? '登录中…' : '登 录' }}
       </button>
 
-      <p class="muted small">
-        默认账号见 server/.env.example；生产环境首次登录后必须改密码。
-      </p>
+      <p class="hint">默认账号见 <code>server/.env.example</code>；生产环境首次登录后必须改密码。</p>
     </div>
+
+    <p class="footer muted">一期：驾驶舱 / 地图点位 / 任务只读 / 告警 · 无视频、无三维</p>
   </div>
 </template>
 
 <style scoped>
 .login-page {
-  height: 100%; display: grid; place-items: center;
-  background: radial-gradient(900px 500px at 50% 20%, #10243a 0%, #070d16 70%);
+  height: 100%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 26px;
+  background: linear-gradient(180deg, #f7f9fc, #eef2f7);
 }
-.card { width: 360px; padding: 28px; }
-.head { display: flex; gap: 12px; align-items: center; margin-bottom: 22px; }
-.logo { font-size: 30px; color: var(--accent); }
+
+.card {
+  width: 380px; padding: 32px 32px 26px;
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  box-shadow: 0 12px 40px rgba(15, 35, 60, 0.09);
+}
+
+.head { display: flex; gap: 13px; align-items: center; margin-bottom: 26px; }
+.mark {
+  width: 42px; height: 42px; display: grid; place-items: center;
+  font-size: 13px; font-weight: 600; color: #fff;
+  border-radius: 11px;
+  background: linear-gradient(135deg, #4d9bff, var(--accent));
+  box-shadow: 0 6px 16px rgba(22, 119, 255, 0.28);
+}
 h1 { font-size: 17px; margin: 0; }
-p { margin: 4px 0 0; }
-.field { display: block; margin-bottom: 14px; }
-.field span { display: block; font-size: 12px; color: var(--text-1); margin-bottom: 6px; }
+.sub { margin: 5px 0 0; font-size: 12px; color: var(--text-2); }
+
+.field { display: block; margin-bottom: 15px; }
+.field span { display: block; font-size: 12.5px; color: var(--text-2); margin-bottom: 7px; }
 input {
-  width: 100%; padding: 9px 12px; border-radius: 8px;
-  border: 1px solid var(--line); background: var(--bg-2); color: var(--text-0);
-  outline: none;
+  width: 100%; padding: 10px 13px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  background: var(--bg-2);
+  color: var(--text-0); font-size: 14px; outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
 }
-input:focus { border-color: var(--accent); }
-.wide { width: 100%; margin-top: 6px; }
-.small { font-size: 12px; margin-top: 14px; }
+input:focus {
+  background: #fff;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.submit { width: 100%; margin-top: 10px; padding: 11px; font-size: 14px; letter-spacing: 0.16em; }
+.small { font-size: 12px; }
+.hint { margin: 16px 0 0; font-size: 12px; line-height: 1.7; color: var(--text-2); }
+.footer { font-size: 12px; }
 </style>

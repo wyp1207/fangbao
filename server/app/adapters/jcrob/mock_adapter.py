@@ -29,7 +29,8 @@ def _make_png(width: int, height: int) -> bytes:
         return (struct.pack(">I", len(data)) + tag + data
                 + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF))
 
-    bg, grid = (12, 22, 34), (30, 49, 72)
+    # 浅色栅格：真机 SLAM 图也是“自由区浅、障碍深”，这样和浅色 UI 一致
+    bg, grid = (247, 249, 252), (205, 214, 226)
     rows = []
     for y in range(height):
         row = bytearray()
