@@ -56,3 +56,59 @@
   [重置] toast=[] modal=0 net=[] dl=[] dlg=[]
   [重置] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
   [新建任务] toast=['下发/暂停/巡航在「任务执行」页；写开关在系统设置里'] modal=0 net=[('GET', 200, '/api/v1/task-templates'), ('GET', 200, '/api/v1/task-runs'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [新建任务] toast=['下发/暂停/巡航在「任务执行」页；写开关在系统设置里'] modal=0 net=[('GET', 200, '/api/v1/task-templates'), ('GET', 200, '/api/v1/task-runs'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [☰] toast=[] modal=2 net=[] dl=[] dlg=[]
+  [☰] toast=[] modal=2 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [1] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status'), ('GET', 200, '/api/v1/alarms')] dl=[] dlg=[]
+  [1] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+
+== task-templates
+  [复制] toast=['已复制为「演练-172401 副本」'] modal=0 net=[('POST', 200, '/api/v1/task-templates/6/duplicate'), ('GET', 200, '/api/v1/task-templates'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [复制] toast=['已复制为「演练-172401 副本」', '已复制为「演练-172401 副本 副本」'] modal=0 net=[('POST', 200, '/api/v1/task-templates/7/duplicate'), ('GET', 200, '/api/v1/task-templates'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [✎] toast=['已复制为「演练-172401 副本」', '已复制为「演练-172401 副本 副本」'] modal=2 net=[('GET', 200, '/api/v1/maps/library/1/points'), ('GET', 200, '/api/v1/robots/1/status'), ('GET', 200, '/api/v1/alarms')] dl=[] dlg=[]
+  [✎] toast=[] modal=2 net=[('GET', 200, '/api/v1/maps/library/1/points'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [🗑] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[{'type': 'confirm', 'msg': '删除模板「演练-172401 副本 副本」？'}]
+  [🗑] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[{'type': 'confirm', 'msg': '删除模板「演练-172401 副本 副本」？'}]
+
+== task-runs
+  [从模板生成计划] toast=[] modal=2 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [从模板生成计划] toast=[] modal=2 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [全部 ▾] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status'), ('GET', 200, '/api/v1/alarms')] dl=[] dlg=[]
+  [全部 ▾] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [刷新] toast=[] modal=0 net=[('GET', 200, '/api/v1/task-runs'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [刷新] toast=[] modal=0 net=[('GET', 200, '/api/v1/task-runs'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [详情] toast=[] modal=2 net=[('GET', 200, '/api/v1/task-runs/6'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [详情] toast=[] modal=2 net=[('GET', 200, '/api/v1/task-runs/6'), ('GET', 200, '/api/v1/robots/1/status'), ('GET', 200, '/api/v1/alarms')] dl=[] dlg=[]
+
+== points
+  [去地图打点] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/maps'), ('GET', 200, '/api/v1/maps/library'), ('GET', 200, '/api/v1/maps/library/1/points'), ('GET', 200, '/api/v1/maps/library/1/image'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [去地图打点] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/maps'), ('GET', 200, '/api/v1/maps/library'), ('GET', 200, '/api/v1/maps/library/1/image'), ('GET', 200, '/api/v1/maps/library/1/points'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+
+== inspection
+  [全部 ▾] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [全部 ▾] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [刷新] toast=[] modal=0 net=[('GET', 200, '/api/v1/inspection/plans'), ('GET', 200, '/api/v1/inspection/tasks'), ('GET', 200, '/api/v1/robots/1/status'), ('GET', 200, '/api/v1/alarms')] dl=[] dlg=[]
+  [刷新] toast=[] modal=0 net=[('GET', 200, '/api/v1/inspection/plans'), ('GET', 200, '/api/v1/inspection/tasks'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [详情] toast=[] modal=2 net=[('GET', 200, '/api/v1/inspection/tasks/2')] dl=[] dlg=[]
+  [详情] toast=[] modal=2 net=[('GET', 200, '/api/v1/inspection/tasks/2'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [手机打卡] toast=[] modal=0 net=[('GET', 200, '/api/v1/inspection/tasks/2')] dl=[] dlg=[]
+  [手机打卡] toast=[] modal=0 net=[('GET', 200, '/api/v1/inspection/tasks/2')] dl=[] dlg=[]
+
+== task-calendar
+
+== alarms
+  [全部 ▾] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [全部 ▾] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [查询] toast=[] modal=0 net=[('GET', 200, '/api/v1/alarms'), ('GET', 200, '/api/v1/robots/1/status'), ('GET', 200, '/api/v1/alarms')] dl=[] dlg=[]
+  [查询] toast=[] modal=0 net=[('GET', 200, '/api/v1/alarms'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [重置] toast=[] modal=0 net=[] dl=[] dlg=[]
+  [重置] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [刷新] toast=[] modal=0 net=[('GET', 200, '/api/v1/alarms'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [刷新] toast=[] modal=0 net=[('GET', 200, '/api/v1/alarms'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [导出 CSV] toast=['已导出 10 条'] modal=0 net=[('GET', 200, '/api/v1/robots/1/status'), ('GET', 200, '/api/v1/alarms')] dl=['告警_2026-10-22.csv'] dlg=[]
+  [导出 CSV] toast=['已导出 10 条', '已导出 10 条'] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=['告警_2026-10-22.csv'] dlg=[]
+  [✎] toast=['已导出 10 条', '已导出 10 条'] modal=2 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [✎] toast=[] modal=2 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [⏹] toast=[] modal=2 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [⏹] toast=[] modal=2 net=[('GET', 200, '/api/v1/robots/1/status'), ('GET', 200, '/api/v1/alarms')] dl=[] dlg=[]
+  [⟲] toast=[] modal=0 net=[('GET', 200, '/api/v1/videos'), ('GET', 200, '/api/v1/recordings'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]

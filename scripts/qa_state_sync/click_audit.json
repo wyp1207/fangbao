@@ -1,0 +1,182 @@
+{
+  "/dashboard": {
+    "name": "dashboard",
+    "clicks": [
+      {
+        "button": "登 录",
+        "title": "",
+        "cls": "btn primary submit",
+        "url_changed": false,
+        "new_url": null,
+        "new_text": [
+          "请求失败（500）"
+        ],
+        "toast": [],
+        "modal": [],
+        "net": [
+          {
+            "m": "POST",
+            "u": "/api/v1/auth/login",
+            "s": 500
+          }
+        ],
+        "dialog": [],
+        "downloads": [],
+        "error": null,
+        "popups": []
+      }
+    ],
+    "skipped": [],
+    "loading_snapshot": ""
+  },
+  "/robot-status": {
+    "name": "robot-status",
+    "clicks": [],
+    "skipped": [
+      {
+        "idx": "0",
+        "text": "登 录",
+        "key": "登 录",
+        "title": "",
+        "cls": "btn primary submit",
+        "tag": "button"
+      }
+    ],
+    "loading_snapshot": ""
+  },
+  "/map": {
+    "name": "map",
+    "clicks": [],
+    "skipped": [
+      {
+        "idx": "0",
+        "text": "登 录",
+        "key": "登 录",
+        "title": "",
+        "cls": "btn primary submit",
+        "tag": "button"
+      }
+    ],
+    "loading_snapshot": ""
+  },
+  "/video": {
+    "name": "video",
+    "clicks": [
+      {
+        "button": "登 录",
+        "title": "",
+        "cls": "btn primary submit",
+        "url_changed": false,
+        "new_url": null,
+        "new_text": [
+          "请求失败（500）"
+        ],
+        "toast": [],
+        "modal": [],
+        "net": [
+          {
+            "m": "POST",
+            "u": "/api/v1/auth/login",
+            "s": 500
+          }
+        ],
+        "dialog": [],
+        "downloads": [],
+        "error": null,
+        "popups": []
+      }
+    ],
+    "skipped": [],
+    "loading_snapshot": ""
+  },
+  "/room": {
+    "name": "room",
+    "clicks": [
+      {
+        "button": "登 录",
+        "title": "",
+        "cls": "btn primary submit",
+        "url_changed": false,
+        "new_url": null,
+        "new_text": [
+          "请求失败（500）"
+        ],
+        "toast": [],
+        "modal": [],
+        "net": [
+          {
+            "m": "POST",
+            "u": "/api/v1/auth/login",
+            "s": 500
+          }
+        ],
+        "dialog": [],
+        "downloads": [],
+        "error": null,
+        "popups": []
+      }
+    ],
+    "skipped": [],
+    "loading_snapshot": ""
+  },
+  "/env": {
+    "name": "env",
+    "clicks": [],
+    "skipped": [
+      {
+        "idx": "0",
+        "text": "登 录",
+        "key": "登 录",
+        "title": "",
+        "cls": "btn primary submit",
+        "tag": "button"
+      }
+    ],
+    "loading_snapshot": ""
+  },
+  "/tasks": {
+    "name": "tasks",
+    "clicks": [
+      {
+        "button": "登 录",
+        "title": "",
+        "cls": "btn primary submit",
+        "url_changed": false,
+        "new_url": null,
+        "new_text": [
+          "请求失败（500）"
+        ],
+        "toast": [],
+        "modal": [],
+        "net": [
+          {
+            "m": "POST",
+            "u": "/api/v1/auth/login",
+            "s": 500
+          }
+        ],
+        "dialog": [],
+        "downloads": [],
+        "error": null,
+        "popups": []
+      }
+    ],
+    "skipped": [],
+    "loading_snapshot": ""
+  },
+  "/task-templates": {
+    "name": "task-templates",
+    "clicks": [],
+    "skipped": [
+      {
+        "idx": "0",
+        "text": "登 录",
+        "key": "登 录",
+        "title": "",
+        "cls": "btn primary submit",
+        "tag": "button"
+      }
+    ],
+    "loading_snapshot": ""
+  }
+}
