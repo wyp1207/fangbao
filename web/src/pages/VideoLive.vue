@@ -54,6 +54,12 @@ async function load() {
       const hit = visible.value.find((v) => v.id === want)
       if (hit) current.value = hit
     }
+    // 如果 query 里带的是分组名且过滤后为空，就回退到全部，别给用户一个空页面
+    if (!current.value && route.query.group) {
+      const g = String(route.query.group)
+      const hit = visible.value.find((v) => (v.group_name || "").includes(g))
+      if (hit) current.value = hit
+    }
     if (!current.value) current.value = visible.value[0] ?? null
     if (current.value) { mjpegFailed.value = false; snapFailed.value = false }
   } catch (e) {
@@ -108,7 +114,7 @@ onBeforeUnmount(() => {
       <div class="toolbar">
         <label>视频源</label>
         <DarkSelect v-if="options.length" v-model="currentId" :options="options" width="220px" />
-        <span v-else class="muted small">{{ loading ? '读取中…' : '还没有视频源' }}</span>
+        <span v-else class="muted small">{{ loading ? '读取中…' : '这台设备还没有可用视频流' }}</span>
         <button class="btn btn-sm" :disabled="!current" @click="test">测试连通</button>
         <button class="btn btn-sm" @click="load">刷新列表</button>
         <span class="grow" />
