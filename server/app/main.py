@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 from app.adapters.jcrob import build_adapter
 from app.adapters.jcrob import errors as jerr
 from app.api.v1 import (alarms, audit, auth, devices, health, map_library,
-                        ai, api_clients, inspection, messages, notify, record_plans, recordings, reports, robots, sensors,
+                        ai, api_clients, inspection, messages, notify, sensor_gateways, record_plans, recordings, reports, robots, sensors,
                         task_runs, task_templates, telemetry,
                         settings as settings_api, users, videos)
 from app.core.config import get_settings
@@ -131,6 +131,13 @@ async def lifespan(app: FastAPI):
     telemetry_janitor = _th.Thread(target=_telemetry_janitor, daemon=True)
     telemetry_janitor.start()
 
+    from app.services import sensor_gateway as sg_module
+    sg_module.runner = sg_module.SensorGatewayRunner(_SL)
+    try:
+        sg_module.runner.start_all()
+    except Exception:  # noqa: BLE001
+        pass
+
     from app.services.task_dispatch import TaskWatchdog
     task_watchdog = TaskWatchdog(_SL)
     task_watchdog.start()
@@ -154,6 +161,10 @@ async def lifespan(app: FastAPI):
         # 录像进程是外部 ffmpeg，必须显式收掉，否则会变成孤儿进程
         from app.services.recorder import registry as recorder_registry
         recorder_registry.stop_all()
+        try:
+            sg_module.runner.stop_all()
+        except Exception:  # noqa: BLE001
+            pass
         try:
             task_watchdog.stop()
         except Exception:  # noqa: BLE001
@@ -234,6 +245,7 @@ def create_app() -> FastAPI:
     app.include_router(inspection.router, prefix=settings.api_prefix)
     app.include_router(ai.router, prefix=settings.api_prefix)
     app.include_router(api_clients.router, prefix=settings.api_prefix)
+    app.include_router(sensor_gateways.router, prefix=settings.api_prefix)
     app.include_router(telemetry.router, prefix=settings.api_prefix)
     return app
 

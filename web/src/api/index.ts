@@ -441,6 +441,14 @@ export const api = {
   saveSettings: (values: Record<string, unknown>) =>
     request<{ ok: boolean; values: Record<string, unknown>; changed: Record<string, unknown> }>('/settings', { method: 'PUT', body: { values } }),
   // 环境传感器
+  sensorGateways: () => request<Record<string, unknown>[]>('/sensor-gateways'),
+  createSensorGateway: (body: Record<string, unknown>) =>
+    request<Record<string, unknown>>('/sensor-gateways', { method: 'POST', body }),
+  deleteSensorGateway: (id: number) =>
+    request<{ ok: boolean }>(`/sensor-gateways/${id}`, { method: 'DELETE' }),
+  testSensorGateway: (id: number) =>
+    request<{ ok: boolean; raw?: number; value?: number; error?: string }>(`/sensor-gateways/${id}/test`, { method: 'POST' }),
+  sensorGatewayRuntime: () => request<Record<string, unknown>[]>('/sensor-gateways/runtime'),
   sensors: () => request<SensorItem[]>('/sensors'),
   sensorMeta: () => request<{ kinds: SensorKind[] }>('/sensors/meta'),
   createSensor: (body: Record<string, unknown>) =>
