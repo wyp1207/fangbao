@@ -24,6 +24,10 @@ class User(Base):
     password_changed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     totp_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)
     totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # 防重放：记最后用过的计数器（同一 30s 窗内的码不能再用一次）
+    totp_last_step: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # 会话版本：登出/改密/停用时 +1，旧 JWT 立即失效（JWT 本身无状态）
+    token_version: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 

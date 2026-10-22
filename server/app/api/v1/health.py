@@ -32,6 +32,24 @@ def health() -> dict:
     }
 
 
+@router.get("/ready")
+def ready() -> dict:
+    """就绪探针：真的查一次库。容器活着但库断了，/health 发现不了。"""
+    from sqlalchemy import text
+
+    from app.db.session import SessionLocal
+
+    try:
+        with SessionLocal() as db:
+            db.execute(text("SELECT 1"))
+        return {"status": "ready"}
+    except Exception as exc:  # noqa: BLE001
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(status_code=503,
+                            content={"status": "not_ready", "error": exc.__class__.__name__})
+
+
 @router.get("/api/v1/health/deep")
 def health_deep(cache=Depends(get_cache), services=Depends(get_services),
                 _user=Depends(get_current_user)) -> dict:
@@ -39,7 +57,10 @@ def health_deep(cache=Depends(get_cache), services=Depends(get_services),
 
     注意 online 是“平台到机器人”的链路状态，不是 /system/is_online（那是机器人能不能上互联网）。
     """
-    snap = cache.as_dict()
+    from app.services.robot_runtime import registry as robot_registry
+
+    default_rt = robot_registry.default()
+    snap = (default_rt.cache if default_rt is not None else cache).as_dict()
     return {
         "cache": {
             "online": snap["online"],

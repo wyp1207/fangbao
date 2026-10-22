@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     bootstrap_password: str = "admin123"
     # 初始管理员是否强制改密：生产必须开；测试环境关掉，否则夹具没法跑
     force_password_change: bool = True
+    # 生产建议关掉 /docs 与 /openapi.json（信息泄露面）
+    docs_enabled: bool = True
 
     log_level: str = "INFO"
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
@@ -80,3 +82,23 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+_DEFAULT_SECRETS = {"", "dev-only-secret-change-me-please-32b", "please-change-this-to-a-random-32-byte-string"}
+
+
+def assert_production_safe() -> None:
+    """prod 下不允许默认密钥/默认口令启动。
+
+    默认 JWT 密钥等于把签发权公开：谁都能签一个 sub=1 的 admin token。
+    """
+    st = get_settings()
+    if st.env not in ("prod", "production"):
+        return
+    problems = []
+    if st.secret_key in _DEFAULT_SECRETS or len(st.secret_key) < 32:
+        problems.append("JC_SECRET_KEY 仍是默认值或太短（至少 32 字节）")
+    if st.bootstrap_password in ("admin123", "please-change-on-first-login"):
+        problems.append("JC_BOOTSTRAP_PASSWORD 仍是默认值")
+    if problems:
+        raise RuntimeError("生产环境配置不安全，拒绝启动：" + "；".join(problems))

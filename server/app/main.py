@@ -41,6 +41,8 @@ class Services:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
+    from app.core.config import assert_production_safe
+    assert_production_safe()
     setup_logging(settings.log_level)
     log.info("启动 %s env=%s mode=%s", settings.app_name, settings.env, settings.robot_mode)
 
@@ -118,7 +120,9 @@ async def lifespan(app: FastAPI):
         import time as _t
         while True:
             try:
-                telemetry_purge(_SL)
+                from app.api.v1.settings import load_all
+                days = int(load_all().get("telemetry.keep_days", 7))
+                telemetry_purge(_SL, keep_days=days)
             except Exception:  # noqa: BLE001
                 pass
             _t.sleep(6 * 3600)
@@ -172,7 +176,15 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
+    _docs = bool(get_settings().docs_enabled)
+    app = FastAPI(
+        docs_url="/docs" if _docs else None,
+        redoc_url=None,
+        openapi_url="/openapi.json" if _docs else None,
+        title=settings.app_name,
+        version="0.1.0",
+        lifespan=lifespan,
+    )
 
     app.add_middleware(
         CORSMiddleware,
