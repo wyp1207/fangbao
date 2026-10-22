@@ -187,4 +187,5 @@ class HttpJcrobAdapter:
                       "RUNNING": "RUNNING", "PAUSED": "PAUSED",
                       "CANCELLED": "FAILED", "ERROR": "FAILED"}.get(state, "RUNNING")
             return {"state": mapped, "raw": tasks[0]}
-        return {"state": "FINISHED"}
+        # 列表为空 ≠ 任务完成（可能还没下发/已被清理）；返回 UNKNOWN 交给上层超时判定
+        return {"state": "UNKNOWN"}
