@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 from app.adapters.jcrob import build_adapter
 from app.adapters.jcrob import errors as jerr
 from app.api.v1 import (alarms, audit, auth, devices, health, map_library,
-                        inspection, messages, notify, record_plans, recordings, reports, robots, sensors,
+                        ai, api_clients, inspection, messages, notify, record_plans, recordings, reports, robots, sensors,
                         task_runs, task_templates, telemetry,
                         settings as settings_api, users, videos)
 from app.core.config import get_settings
@@ -67,6 +67,8 @@ async def lifespan(app: FastAPI):
     notify_svc.init(_SessionLocal)
     message_store.attach_db(_SessionLocal)
     robot_registry.attach_alarms(alarms)
+    from app.services.alarms import bind_store
+    bind_store(alarms)
     lag = LoopLagMonitor()
 
     app.state.adapter = adapter
@@ -210,6 +212,8 @@ def create_app() -> FastAPI:
     app.include_router(task_templates.router, prefix=settings.api_prefix)
     app.include_router(task_runs.router, prefix=settings.api_prefix)
     app.include_router(inspection.router, prefix=settings.api_prefix)
+    app.include_router(ai.router, prefix=settings.api_prefix)
+    app.include_router(api_clients.router, prefix=settings.api_prefix)
     app.include_router(telemetry.router, prefix=settings.api_prefix)
     return app
 

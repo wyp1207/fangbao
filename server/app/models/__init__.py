@@ -1,4 +1,5 @@
 from app.db.session import Base
+from app.models.ai import AiAlgorithm, AiResult, ApiClient
 from app.models.alarm import AlarmRecord
 from app.models.inspection import InspectionItem, InspectionPlan, InspectionTask, WorkOrder
 from app.models.map_library import PlatformMap, PointDraft
@@ -15,4 +16,4 @@ from app.models.telemetry import TelemetrySample
 from app.models.user import User
 from app.models.video_source import VideoSource
 
-__all__ = ["Base", "AlarmRecord", "InspectionItem", "InspectionPlan", "InspectionTask", "WorkOrder", "PlatformMap", "PointDraft", "MessageRecord", "NotifyChannel", "NotifyLog", "OperationLog", "RecordPlan", "Robot", "Sensor", "SensorReading", "Setting", "TaskRun", "TaskRunStep", "TaskTemplate", "TelemetrySample", "User", "VideoSource"]
+__all__ = ["Base", "AiAlgorithm", "AiResult", "ApiClient", "AlarmRecord", "InspectionItem", "InspectionPlan", "InspectionTask", "WorkOrder", "PlatformMap", "PointDraft", "MessageRecord", "NotifyChannel", "NotifyLog", "OperationLog", "RecordPlan", "Robot", "Sensor", "SensorReading", "Setting", "TaskRun", "TaskRunStep", "TaskTemplate", "TelemetrySample", "User", "VideoSource"]

@@ -323,3 +323,16 @@ class AlarmStore:
                     alarm.acked_by = who
                     return alarm.to_dict()
         return None
+
+
+def get_store() -> "AlarmStore | None":
+    """给 AI 结果等外部来源取当前 AlarmStore（未初始化返回 None）。"""
+    return _STORE
+
+
+_STORE = None
+
+
+def bind_store(store: "AlarmStore") -> None:
+    global _STORE
+    _STORE = store

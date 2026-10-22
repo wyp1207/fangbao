@@ -77,6 +77,7 @@ export const NAV: NavGroup[] = [
       { name: 'settings', label: '系统设置', real: true },
       { name: 'notify', label: '告警通知' },
           { name: 'oplog', label: '系统日志' },
+          { name: 'api-keys', label: '接口密钥' },
     ],
   },
 ]

@@ -19,6 +19,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_csrf, require_roles
+from app.services.api_auth import require_scope
 from app.core.errors import BadRequest, NotFound
 from app.db.session import get_db
 from app.models.map_library import PointDraft
@@ -181,11 +182,11 @@ def create_run(
     return _run_out(run, steps)
 
 
-@router.post("/ingest", dependencies=[Depends(require_csrf)])
+@router.post("/ingest")
 def ingest_run(
     body: IngestIn,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("admin", "operator")),
+    _client: dict = Depends(require_scope("task:ingest")),
 ) -> dict:
     """机器人回传执行结果。按 external_id 幂等：同一任务重复上报是"更新"，不是新增。"""
     status = body.status if body.status in STATUS_LABELS else "done"

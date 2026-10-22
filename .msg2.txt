@@ -1,0 +1,24 @@
+feat: AI 结果接入口子 + 机器身份 API Key
+
+PPT 里"六类算法"本体不归我们做，但算法结果必须进得来；之前连 POST 入口都没有。
+
+AI 结果接入：
+- ai_algorithm（8 个默认算法，按算法配最低置信度）+ ai_result 表
+- POST /api/v1/ai/results：支持 base64 或存储路径，原图落盘 data/ai_images/日期/
+- 幂等键 (camera_id, algorithm, ts 秒级) 唯一：算法盒重试不会刷出两条
+- 置信度达阈值才生成告警；告警带 camera_id，可回看原图（GET /ai/results/{id}/image）
+- 前端「AI 识别结果」页：算法筛选、置信度、原图、关联告警
+
+机器身份（API Key）：
+- api_client 表：只存 sha256 哈希，明文只在创建时返回一次，可吊销
+- X-Api-Key + scope：task:ingest / ai:write / sensor:write / read:alarms
+- 任务回传 / AI 结果 / 传感器读数 三个机器入口走 API Key，不需要 Cookie/CSRF
+- 前端「接口密钥」页：新建（勾权限）、复制、吊销、最近使用时间
+
+顺手：
+- 传感器新增 /readings/ingest 机器入口（原接口保留 CSRF 校验）
+- SQLite 开 WAL + busy timeout（并发写不再 database is locked）
+- AI 结果与告警分两次提交，避免两个 session 抢写锁
+
+验证：55 个后端用例通过（新增 API Key + AI 推送 + 幂等 + 告警回填 + 吊销用例）；
+前端 29 个路由 e2e 通过；实测推一条表计结果 → 自动生成告警 #5、低置信度不报警

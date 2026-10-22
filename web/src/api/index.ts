@@ -272,6 +272,16 @@ export const api = {
     if (dateTo) q.push(`date_to=${dateTo}`)
     return request<Record<string, unknown>>(`/reports/summary${q.length ? '?' + q.join('&') : ''}`)
   },
+  aiAlgorithms: () => request<{ code: string; name: string; category: string }[]>('/ai/algorithms'),
+  aiResults: (params: { algorithm?: string; camera_id?: number; limit?: number } = {}) => {
+    const qs = Object.entries(params).filter(([, v]) => v).map(([k, v]) => `${k}=${v}`).join('&')
+    return request<{ total: number; items: Record<string, unknown>[] }>(`/ai/results${qs ? '?' + qs : ''}`)
+  },
+  apiClients: () => request<Record<string, unknown>[]>('/api-clients'),
+  createApiClient: (body: { name: string; scopes: string[] }) =>
+    request<Record<string, unknown>>('/api-clients', { method: 'POST', body }),
+  revokeApiClient: (id: number) =>
+    request<{ ok: boolean }>(`/api-clients/${id}`, { method: 'DELETE' }),
   inspectionPlans: () => request<Record<string, unknown>[]>('/inspection/plans'),
   createInspectionPlan: (body: Record<string, unknown>) =>
     request<Record<string, unknown>>('/inspection/plans', { method: 'POST', body }),

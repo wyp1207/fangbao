@@ -31,6 +31,8 @@ const router = createRouter({
 
         // 告警中心
         { path: 'alarms', name: 'alarms', component: () => import('@/pages/Alarms.vue') },
+        { path: 'ai-results', name: 'ai-results', component: () => import('@/pages/AiResults.vue') },
+        { path: 'keys', name: 'api-keys', component: () => import('@/pages/ApiKeys.vue') },
         { path: 'alarm-rules', name: 'alarm-rules', component: () => import('@/pages/AlarmRules.vue') },
 
         // 数据查询

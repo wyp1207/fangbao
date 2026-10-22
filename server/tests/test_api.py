@@ -400,3 +400,56 @@ def test_work_order_flow(auth_client):
     closed = auth_client.post(f"/api/v1/work-orders/{o['id']}/transition",
                               json={"status": "closed", "resolution": "更换密封圈"})
     assert closed.status_code == 200 and closed.json()["status"] == "closed"
+
+
+def test_api_key_and_ai_ingest(auth_client):
+    """API Key 给机器用：不带 Cookie/CSRF 也能推任务结果和 AI 识别结果。"""
+    import base64
+    from fastapi.testclient import TestClient
+
+    made = auth_client.post("/api/v1/api-clients", json={
+        "name": "算法盒-01", "scopes": ["ai:write", "task:ingest"]})
+    assert made.status_code == 200
+    raw = made.json()["key"]
+    assert raw.startswith("jck_")
+
+    machine = TestClient(auth_client.app)          # 全新会话，没有任何 Cookie
+    headers = {"X-Api-Key": raw}
+
+    # 任务回传（幂等）
+    payload = {"external_id": "EXT-KEY-1", "name": "机器人任务", "status": "done",
+               "steps": [{"seq": 1, "point_name": "P1", "action": "photo", "status": "ok"}]}
+    r1 = machine.post("/api/v1/task-runs/ingest", json=payload, headers=headers)
+    assert r1.status_code == 200, r1.text
+    assert r1.json()["created"] is True
+    r2 = machine.post("/api/v1/task-runs/ingest", json=payload, headers=headers)
+    assert r2.json()["created"] is False
+
+    # 没签名的会话拿不到
+    assert TestClient(auth_client.app).post(
+        "/api/v1/task-runs/ingest", json=payload).status_code == 401
+
+    # AI 结果：图 + 置信度 → 生成告警
+    png = base64.b64encode(b"\xff\xd8\xff\xd9fakejpeg").decode()
+    body = {"algorithm": "meter", "camera_id": 7, "value": 12.5, "confidence": 0.92,
+            "text": "表计读数 12.5 MPa", "image_base64": png}
+    res = machine.post("/api/v1/ai/results", json=body, headers=headers)
+    assert res.status_code == 200, res.text
+    data = res.json()
+    assert data["duplicated"] is False and data["alarm_id"]
+
+    again = machine.post("/api/v1/ai/results", json={**body, "ts": data["ts"]}, headers=headers)
+    assert again.json()["duplicated"] is True
+
+    # 告警确实带上了 camera_id，能回看
+    alarms = auth_client.get("/api/v1/alarms").json()["items"]
+    hit = [a for a in alarms if a["metric"] == "ai_meter"]
+    assert hit and hit[0]["camera_id"] == 7
+
+    # 原图能取
+    img = auth_client.get(f"/api/v1/ai/results/{data['id']}/image")
+    assert img.status_code == 200 and img.content
+
+    # 吊销后立刻失效
+    auth_client.delete(f"/api/v1/api-clients/{made.json()['id']}")
+    assert machine.post("/api/v1/ai/results", json=body, headers=headers).status_code == 401

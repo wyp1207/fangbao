@@ -27,7 +27,8 @@ def _engine():
         db_path = url.split("///", 1)[-1]
         if db_path and db_path != ":memory:":
             Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-        kwargs["connect_args"] = {"check_same_thread": False}
+        # SQLite 并发写会互相锁：给 busy timeout，并开 WAL（读不挡写）
+        kwargs["connect_args"] = {"check_same_thread": False, "timeout": 30}
     else:
         kwargs.update(pool_recycle=1800, pool_size=5, max_overflow=5)
     return create_engine(url, **kwargs)
@@ -35,6 +36,17 @@ def _engine():
 
 engine = _engine()
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+
+
+if engine.url.get_backend_name() == "sqlite":
+    from sqlalchemy import event
+
+    @event.listens_for(engine, "connect")
+    def _sqlite_pragmas(dbapi_conn, _rec):  # noqa: ANN001
+        cur = dbapi_conn.cursor()
+        cur.execute("PRAGMA journal_mode=WAL")
+        cur.execute("PRAGMA synchronous=NORMAL")
+        cur.close()
 
 
 def get_db() -> Iterator[Session]:

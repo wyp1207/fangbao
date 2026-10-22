@@ -9,6 +9,7 @@ from sqlalchemy import select
 from app.core.config import get_settings
 from app.core.security import hash_password
 from app.db.session import Base, SessionLocal, engine
+from app.models.ai import AiAlgorithm, AiResult, ApiClient  # noqa: F401
 from app.models.alarm import AlarmRecord  # noqa: F401
 from app.models.inspection import InspectionItem, InspectionPlan, InspectionTask, WorkOrder  # noqa: F401
 from app.models.map_library import PlatformMap, PointDraft  # noqa: F401
@@ -53,6 +54,7 @@ def ensure_bootstrap() -> None:
             db.add(Robot(name="JCROB-01", mode=settings.robot_mode))
             log.info("创建默认机器人记录")
         db.commit()
+    seed_algorithms()
 
 
 def bootstrap() -> None:
@@ -70,3 +72,27 @@ def bootstrap() -> None:
             db.add(Robot(name="JCROB-01", mode=settings.robot_mode))
             log.info("创建默认机器人记录")
         db.commit()
+    seed_algorithms()
+
+
+DEFAULT_ALGORITHMS = [
+    ("meter", "表计读数", "device", "MPa"),
+    ("defect", "设备缺陷", "device", None),
+    ("thermal", "红外测温", "device", "℃"),
+    ("gas", "气体泄漏", "env", "%LEL"),
+    ("smoke", "烟火识别", "env", None),
+    ("helmet", "未戴安全帽", "person", None),
+    ("intrusion", "区域入侵", "safety", None),
+    ("fire_extinguisher", "灭火器缺失", "safety", None),
+]
+
+
+def seed_algorithms() -> None:
+    """算法注册表：首次启动种进去，算法盒推结果时不用先手工建。"""
+    with SessionLocal() as db:
+        if db.scalar(select(AiAlgorithm)) is not None:
+            return
+        for code, name, cat, unit in DEFAULT_ALGORITHMS:
+            db.add(AiAlgorithm(code=code, name=name, category=cat, unit=unit))
+        db.commit()
+        log.info("已写入 %d 个默认算法", len(DEFAULT_ALGORITHMS))

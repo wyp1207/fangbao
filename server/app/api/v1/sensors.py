@@ -17,6 +17,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_alarms, get_current_user, require_csrf, require_roles
+from app.services.api_auth import require_scope
 from app.core.errors import BadRequest, NotFound
 from app.db.session import get_db
 from app.models.sensor import Sensor, SensorReading
@@ -164,6 +165,18 @@ def delete_sensor(
     return {"ok": True}
 
 
+@router.post("/{sensor_id}/readings/ingest")
+def add_reading_machine(
+    sensor_id: int,
+    body: ReadingIn,
+    db: Session = Depends(get_db),
+    store=Depends(get_alarms),
+    _client: dict = Depends(require_scope("sensor:write")),
+) -> dict:
+    """机器入口（API Key）：现场采集网关/边缘盒子推读数，不需要 Cookie。"""
+    return _add_reading(sensor_id, body, db, store)
+
+
 @router.post("/{sensor_id}/readings", dependencies=[Depends(require_csrf)])
 def add_reading(
     sensor_id: int,
@@ -172,6 +185,10 @@ def add_reading(
     store=Depends(get_alarms),
     _: User = Depends(require_roles("admin", "operator")),
 ) -> dict:
+    return _add_reading(sensor_id, body, db, store)
+
+
+def _add_reading(sensor_id: int, body: ReadingIn, db: Session, store) -> dict:
     s = db.get(Sensor, sensor_id)
     if not s:
         raise NotFound("传感器不存在")
@@ -214,7 +231,7 @@ def history(
     hours: int = Query(24, ge=1, le=24 * 30),
     points: int = Query(120, ge=10, le=1000),
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_roles("admin", "operator")),
 ) -> dict:
     s = db.get(Sensor, sensor_id)
     if not s:
