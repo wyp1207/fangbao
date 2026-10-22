@@ -14,7 +14,10 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, Query
+from pathlib import Path
+from uuid import uuid4
+
+from fastapi import APIRouter, Depends, File, Query, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -27,6 +30,10 @@ from app.models.user import User
 from app.services.messages import audit
 
 router = APIRouter(tags=["inspection"])
+
+PHOTO_ROOT = Path(__file__).resolve().parents[3] / "data" / "inspection_photos"
+ALLOWED_TYPES = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
+MAX_PHOTO = 6 * 1024 * 1024
 
 TASK_STATUS = {"pending": "待执行", "doing": "执行中", "done": "已完成", "missed": "已超时"}
 ORDER_STATUS = {
@@ -305,6 +312,49 @@ def check_item(
         "item": {"id": item.id, "result": item.result, "scanned": bool(item.scanned_at)},
         "task": _task_out(task, rows),
     }
+
+
+@router.post("/inspection/tasks/{task_id}/items/{item_id}/photo", dependencies=[Depends(require_csrf)])
+def upload_photo(
+    task_id: int, item_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    me: User = Depends(require_roles("admin", "safety", "operator")),
+) -> dict:
+    """现场拍照上传：只收图片、限 6MB、按日期分目录存，库里只存相对路径。"""
+    item = db.get(InspectionItem, item_id)
+    if not item or item.task_id != task_id:
+        raise NotFound("巡检项不存在")
+
+    ext = ALLOWED_TYPES.get(file.content_type or "")
+    if ext is None:
+        raise BadRequest("只支持 JPG/PNG/WebP", code="BAD_IMAGE_TYPE")
+    data = file.file.read(MAX_PHOTO + 1)
+    if len(data) > MAX_PHOTO:
+        raise BadRequest("图片超过 6MB，请压缩后再传", code="IMAGE_TOO_LARGE")
+
+    day = datetime.now().strftime("%Y%m%d")
+    name = f"{day}/{uuid4().hex}{ext}"
+    (PHOTO_ROOT / day).mkdir(parents=True, exist_ok=True)
+    (PHOTO_ROOT / name).write_bytes(data)
+
+    photos = _items(item.photos_json)
+    photos.append(f"inspection_photos/{name}")
+    item.photos_json = json.dumps(photos, ensure_ascii=False)
+    db.commit()
+    audit(db=db, action="inspection.photo", target=item.point_name, user=me,
+          detail={"size": len(data), "count": len(photos)})
+    return {"ok": True, "url": f"/api/v1/inspection/photos/{name}", "count": len(photos)}
+
+
+@router.get("/inspection/photos/{path:path}")
+def get_photo(path: str, _: User = Depends(get_current_user)):
+    from fastapi.responses import FileResponse
+
+    target = (PHOTO_ROOT / path).resolve()
+    if not str(target).startswith(str(PHOTO_ROOT.resolve())) or not target.exists():
+        raise NotFound("图片不存在")
+    return FileResponse(target)
 
 
 @router.post("/inspection/tasks/{task_id}/finish", dependencies=[Depends(require_csrf)])

@@ -833,3 +833,45 @@ def test_modbus_gateway_end_to_end(auth_client, monkeypatch):
     gid = ok.json()["id"]
     assert auth_client.get("/api/v1/sensor-gateways").json()[0]["protocol"] == "modbus"
     assert auth_client.delete(f"/api/v1/sensor-gateways/{gid}").status_code == 200
+
+
+def test_inspection_photo_and_performance(auth_client):
+    """现场拍照上传（类型/大小校验）+ 考核报表按人聚合。"""
+    import io as _io
+    from PIL import Image
+
+    plan = auth_client.post("/api/v1/inspection/plans", json={
+        "name": "拍照验证", "shift": "早班",
+        "assignee_id": 1,
+        "items": [{"name": "P1", "code": "Q-1", "checks": ["外观"]}]})
+    assert plan.status_code == 200
+    task = auth_client.post("/api/v1/inspection/tasks/generate",
+                            json={"plan_id": plan.json()["id"]}).json()
+    tid, iid = task["id"], task["items"][0]["id"]
+
+    buf = _io.BytesIO()
+    Image.new("RGB", (40, 40), "red").save(buf, format="JPEG")
+    jpg = buf.getvalue()
+
+    # 非图片被拒
+    bad = auth_client.post(
+        f"/api/v1/inspection/tasks/{tid}/items/{iid}/photo",
+        files={"file": ("a.txt", b"hello", "text/plain")})
+    assert bad.status_code == 400
+
+    up = auth_client.post(
+        f"/api/v1/inspection/tasks/{tid}/items/{iid}/photo",
+        files={"file": ("a.jpg", jpg, "image/jpeg")})
+    assert up.status_code == 200, up.text
+    url = up.json()["url"]
+    assert up.json()["count"] == 1
+
+    # 图片能读回来，且要登录
+    assert auth_client.get(url).status_code == 200
+    from fastapi.testclient import TestClient
+
+    assert TestClient(auth_client.app).get(url).status_code == 401
+
+    # 考核报表里能看到这个人的任务
+    perf = auth_client.get("/api/v1/reports/summary").json()["inspection_performance"]
+    assert any(p["tasks"] >= 1 for p in perf)

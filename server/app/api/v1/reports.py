@@ -164,7 +164,52 @@ def summary(
     first_ts = db.scalar(select(func.min(TelemetrySample.ts)))
     last_ts = db.scalar(select(func.max(TelemetrySample.ts)))
 
+    # ---- 考核：按人/班组统计人工巡检与工单 ----
+    from app.models.inspection import InspectionItem as _II
+    from app.models.inspection import InspectionTask as _IT
+    from app.models.inspection import WorkOrder as _WO
+
+    users = {u.id: u.username for u in db.query(User).all()}
+    perf: dict[int, dict] = {}
+
+    def _row(uid):
+        return perf.setdefault(uid, {
+            "user_id": uid, "username": users.get(uid) or f"#{uid}",
+            "tasks": 0, "done": 0, "overdue": 0, "items": 0, "abnormal": 0,
+            "orders": 0, "closed": 0,
+        })
+
+    tasks_q = db.query(_IT).filter(_IT.created_at >= start, _IT.created_at < end).all()
+    for t in tasks_q:
+        if t.assignee_id is None:
+            continue
+        r = _row(t.assignee_id)
+        r["tasks"] += 1
+        if t.status == "done":
+            r["done"] += 1
+        elif t.due_at and t.due_at < datetime.now():
+            r["overdue"] += 1
+    for it in db.query(_II).filter(_II.checked_at >= start, _II.checked_at < end).all():
+        t = db.get(_IT, it.task_id)
+        if t is None or t.assignee_id is None:
+            continue
+        r = _row(t.assignee_id)
+        r["items"] += 1
+        if it.result == "abnormal":
+            r["abnormal"] += 1
+    for o in db.query(_WO).filter(_WO.created_at >= start, _WO.created_at < end).all():
+        if o.assignee_id is None:
+            continue
+        r = _row(o.assignee_id)
+        r["orders"] += 1
+        if o.status == "closed":
+            r["closed"] += 1
+
+    for r in perf.values():
+        r["done_rate"] = round(r["done"] / r["tasks"] * 100, 1) if r["tasks"] else None
+
     return {
+        "inspection_performance": sorted(perf.values(), key=lambda x: -x["tasks"]),
         "range": {"from": start.date().isoformat(), "to": (end - timedelta(days=1)).date().isoformat()},
         # 实际覆盖：选的区间可能没有那么多数据，页面要照实说
         "data_coverage": {
