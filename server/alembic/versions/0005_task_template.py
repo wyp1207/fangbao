@@ -35,7 +35,7 @@ def upgrade() -> None:
             sa.Column("name", sa.String(64), nullable=False),
             sa.Column("map_id", sa.Integer, nullable=True),
             sa.Column("robot_id", sa.Integer, nullable=True),
-            sa.Column("actions_json", sa.Text, server_default="[]"),
+            sa.Column("actions_json", sa.Text, nullable=True),  # MySQL 的 TEXT 不能带 DEFAULT
             sa.Column("loop", sa.Boolean, server_default=sa.false()),
             sa.Column("note", sa.String(200), nullable=True),
             sa.Column("created_at", sa.DateTime, server_default=sa.func.now()),

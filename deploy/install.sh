@@ -23,8 +23,12 @@ echo "== 2/5 数据目录 =="
 for d in recordings maps logs mysql; do
   mkdir -p "$DATA_ROOT/$d"
 done
-# 录像目录要给容器里的 appuser(10001) 写权限
-chown -R 10001:10001 "$DATA_ROOT/recordings" "$DATA_ROOT/maps" 2>/dev/null || true
+# 录像目录要给容器里的 appuser(10001) 写权限。
+# 非 root 部署时 chown 会失败，退回 0777——内网单机可以接受，有 root 就用 chown。
+if ! chown -R 10001:10001 "$DATA_ROOT/recordings" "$DATA_ROOT/maps" 2>/dev/null; then
+  echo "  (非 root，无法 chown，改用 chmod 777 让容器能写)"
+  chmod -R 777 "$DATA_ROOT/recordings" "$DATA_ROOT/maps"
+fi
 df -h "$DATA_ROOT" | tail -1
 
 echo "== 3/5 配置文件 =="

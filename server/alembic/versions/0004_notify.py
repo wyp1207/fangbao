@@ -18,7 +18,7 @@ def upgrade() -> None:
             sa.Column("id", sa.Integer, primary_key=True),
             sa.Column("name", sa.String(64), nullable=False),
             sa.Column("type", sa.String(24), nullable=False),
-            sa.Column("config_json", sa.Text, nullable=False, server_default="{}"),
+            sa.Column("config_json", sa.Text, nullable=False),  # MySQL 的 TEXT 不能带 DEFAULT
             sa.Column("min_level", sa.String(16), server_default="critical"),
             sa.Column("min_interval_min", sa.Integer, server_default="10"),
             sa.Column("enabled", sa.Boolean, server_default=sa.true()),

@@ -120,7 +120,7 @@ def upgrade() -> None:
         op.create_table(
             "setting",
             sa.Column("key", sa.String(64), primary_key=True),
-            sa.Column("value_json", sa.Text, nullable=False, server_default="null"),
+            sa.Column("value_json", sa.Text, nullable=False),   # MySQL 的 TEXT 不能带 DEFAULT
             sa.Column("updated_at", sa.DateTime, server_default=sa.func.now()),
             sa.Column("updated_by", sa.String(64), nullable=True),
             sa.Column("note", sa.String(200), nullable=True),
