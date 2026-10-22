@@ -88,7 +88,8 @@ class AlarmStore:
 
     def evaluate(self, *, status: dict, info: dict, age_s: float,
                  now: float | None = None,
-                 camera_id: int | None = None, robot_id: int | None = None) -> list[Alarm]:
+                 camera_id: int | None = None, robot_id: int | None = None,
+                 offline_after_s: float | None = None) -> list[Alarm]:
         now = time.monotonic() if now is None else now
         cfg = self._cfg()
         warn_at, crit_at = cfg["warn"], cfg["critical"]
@@ -104,9 +105,10 @@ class AlarmStore:
         if info.get("driver_port") is True:
             found.append(("estop", "critical", "硬件急停被按下", True))
 
-        if age_s < 0 or age_s > cfg["offline"]:
+        offline_limit = float(offline_after_s or cfg["offline"])
+        if age_s < 0 or age_s > offline_limit:
             # 抖动只报提醒，持续断线才升级成严重（默认 3 倍判定时间）
-            lvl = "critical" if age_s > cfg["offline"] * 3 else "warn"
+            lvl = "critical" if age_s > offline_limit * 3 else "warn"
             msg = f"机器人通信中断（{age_s:.0f}s 未更新）" if age_s >= 0 else "机器人通信中断"
             found.append(("offline", lvl, msg, round(age_s, 1)))
 

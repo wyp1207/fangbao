@@ -47,12 +47,12 @@ ADAPTERS: dict[str, dict[str, Any]] = {
         "needs": ["Unitree SDK2 文档与版本", "DDS 网络可达", "一台可连的 G1 样机"],
         "note": "人形机器人，导航/任务模型与 JCROB 不同，适配器待开发",
     },
-    "deeprobotics_http": {
-        "label": "云深处 X30（HTTP 网关）",
+    "deeprobotics_x30": {
+        "label": "云深处 X30（本体监控 TCP 30000）",
         "device_type": "deeprobotics_x30",
-        "supported": False,
-        "needs": ["X30 网关接口文档", "账号/密钥", "一台可连的样机"],
-        "note": "四足机器人，先接状态与视频，导航任务待确认",
+        "supported": True,
+        "needs": [],
+        "note": "实测：帧头 EB90EB90，状态/电池/任务状态可读；导航与起立趴下走同一通道",
     },
     "other_http": {
         "label": "其他（HTTP 只读）",
@@ -89,6 +89,13 @@ def build_for(robot, *, settings, cache=None):
 
     if adapter_key == "jcrob_mock":
         return MockJcrobAdapter(settings.jcrob_fixtures), None
+
+    if adapter_key == "deeprobotics_x30":
+        from app.adapters.deeprobotics import DeepRoboticsX30Adapter
+
+        host = (robot.ip or settings.x30_host or "192.168.1.106").strip()
+        port = int(robot.port or settings.x30_port or 30000)
+        return DeepRoboticsX30Adapter(host, port, timeout=settings.x30_timeout), None
 
     if adapter_key == "jcrob_http":
         from app.core.security import unseal

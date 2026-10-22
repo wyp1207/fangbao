@@ -103,15 +103,17 @@ class RobotRegistry:
                 rt.error = None
                 rt.clock_skew_s = self._check_clock(rt, status, info, galileo)
                 if self._alarms is not None:
-                    self._alarms.evaluate(status=status, info=info, age_s=0.0,
-                                          robot_id=rt.robot_id)
+                    self._alarms.evaluate(
+                        status=status, info=info, age_s=0.0, robot_id=rt.robot_id,
+                        offline_after_s=getattr(rt.adapter, "offline_after_s", None))
             except jerr.JcrobError as exc:
                 rt.cache.mark_failure(exc.code)
                 rt.error = exc.code
                 if self._alarms is not None:
                     self._alarms.evaluate(status={}, info={},
                                           age_s=rt.cache.as_dict()["age_s"],
-                                          robot_id=rt.robot_id)
+                                          robot_id=rt.robot_id,
+                                          offline_after_s=getattr(rt.adapter, "offline_after_s", None))
             except asyncio.CancelledError:
                 raise
             except Exception as exc:  # noqa: BLE001

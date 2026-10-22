@@ -29,9 +29,28 @@ def _num(v: Any) -> float | None:
 
 class DeepRoboticsX30Adapter:
     mode = "x30"
+    # 实测：30000 的响应时间在 0.15~8s 之间波动（导航主机单线程处理），
+    # 所以轮询放慢到 3s，超时放宽，宁可数据旧一点也不要一直超时。
+    poll_interval = 5.0
+    # 30000 单次响应 0.2~8s，所以判离线的时间也要放宽，否则会频繁误报
+    offline_after_s = 30.0
 
     def __init__(self, host: str, port: int = 30000, timeout: float = 5.0) -> None:
         self.client = X30Client(host, port, timeout)
+        # 30000 是短连接请求/响应，一次轮询里 4 个方法各开一条连接会被机器人拖垮
+        # （实测：第二、三条经常超时）。这里加 0.8s 缓存，一轮只打一次。
+        self._status_cache: tuple[float, dict] | None = None
+        self._battery_cache: tuple[float, dict] | None = None
+
+    def _cached(self, key: str, fn, ttl: float = 10.0) -> dict:
+        import time
+
+        cache = getattr(self, f"_{key}_cache")
+        if cache is not None and time.time() - cache[0] < ttl:
+            return cache[1]
+        data = fn()
+        setattr(self, f"_{key}_cache", (time.time(), data))
+        return data
 
     async def aclose(self) -> None:
         return None
@@ -41,38 +60,35 @@ class DeepRoboticsX30Adapter:
 
     # ---- 只读 ----
     async def get_status(self) -> dict:
-        r = await self._call(self.client.status)
+        r = await self._call(self._cached, "status", self.client.status)
         state = MOTION_STATES.get(str(r.get("MotionState", "")), r.get("MotionState", "未知"))
         return {
-            "status": {
-                "status": state,
-                "located": str(r.get("Location", "")).lower() in ("1", "true", "ok"),
-                "raw": r,
-            }
+            "status": state,
+            "located": str(r.get("Location", "")).strip() == "1",
+            "raw": r,
         }
 
     async def get_info(self) -> dict:
-        r = await self._call(self.client.status)
-        b = await self._call(self.client.battery)
+        r = await self._call(self._cached, "status", self.client.status)
+        b = await self._call(self._cached, "battery", self.client.battery, 120.0)
         battery = _num(r.get("Electricity"))
         if battery is None:
             battery = _num(b.get("BatteryLevel"))
         return {
-            "info": {
-                "battery": battery,
-                "voltage": _num(b.get("Voltage")),
-                "motion_state": MOTION_STATES.get(str(r.get("MotionState", "")), "未知"),
-                "raw": {**r, **b},
-            }
+            "battery": battery,
+            "voltage": _num(b.get("Voltage")),
+            "motion_state": MOTION_STATES.get(str(r.get("MotionState", "")), "未知"),
+            "charged": str(r.get("ChargeState", "")) == "1",
+            "raw": {**r, **b},
         }
 
     async def get_pose(self) -> dict:
-        r = await self._call(self.client.status)
+        r = await self._call(self._cached, "status", self.client.status)
         x, y, yaw = _num(r.get("PosX")), _num(r.get("PosY")), _num(r.get("Yaw"))
         return {"x": x, "y": y, "angle_deg": yaw, "raw": r}
 
     async def get_galileo(self) -> dict:
-        r = await self._call(self.client.status)
+        r = await self._call(self._cached, "status", self.client.status)
         return {"currentSpeedX": _num(r.get("Speed")), "raw": r}
 
     async def get_tasks(self) -> Any:
