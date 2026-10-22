@@ -41,7 +41,7 @@
 
 ### 0.4 工作区当前状态（截至 2026-10-22 23:40，未提交）
 
-评审期间发现的 4 个问题，工作区已改（**未提交、未回归**）：
+评审期间发现的 4 个问题，工作区已改（**未提交；后端 `pytest` 73 用例通过，半坏网络回归未做**）：
 
 | 项 | 评审开始时 | 工作区现在 | 仍需 |
 |---|---|---|---|
@@ -50,7 +50,18 @@
 | 报表缓存 500 | `_summary_out` 未定义，`/reports/summary` 必 500 | 已抽 `_summary_impl`，`out` 缓存 15s | 缓存 key 目前只有日期；加筛选维度时要带上，否则串数据 |
 | 环境读数保留 | 只增不删 | 已加 `sensor.keep_days=90` 清理 | 单条 `DELETE` 删 1,550 万行会锁表，改分批/分区 |
 
-这四项说明工作区是活的；本文其余判断基于基线 `a34e695`，仍然成立。**已修项在跑完 `pytest` + 断网/半坏网络回归之前，不要在验收材料里写“已解决”。**
+这四项说明工作区是活的；本文其余判断基于基线 `a34e695`，仍然成立。**已修项在跑完断网/半坏网络回归之前，不要在验收材料里写“已解决”。** 截至 2026-10-22 23:42：`cd server && python -m pytest -q` → `73 passed`。
+
+### 0.5 一张表看完
+
+| 批次 | 事项 | 估算 |
+|---|---|---|
+| **12 月前硬门槛** | TLS 收尾、采集并行收口、`/metrics` + 告警、日志 180 天、备份加密异地、录像看护、保留策略、坐标标定 + 下发幂等 | **约 18 人日** |
+| **12 月前可裁剪** | 事件录像、验收证据导出、告警 KPI、平台死信开关 | 约 6 人日 |
+| **二期** | 时序库/聚合、集中日志/trace、OPC UA/Sparkplug、GB28181/NVR、canonical 模型、MySQL HA、对象存储、SSO/mTLS、边缘补传、VDA5050 | 80–150 人日 |
+| **永远不做** | 自研 Broker/时序库/NVR/对象存储、K8s/微服务、区块链、单机 50 路 7×24、自研 SLAM、多租户 SaaS、无厂商支持的 VDA5050 认证 | 0 |
+
+> 判断标准只有一条：**这项能不能在 12 月验收现场被看见、被演示、被追责？** 不能的，一律二期。
 
 ---
 
@@ -242,7 +253,7 @@
 | 权限 | **够用**（单站点）/ **弱**（多系统） | 7 角色 + TOTP + API Key 够用；无 SSO/mTLS/ABAC，admin 仍是超级用户 |
 | 数据保留 | **弱** | 录像够用；日志/环境读数/审计归档缺，设计与实现不一致 |
 | 可观测性 | **缺** | 有探针，无 metrics/告警/集中日志/trace |
-| 部署与灾备 | **弱**（单机可接受）/ **缺**（DR） | 单机单库、本地备份、无异地/PITR；TLS 覆盖文件本身是坏的 |
+| 部署与灾备 | **弱**（单机可接受）/ **缺**（DR） | 单机单库、本地备份、无异地/PITR；TLS 配置不完整（限流/脱敏缺失） |
 | 协议标准化 | **缺**（多厂商）/ **够用**（单厂商） | 私有 HTTP + 50 行 Modbus；无 OPC UA/Sparkplug/GB28181 |
 
 ### 3.1 并发
@@ -254,7 +265,7 @@
 | 写路径 | 命令队列 + 幂等 + 限流 + 熔断 | 同步端点直接调适配器；`asyncio.run()` 在同步函数里跑协程（`task_dispatch.py:_call`） | 弱 |
 | 背压 | 队列长度/丢弃策略/死信 | 通知队列 `maxsize=500`，满了丢告警（`notify.py:154`）；轮询无背压 | 弱 |
 | 视频 | 独立媒体服务、硬件转码、多路 | 2 路 ffmpeg（`recorder.py:34`），CPU 转码，go2rtc 在宿主 | 弱 |
-| 报表 | 预聚合/异步导出/分页 | `reports.py` 把区间内告警、读数、遥测全部 `.all()` 进内存；工作区加了 15s 缓存 **[已修/未提交]**，但仍是全量扫描，且缓存 key 只有日期 | 弱（已修/未回归） |
+| 报表 | 预聚合/异步导出/分页 | `reports.py` 把区间内告警、读数、遥测全部 `.all()` 进内存；工作区加了 15s 缓存 **[已修/未提交]**，但仍是全量扫描，且缓存 key 只有日期 | 弱（已修/仍需回归） |
 | 限流 | 按用户/租户/接口分级 | nginx 20r/s（按 API Key 或 IP），无按用户写操作限流 | 弱 |
 
 **判断**：1–2 台机器人、单站点，当前并发模型**够用**；到 10 台，轮询请求数 40 req/s、线程/协程竞争、报表全量加载会先出问题；到 50 台是**缺**。
@@ -264,12 +275,12 @@
 | 对比项 | 工业级做法 | 我们现状 | 等级 |
 |---|---|---|---|
 | 机器人状态 | 设备主动上报（MQTT 1–10Hz），平台订阅 | 1s 定时轮询；基线每轮 4 个串行 HTTP，工作区已改 `gather` 四路并发 **[已修/未提交]**；单请求读超时 3s（`config.py:76`） | 弱 |
-| 部分失败语义 | 每路独立新鲜度，失败保留旧值并标“部分过期” | 工作区已保留旧值 + `fresh` 标记、`age_s` 用真实值 **[已修/未提交]**；仍无字段级 `fetched_at`，UI 不区分“哪一路过期” | 弱（已修/未回归） |
+| 部分失败语义 | 每路独立新鲜度，失败保留旧值并标“部分过期” | 工作区已保留旧值 + `fresh` 标记、`age_s` 用真实值 **[已修/未提交]**；仍无字段级 `fetched_at`，UI 不区分“哪一路过期” | 弱（已修/仍需回归） |
 | 实际新鲜度 | p95 < 1s | 基线 4×RTT；100ms RTT 约 0.4s，500ms RTT 约 2s，最坏 12s；工作区并行后≈1×RTT；UI 再 1s 轮询（`stores/robot.ts:4`） | 弱 |
 | 告警产生 | 边缘/流式判定，亚秒级 | 轮询成功后同步判定；离线 10s 才报，critical 30s（`alarms.py`） | 弱 |
 | 任务对账 | 事件驱动 + 心跳 | 巡航 3s 查一次（`cruise.py:POLL_S`）；全局看门狗 15s（`TaskWatchdog`） | 弱 |
 | 视频 | WebRTC < 500ms | go2rtc MSE 约 0.5–1s；MJPEG 转码更慢 | 够用 |
-| 时间基准 | NTP/PTP + 偏差告警 | `clock.max_skew_s` 有设置、`robot_runtime.py:161` 有比较；未强制 NTP，未做时间源监控 | 弱 |
+| 时间基准 | NTP/PTP + 偏差告警 | `clock.max_skew_s` 有设置、`robot_runtime.py:176` 有比较；未强制 NTP，未做时间源监控 | 弱 |
 
 **关键 failure mode（基线）**：四个请求串行，任一慢就把整轮拖长；而 `StateCache.online` 是 `age_s <= 5.0`（`state_cache.py`）。如果一轮超过 5s，页面会先显示离线，10s 后触发离线告警——**慢网络会被误判成机器人失联**。工作区已改成“四路并发 + 失败保留旧值 + `fresh` 标记 + 真实 `age_s`”，主因消除；剩余问题是“哪一路过期”不可见、告警 `evaluate` 仍排在 `_check_clock` 之后（时钟检查异常会再次吞掉告警）。收口要求见 §4 第 2 项。
 
@@ -308,7 +319,7 @@
 | 对比项 | 工业级做法 | 我们现状 | 等级 |
 |---|---|---|---|
 | 遥测 | 1s 原始 7 天 + 1min 聚合 180 天 + 按天分区/`DROP PARTITION` | 10s 采样、7 天、`DELETE`（`telemetry.py:30-31,101`）；无聚合、无分区 | 弱 |
-| 环境读数 | 5s 降采样、90 天、分区/批量清理 | 工作区已加 `sensor.keep_days=90` 清理 **[已修/未提交]**；仍是一条 `DELETE`、无分区，首次删约 1,550 万行会锁表；历史查询仍全量加载 | 弱（收口中） |
+| 环境读数 | 5s 降采样、90 天、分区/批量清理 | 工作区已加 `sensor.keep_days=90` 清理 **[已修/未提交]**；仍是一条 `DELETE`、无分区，首次删约 1,550 万行会锁表；历史查询仍全量加载 | 弱（已修/待分批） |
 | 告警/工单 | 长期保留 + 归档 + 法务留存 | 长期保留，无归档；表会一直长 | 够用（当前量小） |
 | 审计 | 180 天~6 个月，WORM/异地 | 永久保留，哈希链，无归档/外锚 | 弱 |
 | 平台日志 | 集中日志 180 天+ | stdout → Docker json-file，合计约 230MB；`/app/logs` 挂了卷但代码不写文件 | 缺 |
@@ -401,7 +412,7 @@ jc-nginx
 | # | 事项 | 解决什么问题 | 最小实现 | 人天 | 不做会怎样 | 批次 |
 |---|---|---|---|---|---|---|
 | 1 | TLS 收尾 + 生产开关 | `tls.conf` 比 HTTP 配置弱；`/docs` 暴露；DB 默认口令不校验 | 把 `default.conf` 的 `limit_req`/safe log/`/ws/`/MJPEG 不缓冲/静态缓存合并进 `tls.conf`；`JC_DOCS_ENABLED=false` 写进 env 并在 `assert_production_safe()` 校验；`docker compose config` 进 CI | 1 | 甲方安全扫描/等保 checklist 直接挂；TLS 模式反而更弱；Cookie 无 Secure | **12 月前** |
-| 2 | 采集并行收口 | 慢网络误判离线；部分失败误恢复告警 | 修 `galileo` 未定义；四路 `gather` + 每路独立 `timeout`/jitter；`StateCache` 按字段保存 `last_good` + `fetched_at`；只有全成功才刷新 `recv_ts`；部分成功标 `partial`，告警用真实 `age_s`、不触发 `resolve` | 1 | 网络半坏时低电量/急停告警“自己好了”；页面显示“在线 0s”但数据是空的；当前还会因 `NameError` 导致告警静默 | **12 月前** |
+| 2 | 采集并行收口 | 慢网络误判离线；部分失败误恢复告警 | 四路 `gather`/旧值/`fresh`/真实 `age_s` 已做 **[工作区]**；剩余：字段级 `fetched_at`、UI 标“部分过期”、`evaluate()` 前置到时钟检查之前、半坏网络回归 | 0.5–1 | 排障时不知道“哪一路坏了”；时钟检查异常会再次吞掉告警 | **12 月前** |
 | 3 | `/metrics` + 6 条告警 + 死信 | 平台/库/轮询/录像/磁盘挂了没人知道 | `prometheus-client` 暴露 8 个指标；`monitoring` compose profile（Prometheus+Grafana+node_exporter+mysqld-exporter）；告警走现有 webhook；主机 cron 探 `/health` 三次失败发通知 | 3 | 黑屏/停录/库挂只能等客户打电话；验收“失联”项没有客观证据 | **12 月前** |
 | 4 | 日志留存 180 天 | 事故只能复盘几小时；等保 6 个月不满足 | `RotatingFileHandler` 写 `/app/logs/app.log`（100MB×30）+ 每月 gzip 归档到 NAS；nginx access log 保留 180 天；日志加 request id | 1.5 | 出事无法定位；等保/审计过不了；客户问“昨天的日志”拿不出 | **12 月前** |
 | 5 | 备份加密 + 异地 + 恢复演练 | 主机/磁盘/勒索 = 数据全丢 | `age` 加密；`rsync` 到 NAS/另一台机；sha256 清单；每周自动恢复到临时库校验行数；RPO 24h/RTO 1h 写进 runbook | 3 | 一次磁盘故障就交付事故；审计链/录像索引无法恢复 | **12 月前** |
@@ -565,7 +576,7 @@ curl -fsS http://127.0.0.1:8099/health
 | 自研对象存储 | Garage/SeaweedFS/MinIO 足够；单机 2 路用本地盘即可 |
 | Kubernetes / 微服务拆分 | 单机 3 容器，拆了只增加运维成本 |
 | 区块链存证 | 哈希链 + 异地备份 + 外部锚定足够；区块链是营销词 |
-| 单机 50 路 7×24 录像 | 容量/CPU 都不够；要上 NVR/对象存储/事件录像 |
+| 单机 50 路 7×24 录像 | 50×2Mbps≈1.08TB/天、394TB/年，本机盘约 1.9TB；要上 NVR/对象存储/事件录像 |
 | 自研 SLAM/导航 | 厂商负责；平台做“监督层”，不碰控制 |
 | 多租户 SaaS | 私有化单客户，租户模型是纯成本 |
 | 无厂商支持的 VDA5050 合规认证 | 做了也无法通过 conformance；不如把私有适配器做稳 |
@@ -652,14 +663,14 @@ curl -fsS http://127.0.0.1:8099/health
 |---|---|---|
 | 单进程单 worker | `deploy/entrypoint.sh:12-16`；`server/app/main.py:1-5` | 代码 |
 | 基线每轮 4 个串行 HTTP；工作区已改 `gather` | `server/app/tasks/poller.py:29-32`；`server/app/services/robot_runtime.py:97-115` | 代码 |
-| 并行收口未完成（`galileo` NameError、`age_s=0`、字段级新鲜度） | `server/app/services/robot_runtime.py:100-125`；`server/app/services/state_cache.py:35-50`；`alarms.py:_resolve_gone` | 代码（工作区） |
+| 并行已修（旧值/`fresh`/真实 `age_s`），仍缺字段级新鲜度 | `server/app/services/robot_runtime.py:97-125`；`server/app/services/state_cache.py:35-50` | 代码（工作区） |
 | 在线判定 5s、离线 10s | `server/app/services/state_cache.py`；`server/app/services/alarms.py:51-65` | 代码 |
 | 遥测 10s/7 天 | `server/app/api/v1/telemetry.py:30-31,101` | 代码 |
 | 设计写 1s/7天 + 1min/180天 + 分区 | `docs/平台方案-定稿.md` §12 | 文档 |
 | 环境读数清理：工作区已加 90d，单条 DELETE | `server/app/main.py:140-155`；`server/app/services/settings_schema.py:sensor.keep_days` | 代码（工作区） |
 | 录像最多 2 路 | `server/app/services/recorder.py:34` | 代码 |
 | 报表全量加载 | `server/app/api/v1/reports.py:66,92,115` | 代码 |
-| 报表缓存 `_summary_out` 未定义（500） | `server/app/api/v1/reports.py:223-224` | 代码（工作区） |
+| 报表 15s 缓存已修，但仍全量扫描 | `server/app/api/v1/reports.py:58-80` | 代码（工作区） |
 | 重启把任务标 failed | `server/app/main.py:71-83` | 代码 |
 | 通知队列满丢告警 | `server/app/services/notify.py:154` | 代码 |
 | 日志只写 stdout | `server/app/core/logging.py` | 代码 |

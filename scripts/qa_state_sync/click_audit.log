@@ -1,0 +1,58 @@
+
+== dashboard
+  [默认场站 ▾] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [默认场站 ▾] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [JCROB-01 ▾] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status'), ('GET', 200, '/api/v1/alarms')] dl=[] dlg=[]
+  [JCROB-01 ▾] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [锁定屏幕] toast=[] modal=0 net=[] dl=[] dlg=[]
+  [JCROB-01 78% 0.40 m/s 在线] toast=['已切换到 JCROB-01'] modal=0 net=[('GET', 200, '/api/v1/videos'), ('GET', 200, '/api/v1/sensors/summary'), ('GET', 200, '/api/v1/alarms/stats'), ('GET', 200, '/api/v1/robots/3/status'), ('GET', 200, '/api/v1/robots/1/status'), ('GET', 200, '/api/v1/robots/2/status'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [JCROB-01 78% 0.40 m/s 在线] toast=['已切换到 JCROB-01', '已切换到 JCROB-01'] modal=0 net=[('GET', 200, '/api/v1/videos'), ('GET', 200, '/api/v1/sensors/summary'), ('GET', 200, '/api/v1/robots/1/status'), ('GET', 200, '/api/v1/robots/2/status'), ('GET', 200, '/api/v1/robots/3/status'), ('GET', 200, '/api/v1/alarms/stats'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [绝影 X30 Pro —% — m/s 未连接] toast=['已切换到 JCROB-01', '已切换到 JCROB-01', '已切换到 绝影 X30 Pro'] modal=0 net=[('GET', 200, '/api/v1/robots/2/status'), ('GET', 200, '/api/v1/sensors/summary'), ('GET', 200, '/api/v1/videos'), ('GET', 200, '/api/v1/robots/1/status'), ('GET', 200, '/api/v1/robots/2/status'), ('GET', 200, '/api/v1/alarms/stats'), ('GET', 200, '/api/v1/robots/3/status'), ('GET', 200, '/api/v1/robots/2/status'), ('GET', 200, '/api/v1/alarms')] dl=[] dlg=[]
+  [绝影 X30 Pro —% — m/s 未连接] toast=['已切换到 JCROB-01', '已切换到 绝影 X30 Pro', '已切换到 绝影 X30 Pro'] modal=0 net=[('GET', 200, '/api/v1/videos'), ('GET', 200, '/api/v1/sensors/summary'), ('GET', 200, '/api/v1/robots/1/status'), ('GET', 200, '/api/v1/robots/2/status'), ('GET', 200, '/api/v1/robots/3/status'), ('GET', 200, '/api/v1/alarms/stats'), ('GET', 200, '/api/v1/robots/2/status')] dl=[] dlg=[]
+  [JCROB 模拟器 —% — m/s 未连接] toast=['已切换到 绝影 X30 Pro', '已切换到 绝影 X30 Pro', '已切换到 JCROB 模拟器'] modal=0 net=[('GET', 200, '/api/v1/robots/3/status'), ('GET', 200, '/api/v1/videos'), ('GET', 200, '/api/v1/robots/1/status'), ('GET', 200, '/api/v1/sensors/summary'), ('GET', 200, '/api/v1/robots/2/status'), ('GET', 200, '/api/v1/alarms/stats'), ('GET', 200, '/api/v1/robots/3/status'), ('GET', 200, '/api/v1/robots/3/status')] dl=[] dlg=[]
+  [JCROB 模拟器 —% — m/s 未连接] toast=['已切换到 绝影 X30 Pro', '已切换到 JCROB 模拟器', '已切换到 JCROB 模拟器'] modal=0 net=[('GET', 200, '/api/v1/videos'), ('GET', 200, '/api/v1/sensors/summary'), ('GET', 200, '/api/v1/robots/2/status'), ('GET', 200, '/api/v1/robots/1/status'), ('GET', 200, '/api/v1/alarms/stats'), ('GET', 200, '/api/v1/robots/3/status'), ('GET', 200, '/api/v1/robots/3/status')] dl=[] dlg=[]
+  [全部 ▾] toast=['已切换到 JCROB 模拟器', '已切换到 JCROB 模拟器'] modal=0 net=[('GET', 200, '/api/v1/robots/3/status'), ('GET', 200, '/api/v1/alarms')] dl=[] dlg=[]
+  [全部 ▾] toast=['已切换到 JCROB 模拟器'] modal=0 net=[] dl=[] dlg=[]
+  [锁定屏幕] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/3/status')] dl=[] dlg=[]
+  [127] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/3/status'), ('GET', 200, '/api/v1/alarms'), ('GET', 200, '/api/v1/alarms'), ('GET', 200, '/api/v1/settings'), ('GET', 200, '/api/v1/alarms')] dl=[] dlg=[]
+  [告警：0 条未确认] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status'), ('GET', 200, '/api/v1/alarms'), ('GET', 200, '/api/v1/alarms'), ('GET', 200, '/api/v1/settings'), ('GET', 200, '/api/v1/alarms')] dl=[] dlg=[]
+  [告警：0 条未确认] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status'), ('GET', 200, '/api/v1/alarms'), ('GET', 200, '/api/v1/alarms'), ('GET', 200, '/api/v1/settings'), ('GET', 200, '/api/v1/alarms')] dl=[] dlg=[]
+  [100] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status'), ('GET', 200, '/api/v1/messages'), ('GET', 200, '/api/v1/alarms')] dl=[] dlg=[]
+  [100] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status'), ('GET', 200, '/api/v1/messages'), ('GET', 200, '/api/v1/alarms')] dl=[] dlg=[]
+  [打开全屏页 ↗] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status'), ('GET', 200, '/api/v1/videos')] dl=[] dlg=[]
+  [打开全屏页 ↗] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status'), ('GET', 200, '/api/v1/videos')] dl=[] dlg=[]
+
+== robot-status
+
+== map
+
+== video
+  [充电房-可见光 ▾] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [充电房-可见光 ▾] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [刷新列表] toast=[] modal=0 net=[('GET', 200, '/api/v1/videos'), ('GET', 200, '/api/v1/robots/1/status'), ('GET', 200, '/api/v1/alarms')] dl=[] dlg=[]
+  [刷新列表] toast=[] modal=0 net=[('GET', 200, '/api/v1/videos'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [⚙ 摄像头配置] toast=[] modal=0 net=[('GET', 200, '/api/v1/videos'), ('GET', 200, '/api/v1/videos/go2rtc-streams')] dl=[] dlg=[]
+  [⚙ 摄像头配置] toast=[] modal=0 net=[('GET', 200, '/api/v1/videos'), ('GET', 200, '/api/v1/videos/go2rtc-streams'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [去管理视频源] toast=[] modal=0 net=[('GET', 200, '/api/v1/videos'), ('GET', 200, '/api/v1/videos/go2rtc-streams'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [去管理视频源] toast=[] modal=0 net=[('GET', 200, '/api/v1/videos'), ('GET', 200, '/api/v1/videos/go2rtc-streams'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+
+== room
+  [充电房-可见光 ▾] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [充电房-可见光 ▾] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [刷新列表] toast=[] modal=0 net=[('GET', 200, '/api/v1/videos'), ('GET', 200, '/api/v1/robots/1/status'), ('GET', 200, '/api/v1/alarms')] dl=[] dlg=[]
+  [刷新列表] toast=[] modal=0 net=[('GET', 200, '/api/v1/videos'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [⚙ 摄像头配置] toast=[] modal=0 net=[('GET', 200, '/api/v1/videos'), ('GET', 200, '/api/v1/videos/go2rtc-streams')] dl=[] dlg=[]
+  [⚙ 摄像头配置] toast=[] modal=0 net=[('GET', 200, '/api/v1/videos'), ('GET', 200, '/api/v1/videos/go2rtc-streams'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [去管理视频源] toast=[] modal=0 net=[('GET', 200, '/api/v1/videos'), ('GET', 200, '/api/v1/videos/go2rtc-streams'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [去管理视频源] toast=[] modal=0 net=[('GET', 200, '/api/v1/videos'), ('GET', 200, '/api/v1/videos/go2rtc-streams'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+
+== env
+
+== tasks
+  [全部 ▾] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [全部 ▾] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [查询] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/tasks'), ('GET', 200, '/api/v1/robots/1/status'), ('GET', 200, '/api/v1/alarms')] dl=[] dlg=[]
+  [查询] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/tasks'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [重置] toast=[] modal=0 net=[] dl=[] dlg=[]
+  [重置] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
+  [新建任务] toast=['下发/暂停/巡航在「任务执行」页；写开关在系统设置里'] modal=0 net=[('GET', 200, '/api/v1/task-templates'), ('GET', 200, '/api/v1/task-runs'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] dlg=[]
