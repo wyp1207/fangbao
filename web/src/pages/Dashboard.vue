@@ -60,15 +60,14 @@ const videoRows = ref<{
 
 /** 只有显式勾了「首页显示」的摄像头才上大屏——测试流不该自己冒出来 */
 const dashVideos = computed(() => videoRows.value.filter((v) => v.show_on_dashboard && v.go2rtc_url))
-const visibleStream = computed(() => {
+const visibleVideo = computed(() => {
   const pool = dashVideos.value
-  const v = pool.find((x) => /充电房|可见光|车体/.test(x.group_name + x.name)) ?? pool[0]
-  return v?.go2rtc_url ?? ''
+  return pool.find((x) => /充电房|可见光|车体/.test(x.group_name + x.name)) ?? pool[0] ?? null
 })
-const thermalStream = computed(() => {
-  const v = dashVideos.value.find((x) => /热|红外|thermal/i.test(x.name + x.group_name))
-  return v?.go2rtc_url ?? ''
-})
+const thermalVideo = computed(() =>
+  dashVideos.value.find((x) => /热|红外|thermal/i.test(x.name + x.group_name)) ?? null)
+const visibleStream = computed(() => visibleVideo.value?.go2rtc_url ?? '')
+const thermalStream = computed(() => thermalVideo.value?.go2rtc_url ?? '')
 
 // 消息中心未读数（和消息页用同一个 localStorage 时间戳）
 const msgUnread = ref(0)
@@ -80,22 +79,19 @@ const deviceStats = ref<DeviceStat[]>([])
 async function loadDeviceStats() {
   const list = devices.value
   if (list.length < 2) { deviceStats.value = []; return }
-  const out: DeviceStat[] = []
-  for (const d of list) {
-    try {
-      const st = await api.status(d.id)
-      out.push({
-        id: d.id, name: d.name,
-        online: st.online ?? false,
-        battery: typeof st.info?.battery === 'number' ? st.info.battery : null,
-        speed: typeof st.galileo?.currentSpeedX === 'number' ? st.galileo.currentSpeedX : null,
-        age: st.age_s ?? -1,
-      })
-    } catch {
-      out.push({ id: d.id, name: d.name, online: false, battery: null, speed: null, age: -1 })
+  // 并行取：串行时一台设备超时（比如离线的），整条设备条要等十几秒才出来
+  const results = await Promise.allSettled(list.map((d) => api.status(d.id)))
+  deviceStats.value = list.map((d, i) => {
+    const r = results[i]
+    const st = r.status === "fulfilled" ? r.value : null
+    return {
+      id: d.id, name: d.name,
+      online: st?.online ?? false,
+      battery: typeof st?.info?.battery === "number" ? st.info.battery : null,
+      speed: typeof st?.galileo?.currentSpeedX === "number" ? st.galileo.currentSpeedX : null,
+      age: st?.age_s ?? -1,
     }
-  }
-  deviceStats.value = out
+  })
 }
 const READ_KEY = 'jc_msg_read_ts'
 async function refreshMsgUnread() {
@@ -151,9 +147,9 @@ function goPoint(p: { name?: string }) {
   void router.push({ name: 'map', query: { map: robot.currentMap, point: p.name ?? '' } })
 }
 
-function goVideo(which: string) {
-  // 视频页自己去拉视频源，这里只负责跳过去
-  void router.push({ name: 'video', query: { group: which } })
+function goVideo(v: { id: number } | null) {
+  // 带 source id 过去，视频页直接选中同一路；没有就落到默认第一路
+  void router.push({ name: 'video', query: v ? { source: String(v.id) } : {} })
 }
 
 function openVideo(which: string) {
@@ -379,7 +375,7 @@ async function logout() {
               <span>真机联调后，在「设备管理 → 摄像头」勾选「首页显示」即自动呈现</span>
               <button class="btn btn-sm" @click="router.push({ name: 'cameras' })">去配置</button>
             </div>
-            <button class="embed-expand" title="打开视频监控" @click="goVideo('可见光')">打开全屏页 ↗</button>
+            <button class="embed-expand" title="打开视频监控" @click="goVideo(visibleVideo)">打开全屏页 ↗</button>
           </div>
         </ScadaPanel>
 
@@ -390,7 +386,7 @@ async function logout() {
               <b>视频通道未接入</b>
               <span>热像仪接上后，勾选「首页显示」即自动呈现</span>
             </div>
-            <button class="embed-expand" title="打开视频监控" @click="goVideo('热红外')">打开全屏页 ↗</button>
+            <button class="embed-expand" title="打开视频监控" @click="goVideo(thermalVideo)">打开全屏页 ↗</button>
           </div>
         </ScadaPanel>
 
