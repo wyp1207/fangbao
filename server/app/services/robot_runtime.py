@@ -115,12 +115,16 @@ class RobotRegistry:
                 rt.cache.update(**merged, fresh=fresh)
                 status, info, galileo = merged["status"], merged["info"], merged["galileo"]
                 rt.error = None
-                rt.clock_skew_s = self._check_clock(rt, status, info, galileo)
+                # 先求值告警，再做时钟检查：时钟检查异常不该让告警静默
                 if self._alarms is not None:
                     self._alarms.evaluate(
                         status=status, info=info,
                         age_s=rt.cache.as_dict()["age_s"], robot_id=rt.robot_id,
                         offline_after_s=getattr(rt.adapter, "offline_after_s", None))
+                try:
+                    rt.clock_skew_s = self._check_clock(rt, status, info, galileo)
+                except Exception:  # noqa: BLE001
+                    rt.clock_skew_s = None
             except jerr.JcrobError as exc:
                 rt.cache.mark_failure(exc.code)
                 rt.error = exc.code
