@@ -63,8 +63,11 @@ def _call(fn, *args):
     return res
 
 
-def _order_payload(template: TaskTemplate | None, steps: list[TaskRunStep]) -> dict:
-    """下发给机器人的订单结构。字段名按通用约定，真机确认后只改这一处。"""
+def _order_payload(db, template: TaskTemplate | None, steps: list[TaskRunStep]) -> dict:
+    """下发给机器人的订单结构。坐标必须带上——只给 pointId 机器人不知道去哪。"""
+    from app.models.map_library import PointDraft
+
+    points = {p.id: p for p in db.query(PointDraft).all()}
     return {
         "orderId": f"JC-{int(time.time() * 1000)}",
         "orderUpdateId": 0,
@@ -75,6 +78,9 @@ def _order_payload(template: TaskTemplate | None, steps: list[TaskRunStep]) -> d
                 "actionParameters": [
                     {"key": "pointId", "value": str(s.point_id or "")},
                     {"key": "pointName", "value": s.point_name or ""},
+                    {"key": "x", "value": getattr(points.get(s.point_id or -1), "x", 0.0)},
+                    {"key": "y", "value": getattr(points.get(s.point_id or -1), "y", 0.0)},
+                    {"key": "yaw", "value": getattr(points.get(s.point_id or -1), "theta", 0.0) or 0.0},
                 ],
             }
             for s in steps
@@ -95,7 +101,7 @@ def dispatch(db, run: TaskRun, adapter) -> TaskRun:
         raise BadRequest("这条计划没有点位，先补点位", code="EMPTY_STEPS")
 
     template = db.get(TaskTemplate, run.template_id) if run.template_id else None
-    order = _order_payload(template, steps)
+    order = _order_payload(db, template, steps)
 
     from app.adapters.jcrob import errors as jerr
 
