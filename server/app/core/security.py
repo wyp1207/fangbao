@@ -54,7 +54,8 @@ def verify_password(password: str, stored: str) -> bool:
         return False
 
 
-def create_access_token(subject: str, role: str, *, secret: str, ttl_minutes: int) -> str:
+def create_access_token(subject: str, role: str, *, secret: str, ttl_minutes: int,
+                        extra: dict | None = None) -> str:
     now = datetime.now(timezone.utc)
     payload: dict[str, Any] = {
         "sub": subject,
@@ -63,6 +64,8 @@ def create_access_token(subject: str, role: str, *, secret: str, ttl_minutes: in
         "exp": int((now + timedelta(minutes=ttl_minutes)).timestamp()),
         "jti": secrets.token_hex(8),
     }
+    if extra:
+        payload.update(extra)
     return jwt.encode(payload, secret, algorithm="HS256")
 
 
@@ -156,6 +159,21 @@ def totp_code(secret: str, at: int | None = None, step: int = 30, digits: int = 
     return str(code % (10 ** digits)).zfill(digits)
 
 
+def totp_verify_step(secret: str, code: str, window: int = 1) -> int | None:
+    """返回匹配的时间步（用于防重放），不匹配返回 None。"""
+    import time
+
+    code = (code or "").strip()
+    if not secret or not code.isdigit() or len(code) != 6:
+        return None
+    now = time.time()
+    for i in range(-window, window + 1):
+        step = int((now + i * 30) // 30)
+        if totp_code(secret, at=now + i * 30) == code:
+            return step
+    return None
+
+
 def totp_verify(secret: str, code: str, window: int = 1) -> bool:
     """允许前后各一个时间窗（时钟漂移 ±30s）。"""
     import time
@@ -163,8 +181,7 @@ def totp_verify(secret: str, code: str, window: int = 1) -> bool:
     code = (code or "").strip()
     if not secret or not code.isdigit() or len(code) != 6:
         return False
-    now = time.time()
-    return any(totp_code(secret, at=now + i * 30) == code for i in range(-window, window + 1))
+    return totp_verify_step(secret, code, window) is not None
 
 
 def totp_uri(secret: str, account: str, issuer: str = "防爆巡检平台") -> str:

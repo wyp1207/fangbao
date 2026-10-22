@@ -161,8 +161,17 @@ def summary(
         except Exception:  # noqa: BLE001
             pass
 
+    first_ts = db.scalar(select(func.min(TelemetrySample.ts)))
+    last_ts = db.scalar(select(func.max(TelemetrySample.ts)))
+
     return {
         "range": {"from": start.date().isoformat(), "to": (end - timedelta(days=1)).date().isoformat()},
+        # 实际覆盖：选的区间可能没有那么多数据，页面要照实说
+        "data_coverage": {
+            "telemetry_from": first_ts.isoformat(timespec="minutes") if first_ts else None,
+            "telemetry_to": last_ts.isoformat(timespec="minutes") if last_ts else None,
+            "telemetry_days": round((last_ts - first_ts).total_seconds() / 86400, 1) if first_ts and last_ts else 0,
+        },
         "alarms_by_robot": [
             {"robot_id": k, "count": v} for k, v in sorted(by_robot.items())
         ],

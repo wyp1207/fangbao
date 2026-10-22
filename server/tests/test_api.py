@@ -654,3 +654,49 @@ def test_totp_two_factor(auth_client):
     ok = fresh.post("/api/v1/auth/login", json={
         "username": "totp_user", "password": "Second12345", "totp_code": totp_code(secret)})
     assert ok.status_code == 200
+
+
+def test_logout_revokes_and_role_gate(auth_client):
+    """登出真的吊销旧 token；viewer 不能调机器回传接口。"""
+    from fastapi.testclient import TestClient
+
+    # 先建 viewer（登出会让 admin 的旧会话全部失效，所以顺序不能反）
+    made = auth_client.post("/api/v1/users", json={
+        "username": "gate_viewer", "password": "Init12345", "role": "viewer"})
+    assert made.status_code == 200
+    v = TestClient(auth_client.app)
+    lr = v.post("/api/v1/auth/login", json={"username": "gate_viewer", "password": "Init12345"})
+    assert lr.status_code == 200
+    v.headers.update({"X-CSRF-Token": lr.json()["csrf_token"]})
+    assert v.post("/api/v1/auth/password",
+                  json={"old_password": "Init12345", "new_password": "Viewer12345"}).status_code == 200
+    bad = v.post("/api/v1/task-runs/ingest", json={"external_id": "V-1", "steps": []})
+    assert bad.status_code == 403
+
+    # 单独开一个会话，拿到 token 原文
+    c = TestClient(auth_client.app)
+    r = c.post("/api/v1/auth/login", json={"username": "admin", "password": "admin123"})
+    token = r.cookies.get("jc_token")
+    assert token
+    assert c.get("/api/v1/auth/me").status_code == 200
+
+    assert c.post("/api/v1/auth/logout",
+                  headers={"X-CSRF-Token": r.json()["csrf_token"]}).status_code == 200
+
+    replay = TestClient(auth_client.app)
+    replay.cookies.set("jc_token", token)
+    assert replay.get("/api/v1/auth/me").status_code == 401
+
+
+
+def test_production_refuses_default_secret(monkeypatch):
+    """prod 用默认密钥必须拒绝启动。"""
+    from app.core.config import assert_production_safe, get_settings
+
+    st = get_settings()
+    monkeypatch.setattr(st, "env", "prod", raising=False)
+    monkeypatch.setattr(st, "secret_key", "dev-only-secret-change-me-please-32b", raising=False)
+    import pytest
+
+    with pytest.raises(RuntimeError):
+        assert_production_safe()

@@ -60,8 +60,13 @@ def runtime_list(_user: User = Depends(get_current_user)) -> list[dict]:
 @router.get("/{robot_id}/pose")
 def robot_pose(robot_id: int, cache=Depends(get_cache),
                _user: User = Depends(get_current_user)) -> dict:
-    return {"pose": cache.snapshot.pose, "age_s": cache.as_dict()["age_s"],
-            "online": cache.online}
+    """和 /status 读同一个数据源，避免"状态说在线、位姿说离线"。"""
+    from app.services.robot_runtime import registry as robot_registry
+
+    rt = robot_registry.get(robot_id)
+    src = rt.cache if rt is not None else cache
+    snap = src.as_dict()
+    return {"pose": snap.get("pose") or {}, "age_s": snap["age_s"], "online": snap["online"]}
 
 
 @router.get("/{robot_id}/maps")

@@ -21,6 +21,8 @@ def resolve_api_client(db: Session, raw: str | None) -> dict | None:
                                        ApiClient.enabled.is_(True)).first()
         if c is None:
             return None
+        if c.expires_at is not None and c.expires_at < datetime.now():
+            return None
         c.last_used_at = datetime.now()
         db.commit()
         return {"kind": "key", "name": c.name,
@@ -63,6 +65,9 @@ def session_or_key(
         raise PlatformError("需要登录会话或 X-Api-Key", code="UNAUTHORIZED", status_code=401)
     if getattr(user, "must_change_password", False):
         raise PlatformError("请先修改初始密码", code="MUST_CHANGE_PASSWORD", status_code=403)
+    if user.role not in ("admin", "operator"):
+        raise PlatformError("该接口只允许管理员/操作员或 API Key", code="FORBIDDEN",
+                            status_code=403)
     return {"kind": "user", "name": user.username, "scopes": ["*"]}
 
 

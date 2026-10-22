@@ -34,6 +34,8 @@ class AlarmRecord(Base):
     handle_note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     escalated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # 条件消失自动恢复（行业通行做法：active → resolved，而不是让人手动关）
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     closed_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
     resolution: Mapped[str | None] = mapped_column(String(32), nullable=True)  # handled/misreport/ignored

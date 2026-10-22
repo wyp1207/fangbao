@@ -152,7 +152,41 @@ class AlarmStore:
                 new.append(alarm)
             if len(self._items) > self.max_items:
                 self._items = self._items[-self.max_items:]
+            # 本轮没出现的指标 → 自动恢复
+            try:
+                self._resolve_gone(robot_id, {f"{robot_id}:{m}" if robot_id is not None else m
+                                              for m, _, _, _ in found})
+            except Exception:  # noqa: BLE001
+                pass
         return new
+
+    def _resolve_gone(self, robot_id: int | None, active: set[str]) -> None:
+        """条件消失的告警自动恢复（active → resolved）。
+
+        行业通行做法：告警要能自己好，不能全靠人点"关闭"——
+        否则一次抖动会留下几十条永远挂着的"未确认"。
+        """
+        if self._session_factory is None:
+            return
+        from app.models.alarm import AlarmRecord
+
+        prefix = f"{robot_id}:" if robot_id is not None else ""
+        base = {k[len(prefix):] for k in active if k.startswith(prefix)} if prefix else active
+        with self._session_factory() as db:  # type: ignore[misc]
+            rows = (db.query(AlarmRecord)
+                    .filter(AlarmRecord.resolved_at.is_(None),
+                            AlarmRecord.closed_at.is_(None))
+                    .all())
+            changed = False
+            for r in rows:
+                if robot_id is not None and r.robot_id != robot_id:
+                    continue
+                if r.metric in base:
+                    continue
+                r.resolved_at = _now()
+                changed = True
+            if changed:
+                db.commit()
 
     def _persist(self, alarm: Alarm, robot_id: int | None) -> None:
         from app.models.alarm import AlarmRecord

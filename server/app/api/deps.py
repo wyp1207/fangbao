@@ -29,6 +29,10 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     user = db.get(User, int(payload["sub"]))
     if not user or not user.is_active:
         raise Unauthorized("账号不可用")
+    # 旧 token（登出/改密前签的）直接失效
+    ver = payload.get("ver")
+    if ver is not None and int(ver) != int(getattr(user, "token_version", 1) or 1):
+        raise Unauthorized("会话已失效，请重新登录")
     _enforce_password_change(request, user)
     return user
 
