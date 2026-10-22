@@ -177,9 +177,10 @@ class AlarmStore:
             from app.models.alarm import AlarmRecord
 
             with self._session_factory() as db:  # type: ignore[misc]
+                # 表里没有 status 列：用 resolved_at 判断是否已恢复
                 q = db.query(AlarmRecord).filter(
                     AlarmRecord.metric == metric,
-                    AlarmRecord.status != "resolved",
+                    AlarmRecord.resolved_at.is_(None),
                 )
                 if robot_id is not None:
                     q = q.filter(AlarmRecord.robot_id == robot_id)
@@ -189,6 +190,7 @@ class AlarmStore:
                 if row is None:
                     return False
                 row.message = message[:255]
+                row.level = "critical" if "critical" in message or "第" in message else row.level
                 row.value_json = json.dumps(
                     {"value": value, "at": datetime.now().isoformat(timespec="seconds")},
                     ensure_ascii=False)

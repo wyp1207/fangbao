@@ -345,7 +345,7 @@ POST /api/v1/users  {"username":"qa_auditor_2342","password":"QaPass2026!","role
    - 修复：`/health/deep` 按设备返回或明确标注“平台级”；地图按 `robot.deviceId` 取图；设备下拉选项不要被场站过滤；设备选择写入 URL/query 或 localStorage。
 
 6. **菜单把 14 个已交付页面标成「未接入」（P1，验收口径）**
-   - 证据：菜单截图里「环境监测 / 任务模板 / 任务执行 / 人工巡检 / 运行数据 / 巡检报表 / 环境传感器 / 采集网关 / 录像计划 / 录像回放 / 告警通知 / AI 识别结果」都带「未接入」，`/oplog`、`/keys` 也同样；但本次实测这些页面全部有真实数据、真实接口（报表 141 条、运行数据 10527 点、模板 6 条……）。`nav.ts` 中只有 9 个条目写了 `real: true`，其余缺省 false（`task-calendar` 是唯一真正未接入的占位页）。[nav.ts:33](web/src/config/nav.ts#L33)
+   - 证据：菜单截图里「环境监测 / 任务模板 / 任务执行 / 人工巡检 / 运行数据 / 巡检报表 / 环境传感器 / 采集网关 / 录像计划 / 录像回放 / 告警通知 / AI 识别结果」都带「未接入」，`/oplog`、`/keys` 也同样；但本次实测这些页面全部有真实数据、真实接口（报表 141 条、运行数据 10527 点、模板 6 条……）。`nav.ts` 里只有 15 个条目标了 `real: true`，其余已实现条目不写（`task-calendar` 是唯一真正未接入的占位页）。[nav.ts:33](web/src/config/nav.ts#L33)
    - 影响：验收方会认为这些功能没做；与“已交付”事实冲突。
    - 修复：按实际状态补 `real: true`；只有「任务日历」保留未接入说明页。
 
@@ -354,7 +354,7 @@ POST /api/v1/users  {"username":"qa_auditor_2342","password":"QaPass2026!","role
    - 影响：新增录制计划无法可靠选摄像头（无法真正完成计划创建）。
 
 8. **权限 UI 与后端 403 不一致（P1）**
-   - 证据：§5.3；operator 设置页「保存配置」可用但 `PUT /settings` 403；viewer/operator 能看到用户管理/系统设置菜单；viewer 直接访问 `/oplog` 显示“共 0 条”而非 403。
+   - 证据：§5.3；operator 设置页改任一项后「保存配置」即启用，但 `PUT /settings` 403；viewer/operator 能看到用户管理/系统设置菜单；viewer 直接访问 `/oplog` 显示“共 0 条”而非 403。
    - 影响：用户会反复点一个必然失败的按钮，或误以为无数据；三权分立的“不可见”没有做到。
    - 修复：菜单按角色隐藏 users/settings；operator 的 `canWrite` 与 settings 允许角色对齐（要么放开 operator，要么禁用保存）；oplog 403 显示明确无权限态。
 

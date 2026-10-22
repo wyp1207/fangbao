@@ -33,7 +33,7 @@ const router = createRouter({
         // 告警中心
         { path: 'alarms', name: 'alarms', component: () => import('@/pages/Alarms.vue') },
         { path: 'ai-results', name: 'ai-results', component: () => import('@/pages/AiResults.vue') },
-        { path: 'keys', name: 'api-keys', component: () => import('@/pages/ApiKeys.vue') },
+        { path: 'keys', name: 'api-keys', component: () => import('@/pages/ApiKeys.vue'), meta: { roles: ['admin', 'sysadmin'] } },
         { path: 'alarm-rules', name: 'alarm-rules', component: () => import('@/pages/AlarmRules.vue') },
 
         // 数据查询
@@ -56,10 +56,10 @@ const router = createRouter({
 
         // 系统管理
         { path: 'messages', name: 'messages', component: () => import('@/pages/Messages.vue') },
-        { path: 'users', name: 'users', component: () => import('@/pages/Users.vue') },
-        { path: 'settings', name: 'settings', component: () => import('@/pages/Settings.vue') },
-        { path: 'notify', name: 'notify', component: () => import('@/pages/NotifyChannels.vue') },
-        { path: 'oplog', name: 'oplog', component: () => import('@/pages/AuditLogs.vue') },
+        { path: 'users', name: 'users', component: () => import('@/pages/Users.vue'), meta: { roles: ['admin', 'sysadmin'] } },
+        { path: 'settings', name: 'settings', component: () => import('@/pages/Settings.vue'), meta: { roles: ['admin', 'sysadmin', 'secadmin'] } },
+        { path: 'notify', name: 'notify', component: () => import('@/pages/NotifyChannels.vue'), meta: { roles: ['admin', 'sysadmin', 'secadmin'] } },
+        { path: 'oplog', name: 'oplog', component: () => import('@/pages/AuditLogs.vue'), meta: { roles: ['admin', 'auditor'] } },
       ],
     },
   ],
@@ -68,8 +68,15 @@ const router = createRouter({
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
   await auth.fetchMe()
-  if (to.name !== 'login' && !auth.isLoggedIn) return { name: 'login' }
+  if (to.name !== 'login' && !auth.isLoggedIn) {
+    return { name: 'login', query: to.fullPath !== '/' ? { redirect: to.fullPath } : {} }
+  }
   if (to.name === 'login' && auth.isLoggedIn) return { name: 'dashboard' }
+  // 页面级权限：URL 直接输也不能看（后端仍会 403，这里只是别让人看到页面骨架）
+  const need = (to.meta?.roles as string[] | undefined) ?? []
+  if (need.length && !need.includes(auth.user?.role ?? '')) {
+    return { name: 'robot-status', query: { denied: '1' } }
+  }
   return true
 })
 
