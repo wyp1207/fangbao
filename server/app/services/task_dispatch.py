@@ -63,6 +63,57 @@ def _call(fn, *args):
     return res
 
 
+PREFLIGHT_MIN_BATTERY = 30.0
+
+
+def preflight(db, run: TaskRun, adapter) -> dict:
+    """下发前检查机器人状态。返回 {"ok": bool, "reason": str, "checks": {...}}。
+
+    评审共识：宁可在平台侧拒绝，也不要在急停/手动/低电量时把目标点发下去。
+    """
+    checks: dict[str, str] = {}
+    try:
+        status = adapter.get_status()
+        info = adapter.get_info()
+        import asyncio, inspect
+        if inspect.isawaitable(status):
+            status = asyncio.run(status)
+        if inspect.isawaitable(info):
+            info = asyncio.run(info)
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "reason": f"读不到机器人状态：{exc.__class__.__name__}",
+                "checks": {"link": "fail"}}
+
+    st = (status or {}).get("status") if isinstance(status, dict) else {}
+    st = st if isinstance(st, dict) else {}
+    state_text = str(st.get("status") or status.get("status") if isinstance(status, dict) else "")
+    checks["motion_state"] = state_text or "unknown"
+
+    if "急停" in state_text or state_text.lower() in ("estop", "emergency_stop"):
+        return {"ok": False, "reason": f"机器人处于急停状态（{state_text}），先解除急停", "checks": checks}
+    if "手动" in state_text or state_text.lower() in ("manual",):
+        return {"ok": False, "reason": "机器人处于手动模式，切回自动再下发", "checks": checks}
+
+    battery = (info or {}).get("battery") if isinstance(info, dict) else None
+    checks["battery"] = str(battery)
+    if isinstance(battery, (int, float)) and battery < PREFLIGHT_MIN_BATTERY:
+        return {"ok": False, "reason": f"电量 {battery:.0f}% 低于 {PREFLIGHT_MIN_BATTERY:.0f}%，先回充",
+                "checks": checks}
+
+    # 同一台机器人不允许两个任务同时跑
+    running = (db.query(TaskRun)
+               .filter(TaskRun.robot_id == run.robot_id,
+                       TaskRun.id != run.id,
+                       TaskRun.status == "running")
+               .first())
+    if running is not None:
+        return {"ok": False, "reason": f"这台机器人正在执行任务 #{running.id}（{running.name}）",
+                "checks": checks}
+
+    checks["pending_runs"] = "ok"
+    return {"ok": True, "reason": "", "checks": checks}
+
+
 def _order_payload(db, template: TaskTemplate | None, steps: list[TaskRunStep]) -> dict:
     """下发给机器人的订单结构。坐标必须带上——只给 pointId 机器人不知道去哪。"""
     from app.models.map_library import PointDraft
@@ -95,6 +146,10 @@ def dispatch(db, run: TaskRun, adapter) -> TaskRun:
     _require_write()
     if run.status != "planned":
         raise BadRequest(f"当前状态 {run.status} 不能下发", code="BAD_STATUS")
+
+    gate = preflight(db, run, adapter)
+    if not gate["ok"]:
+        raise PlatformError(gate["reason"], code="PREFLIGHT_FAILED", status_code=409)
 
     steps = db.query(TaskRunStep).filter(TaskRunStep.run_id == run.id).all()
     if not steps:

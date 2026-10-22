@@ -1078,3 +1078,59 @@ def test_mobile_work_order_flow(auth_client, monkeypatch):
                               json={"status": "closed", "resolution": "已更换密封圈，现场恢复"})
     assert closed.status_code == 200 and closed.json()["status"] == "closed"
     assert closed.json()["photos"]
+
+
+def test_dispatch_preflight_blocks(auth_client):
+    """下发前门禁：低电量 / 急停 / 手动模式 / 同机已有任务，都要拒绝并说明原因。"""
+    from app.services import task_dispatch
+
+    class Fake:
+        def __init__(self, state="Free", battery=80):
+            self.state, self.battery = state, battery
+
+        def get_status(self):
+            return {"status": self.state}
+
+        def get_info(self):
+            return {"battery": self.battery}
+
+    import io as _io
+    from PIL import Image
+
+    buf = _io.BytesIO()
+    Image.new("RGB", (60, 60), "white").save(buf, format="PNG")
+    mid = auth_client.post("/api/v1/maps/library",
+                           files={"file": ("p.png", buf.getvalue(), "image/png")},
+                           data={"name": "门禁图", "resolution": "0.05"}).json()["id"]
+    pt = auth_client.post(f"/api/v1/maps/library/{mid}/points",
+                          json={"name": "G1", "x": 1, "y": 1}).json()
+    tpl = auth_client.post("/api/v1/task-templates", json={
+        "name": "门禁模板", "map_id": mid,
+        "actions": [{"point_id": pt["id"], "action": "photo"}]}).json()
+
+    from app.db.session import SessionLocal
+    from app.models.task_run import TaskRun
+
+    with SessionLocal() as db:
+        run = TaskRun(name="门禁用例", status="planned", template_id=tpl["id"], robot_id=1)
+        db.add(run)
+        db.commit()
+        db.refresh(run)
+
+        assert task_dispatch.preflight(db, run, Fake("Free", 80))["ok"] is True
+        low = task_dispatch.preflight(db, run, Fake("Free", 12))
+        assert low["ok"] is False and "电量" in low["reason"]
+        estop = task_dispatch.preflight(db, run, Fake("急停", 80))
+        assert estop["ok"] is False and "急停" in estop["reason"]
+        manual = task_dispatch.preflight(db, run, Fake("手动模式", 80))
+        assert manual["ok"] is False and "手动" in manual["reason"]
+
+        # 同机已有 running 任务 → 拒绝
+        other = TaskRun(name="正在跑", status="running", robot_id=1)
+        db.add(other)
+        db.commit()
+        busy = task_dispatch.preflight(db, run, Fake("Free", 80))
+        assert busy["ok"] is False and "正在执行" in busy["reason"]
+
+        db.query(TaskRun).filter(TaskRun.name.in_(("门禁用例", "正在跑"))).delete()
+        db.commit()

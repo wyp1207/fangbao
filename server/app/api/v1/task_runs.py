@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_csrf, require_roles
 from app.services.api_auth import require_scope
-from app.core.errors import BadRequest, NotFound
+from app.core.errors import BadRequest, NotFound, PlatformError
 from app.db.session import get_db
 from app.models.map_library import PointDraft
 from app.models.task_run import TaskRun, TaskRunStep
@@ -279,6 +279,12 @@ def start_cruise(
     steps = db.query(TaskRunStep).filter(TaskRunStep.run_id == run.id).all()
     if not steps:
         raise BadRequest("这条计划没有点位", code="EMPTY_STEPS")
+
+    from app.services.task_dispatch import preflight
+
+    gate = preflight(db, run, adapter)
+    if not gate["ok"]:
+        raise PlatformError(gate["reason"], code="PREFLIGHT_FAILED", status_code=409)
 
     for s in steps:                     # 重跑时把旧结果清掉
         s.status = "pending"

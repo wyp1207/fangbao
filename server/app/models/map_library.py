@@ -49,6 +49,8 @@ class PointDraft(Base):
     map_id: Mapped[int] = mapped_column(Integer, index=True)
     name: Mapped[str] = mapped_column(String(64))
     group_name: Mapped[str] = mapped_column(String(32), default="默认分组")
+    # 到点判定半径（米）：观察点可 1.0，仪表/拍照点要 0.3
+    arrive_radius_m: Mapped[float] = mapped_column(Float, default=1.0)
     x: Mapped[float] = mapped_column(Float)
     y: Mapped[float] = mapped_column(Float)
     theta: Mapped[float] = mapped_column(Float, default=0.0)
