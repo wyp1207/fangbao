@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import MapCanvas from '@/components/MapCanvas.vue'
 import DarkSelect from '@/components/DarkSelect.vue'
@@ -234,6 +234,12 @@ async function removeDraft(id: number) {
   await loadDrafts(libId.value)
   await refreshLibrary()
 }
+
+watch(() => robot.deviceId, async () => {
+  // 换设备后地图必须是这台车的地图，否则点位会画到别的车上
+  robotMaps.value = await api.maps()
+  if (robotMaps.value.length) await chooseRobot(robotMaps.value[0].name)
+})
 
 onMounted(async () => {
   robot.start()

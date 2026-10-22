@@ -1,8 +1,8 @@
 # 防爆机器人巡检平台 · 按钮逐一点击 + 状态同步实测报告
 
-- 测试时间：2026-10-22 23:25 — 2026-10-23 00:25（Asia/Shanghai）
-- 被测版本：`HEAD = ef31e96`（2026-10-22 23:59:26 `feat: 失败路径补全（1）+ 日志落盘 180 天（2）`）
-- 运行态说明：测试期间工作树中存在并行修改（`server/app/api/v1/reports.py`、`server/app/main.py`、`server/app/services/alarms.py`，均为未提交状态），且后端被外部重启多次（PID `377908 → 341452 → 204348 → 324992`）。**本报告以实际运行到的服务行为为准，并标注了时间点。**
+- 测试时间：2026-10-22 23:25 — 2026-10-23 00:39（Asia/Shanghai）
+- 被测版本：初测 `HEAD = ef31e96`（23:59:26）；**修复复测 `HEAD = 7d8fc74`（00:30:49 `fix: 告警风暴真正生效（表里没有 status 列）+ 路由级权限 + 空菜单组隐藏`）**，运行进程 PID 254872（00:29:23 启动）
+- 运行态说明：测试期间后端被外部重启多次（PID `377908 → 341452 → 204348 → 324992 → 229328 → 269324 → 254872`），并经历两次修复提交（`76ef5f1`、`7d8fc74`）。**本报告把“初测问题”和“修复后复测”分开写，所有数字都带采样时间。**
 - 环境：前端 `http://127.0.0.1:5173`，后端 `http://127.0.0.1:8000/api/v1`，账号 `admin/admin123`
 - 浏览器：Playwright 1.64 + Chromium 1243（`%LOCALAPPDATA%\ms-playwright\chromium-1243\chrome-win64\chrome.exe`），1680×950 / 1920×1000
 - 约束：只读优先。没有删除业务数据、没有改既有账号密码、没有重启服务、没有提交任何写操作表单。写按钮一律只打开弹窗/下拉，不点“保存/提交/确认/删除/下发/派单/开始录制/测试”。
@@ -13,11 +13,31 @@
 
 | 档位 | 数量 | 代表问题 |
 |---|---|---|
-| 必须修 | 9 项 | 告警/工单风暴、报表导出 500、20 并发可拖死整站、审计链校验失败、切换设备后状态串台、14 个已交付页面菜单标“未接入”、录像计划组件未注册、权限 UI 与后端 403 不一致、部署缺列导致报表 500 |
-| 建议修 | 10 项 | 预检不校验写开关、消息角标 100 截断、首页前 5 秒告警为 0、环境读数过期无强提示、CSV 只导当前页、回放出现已删摄像头 #2、告警未关联工单、手机已完成任务仍可提交（疑似）、操作日志无自检入口、设备台账 ⇄ 无反应 |
-| 可忽略 | 5 项 | 占位页文案、真机未接入提示、导出按钮打开新标签、消息中心全量渲染、导航“未接入”中真正未接入的「任务日历」 |
+| 必须修 | 5 项 | 报表导出 500、审计链校验失败、切换设备后状态串台、14 个已交付页面菜单标“未接入”、存量告警/工单积压（174 条/142 张）待清理 |
+| 建议修 | 11 项 | 预检不校验写开关、消息角标 100 截断、首页前 5 秒告警为 0、环境读数过期无强提示、CSV 只导当前页、回放出现已删摄像头 #2、告警未关联工单、手机已完成任务仍可提交（疑似）、操作日志无自检入口、设备台账 ⇄ 无反应、部署升级缺列 |
+| 可忽略 | 5 项 | 占位页文案、真机未接入提示、打印打开新标签、消息中心全量渲染、热红外未接入时的降级 |
 
-**一句话结论**：页面覆盖度和只读查询链路基本可用；只要不碰写操作，绝大多数列表/详情/弹窗都能打开。当前最大的问题不是“按钮点不动”，而是 **数据侧的单点故障被放大成全站故障**（一台离线模拟器每分钟产生 1 条告警并自动建 1 张工单，47 分钟内从 124 条/99 张涨到 160 条/130 张），以及 **20 个并发重查询能把这套 SQLite 后端拖到 `/health` 都不可达**。
+**已复测通过（本轮修复）**：新告警不再堆积（90 秒 174→174、工单 142→142，计数改为原地更新）、20 并发 `reports/summary` 三轮全 200 且 419 次 `/health` 探测全 200、viewer/operator/auditor 的受限菜单与直接 URL 均被拦截、录像计划 `DarkSelect` 正常渲染。
+
+**一句话结论**：页面覆盖度和只读查询链路基本可用；只要不碰写操作，绝大多数列表/详情/弹窗都能打开。修复后，**新告警风暴和并发拖死整站已止住**；当前剩余的最高风险是“切换设备后的状态串台”（离线 3 号机显示 1 号机的健康/地图）和两张报表/审计的硬失败（导出 500、审计链断），以及修复前已产生的 174 条告警 / 142 张工单存量。
+
+### 0.1 修复后复测（00:30–00:39，HEAD `7d8fc74`，PID 254872）
+
+| 项 | 复测方法 | 结果 | 判定 |
+|---|---|---|---|
+| 新告警是否还堆积 | `/alarms?limit=200` + `/work-orders?limit=1`，每 30s 一次，连续 90s | `total 174 → 174 → 174 → 174`，`work-orders 142 → 142 → 142 → 142`；最新告警 id 175 的 `started_at` 固定 `00:28:46`，`message` 从「第 41 次」→「第 61 次」→「第 81 次」原地更新 | ✅ 已修复 |
+| 工单是否还批量生成 | 同上 | 90 秒内 +0 | ✅ 已修复 |
+| 20 并发 `reports/summary` | 3 轮，每轮前等 16s 让 15s 缓存过期；每 100ms 探一次 `/health` | 3 轮均 20/20 200：p50 `208.4 / 250.9 / 154.9ms`；健康探测 **419 次全部 200**，p95 28.7ms、max 80.6ms | ✅ 已修复 |
+| viewer/operator/auditor 菜单 | 三种账号登录，dump `.nav-tab` 和系统管理下拉 | viewer/operator 只剩 7 个顶级菜单（无“系统管理”空 tab）；auditor 有“系统管理”，下拉只剩「系统日志 未接入」 | ✅ 已修复 |
+| 受限 URL 直访 | 分别 `goto /users /settings /oplog /keys` | viewer/operator 四个全部 302→`/robot-status?denied=1`；auditor 的 `/oplog` 正常、其余三个同样被拦 | ✅ 已修复 |
+| 录像计划 `DarkSelect` | 打开 `/record/plan` 捕获 console；点「新增计划」 | 无 `Failed to resolve component: DarkSelect`；弹窗内 `.dasel` 数量 1、原生 `<select>` 0，下拉选项 `["充电房-可见光"]`；截图 [record_plan_modal_fixed.png](docs/reviews/qa-evidence/record_plan_modal_fixed.png) | ✅ 已修复 |
+| 设备切换串台 | 首页切 3 号机 → SPA 导航到机器人状态/地图 | 「当前设备」仍显示“全部”；`/health/deep` 仍显示 1 号机「链路在线 是 / 0.9s / 0 失败」；地图仍 map1/6 点 | ❌ 未修（已知） |
+| 报表导出 / 审计链 | 00:35 重新请求 | `export.xlsx` 仍 500；`/audit-logs/verify` 仍 `ok:false, broken_at:1` | ❌ 未修 |
+
+**告警修复的关键细节**：第一次修复 `76ef5f1` 的 `_touch_open()` 用 `AlarmRecord.status != "resolved"` 过滤，但 `alarm_record` 表里根本没有 `status` 列（只有 `acked_at/handled_at/closed_at/resolved_at`），SQL 报错被 `except` 吞掉、永远返回 False，所以第一次“修复”实际无效（00:23–00:25 仍 168→170）。第二次提交 `7d8fc74` 改成 `resolved_at.is_(None)` 后，90 秒复测才真正停在 174。这个教训值得写进回归用例：**修复必须用运行态计数验证，不能只看代码 diff**。
+
+**存量**：修复只阻止新增，修复前已产生的 171 条未关闭告警、142 张工单（其中 140 张待派单）仍在库里；工单页和消息中心仍会被这批历史数据淹没，需要一次性合并/关闭（业务确认后执行）。
+
 
 ---
 
@@ -31,8 +51,8 @@
    - 建议验收结束后停用/删除这三个账号。相关审计见 `/oplog` 第 10–12 行（新建）与登录记录。
 2. **误触发过一次写操作**：通用按钮遍历脚本把任务模板行的「复制」当成只读按钮点击，创建了 3 条副本（`id=7/8/9`，名称 `演练-172401 副本 ...`）。发现后**只删除了这 3 条自己产生的副本**，模板总数恢复为 6（`task_templates = [1,2,3,4,5,6]`）。除此之外没有删除任何数据。
 3. 未修改 `admin` 密码，未修改任何既有账号的角色/状态。
-4. 测试期间后端共被外部重启至少 4 次（非本会话执行）；并发测试后 `/health` 曾持续不可达 >90 秒，随后由外部恢复。重启时间点与证据见 §3。
-5. 数据在测试期间持续增长：23:25 时 124 条告警 / 99 张工单，00:18 时 160 条告警 / 130 张工单。下文所有数字均标注采样时间，不要拿不同时间的数字直接对比。
+4. 测试期间后端共被外部重启至少 6 次（非本会话执行）；并发测试后 `/health` 曾持续不可达 >90 秒，随后由外部恢复；修复后（PID 254872）未再出现。重启时间点与证据见 §4。
+5. 数据在测试期间持续增长：23:25 时 124 条告警 / 99 张工单，00:18 时 160 条 / 130 张；修复后停在 **174 条告警（171 未关闭）/ 142 张工单（140 待派单）**。下文所有数字均标注采样时间，不要拿不同时间的数字直接对比。
 
 ---
 
@@ -88,7 +108,7 @@
 | **摄像头** `/cameras` | 分组/名称筛选、`查询`、`重置`、`刷新`、`新增视频源`、行 `大屏显示/▶/✎/⚡/⇄/⏸/🗑` | 新增弹窗（含 go2rtc 流名下拉）；`✎` 打开编辑弹窗（密码显示 `***`，有「一键注册到 go2rtc」）；`⚡/⇄/⏸/🗑` 未点（测试/写） | ✅/⛔ |
 | **环境传感器** `/env-device` | `刷新`、`新增传感器`、行 `＋/✎/🗑` | 新增/编辑弹窗字段完整（阈值留空=未标定）；当前 1 台已标定 5/10 | ✅/⛔ |
 | **采集网关** `/sensor-gateways` | `新增网关`、行 `测试/🗑` | 新增弹窗（Modbus TCP/MQTT、寄存器、系数、周期）；当前 1 台「泵房气体报警器」运行状态 **异常** | ✅/⛔ |
-| **录像计划** `/record/plan` | `开始录制`、`停止`、`去回放`、`新增计划` | `新增计划` 打开弹窗，但浏览器控制台报 3 次 `Failed to resolve component: DarkSelect`（组件未注册，摄像头下拉是坏的）；`开始录制/停止` 未点（写） | ❌ 弹窗有缺陷 |
+| **录像计划** `/record/plan` | `开始录制`、`停止`、`去回放`、`新增计划` | 初测 `新增计划` 弹窗报 3 次 `Failed to resolve component: DarkSelect`（组件未导入，摄像头下拉坏）；**修复后复测无警告，`.dasel` 正常渲染并列出「充电房-可见光」**。`开始录制/停止` 未点（写） | ✅ 已修复 |
 | **录像回放** `/record/playback` | 摄像头下拉、日期、`查询`、`重置`、`去录像计划`、行 `▶/⤓/🗑` | `▶` 真实播放：请求 `/recordings/file...` 返回 **206 Partial Content**，toast「播放 1_20261022_154655.mp4」；列表 5 段与 `/recordings` 一致；`⤓` 元素匹配不到（可能不是 button），未验证下载；`🗑` 未点 | ✅ 播放 / ⛔ 下载 |
 
 ### 2.6 系统管理
@@ -145,7 +165,7 @@
 - 机器人状态的「接口健康」调 `/health/deep`（全局单例），不是 `/robots/{id}/status`。[RobotStatus.vue:49](web/src/pages/RobotStatus.vue#L49)
 - 切换只在 Pinia 内存中生效，刷新即回默认值 1。[stores/robot.ts](web/src/stores/robot.ts)
 
-**截图**：[robot_status_after_switch_spa.png](docs/reviews/qa-evidence/robot_status_after_switch_spa.png)（离线 + 接口健康仍“链路在线 是”）、[map_device3.png](docs/reviews/qa-evidence/map_device3.png)（3 号机仍显示 map1）。
+**截图**：[robot_status_after_switch_spa.png](docs/reviews/qa-evidence/robot_status_after_switch_spa.png)（离线 + 接口健康仍“链路在线 是”）、[map_device3.png](docs/reviews/qa-evidence/map_device3.png)（3 号机仍显示 map1）。00:34 在修复后的 HEAD `7d8fc74` 上复测仍复现：`当前设备=全部`、接口健康 `链路在线 是 / 0.9s / 0 失败 / 累计轮询 312`、地图 `map1/6 点`，见 [fixcheck_robot_status_device3.png](docs/reviews/qa-evidence/fixcheck_robot_status_device3.png)、[fixcheck_map_device3.png](docs/reviews/qa-evidence/fixcheck_map_device3.png)。整页刷新后回到 `JCROB-01`（00:38 实测）。
 
 ### 3.3 告警处置后的首页 / 工单 / 审计同步
 
@@ -213,27 +233,48 @@
 | 00:07 | `curl -m 15 /health` = **000**，TCP 仍 LISTEN，进程 CPU 持续上升；>90 秒不可达，随后外部重启（PID 变化） |
 | 00:04 | 另一次单独 20 并发 `reports/summary`：20/20 成功，p50 30–51ms |
 
-**结论**：不是“某个接口稳定地慢”，而是 **20 个重查询并发 + 前序请求会非确定性地把整个进程拖死，连不查库的 `/health` 都不可达**。这比单个接口 500 更严重：现场 20 个浏览器同时打开报表/运行数据就可能触发。工作树里已经有人在加 `_SUMMARY_LOCK`/缓存/预热（未提交），但截至本报告未经过并发回归，不能算已修复。
+**结论（修复前）**：不是“某个接口稳定地慢”，而是 **20 个重查询并发 + 前序请求会非确定性地把整个进程拖死，连不查库的 `/health` 都不可达**。这比单个接口 500 更严重：现场 20 个浏览器同时打开报表/运行数据就可能触发。
 
-### 4.2 连续 100 次轮询
+### 4.2 修复后复测（00:30–00:32，HEAD `7d8fc74`，PID 254872）
 
-健康状态下（00:12，前序负载已恢复）：
+复测脚本：[report_conc3.py](scripts/qa_state_sync/report_conc3.py)。每轮前等 16s 让 15s 缓存过期，模拟冷查询；20 并发 `reports/summary`，同时每 100ms 探 `/health`：
+
+```
+ROUND1 n=20 p50=208.4 p95=210.7 max=212.6 codes={200: 20}
+ROUND2 n=20 p50=250.9 p95=258.4 max=260.3 codes={200: 20}
+ROUND3 n=20 p50=154.9 p95=159.7 max=161.5 codes={200: 20}
+health n=419 codes={200: 419} p95=28.7ms max=80.6ms
+```
+
+- 三轮 60 个请求全部 200，没有 429（单飞锁命中旧缓存/排队 1s 内返回），也没有再出现 `/health` 超时。
+- 与修复前那次“20/20 全部 25–30s 超时 + `/health` 000”形成对照，**并发拖死整站的问题在本轮修复后未复现**。
+- 仍需保留一条并发回归门禁（20/50 并发 + `/health` 探测），防止后续改动退化。
+
+### 4.3 连续 100 次轮询
+
+修复后（00:34，PID 254872）：
 
 ```
 /robots/1/status × 100（间隔 200ms）
-n=100  p50=17.2ms  p95=30.4ms  p99=31.8ms  max=35.3ms  codes={200:100}
+n=100  p50=17.4ms  p95=33.9ms  max=42.9ms  codes={200:100}
 >200ms 的尖刺：0
 ```
 
-`/alarms × 100`（间隔 200ms）：
+修复前（00:12，前序负载已恢复）的同类采样：
+
+```
+n=100  p50=17.2ms  p95=30.4ms  p99=31.8ms  max=35.3ms  codes={200:100}
+```
+
+`/alarms × 100`（间隔 200ms，修复前）：
 
 ```
 n=100  p50=27.3ms  p95=40.5ms  max=51.1ms  codes={200:100}
 ```
 
-**5xx 数 = 0**。唯一一次“100 次里 2 次超时”的采样发生在 20 并发把后端拖死之后，不是常态轮询的问题；但这也说明“一个坏请求能把所有轮询一起拖下水”，需要熔断/隔离。
+**5xx 数 = 0**。唯一一次“100 次里 2 次超时”的采样发生在 20 并发把后端拖死之后，不是常态轮询的问题；修复后 100 次轮询无任何超 200ms 的尖刺。
 
-### 4.3 单请求基线
+### 4.4 单请求基线
 
 - `/reports/summary` 单请求：22–166 ms（冷/热差异）。
 - `/reports/export.xlsx` 单请求：**500**（见 §5）。
@@ -277,25 +318,24 @@ POST /api/v1/users  {"username":"qa_auditor_2342","password":"QaPass2026!","role
 403 返回体示例：`{"code":"FORBIDDEN","message":"需要角色 admin/operator"}`。
 **后端权限矩阵基本正确**：auditor 只能看审计，viewer/operator 拿不到用户/密钥/审计；operator 可以确认告警（404 证明角色校验已过）。admin 的读接口均实测 200；写接口除 `POST /users`（建 3 个测试号）外均未提交，不写成“推断 200”。
 
-### 5.3 菜单可见性（实测）
+### 5.3 菜单可见性与路由守卫（修复后复测）
 
-同一套菜单，三种角色：
+同一套菜单，三种角色（HEAD `7d8fc74`，00:33 实测）：
 
 | 菜单/页面 | viewer | operator | auditor |
 |---|---|---|---|
-| 用户管理 `/users` | **显示**（点进去是“只有管理员可以管理账号”） | **显示**（同左） | **显示**（同左） |
-| 系统设置 `/settings` | **显示**（输入框可编辑；保存 disabled） | **显示**（输入框可编辑；改任一项后保存启用） | **显示**（输入框可编辑；保存 disabled） |
-| 系统日志 `/oplog` | 菜单隐藏；直接访问显示 **空表“共 0 条”** | 菜单隐藏；直接访问空表 | 菜单显示；277 条正常 |
-| 接口密钥 `/keys` | 菜单隐藏；直接访问文案 403 | 同左 | 同左 |
+| 用户管理 `/users` | **菜单无**；直访 302→`/robot-status?denied=1` | **菜单无**；直访被拦 | **菜单无**；直访被拦 |
+| 系统设置 `/settings` | **菜单无**；直访被拦 | **菜单无**；直访被拦 | **菜单无**；直访被拦 |
+| 告警通知 `/notify` | **菜单无**；直访被拦 | **菜单无**；直访被拦 | **菜单无**；直访被拦 |
+| 系统日志 `/oplog` | **菜单无**；直访被拦 | **菜单无**；直访被拦 | **菜单有「系统日志」**；`/oplog` 正常 200 |
+| 接口密钥 `/keys` | **菜单无**；直访被拦 | **菜单无**；直访被拦 | **菜单无**；直访被拦 |
+| 系统管理（顶级 tab） | 不显示（子项全空，整组隐藏） | 不显示 | 显示，下拉只剩「系统日志」 |
 | 设备/告警/任务等 | 全部显示 | 全部显示 | 全部显示 |
 
-**问题**：
-1. `nav.ts` 只给 `oplog`、`api-keys` 配了 `roles`，`users`、`settings` 没配，所以 viewer/operator/auditor 都能看到入口（[nav.ts:84](web/src/config/nav.ts#L84)）。虽然后端 403，但“能点进去”本身违反三权分立的 UI 预期。
-2. operator 的 `auth.canWrite = admin/safety/operator` 为 true；设置页输入框没有任何角色禁用，operator 改任一项后保存按钮即启用，但 `PUT /settings` 只允许 `admin/sysadmin/secadmin/safety` → **按钮能点，提交必 403**。另外 `Settings.vue:51` 定义了按 key 限制的 `canEditKey()`，但全文没有任何地方调用它，属于死代码（[Settings.vue:124](web/src/pages/Settings.vue#L124)）。
-3. viewer/operator 直接访问 `/oplog` 时，页面捕获 403 后渲染成空表「共 0 条」，而不是“无权限”。这会让人误以为系统没有日志，而不是被拒绝。对比 `/keys` 会把「需要角色 admin/sysadmin」显示出来，两页错误处理不一致。
-4. `users` 页本身的降级文案是好的（“只有管理员可以管理账号。当前账号角色：只读/操作员/审计管理员”）。
-
-截图：[perm_viewer_menu.png](docs/reviews/qa-evidence/perm_viewer_menu.png)（系统管理下拉里仍有用户管理/系统设置）、[perm_viewer_users.png](docs/reviews/qa-evidence/perm_viewer_users.png)、[perm_operator_settings.png](docs/reviews/qa-evidence/perm_operator_settings.png)（表单可编辑+保存可用）、[perm_auditor_oplog.png](docs/reviews/qa-evidence/perm_auditor_oplog.png)。
+- 受限 URL 被 `meta.roles` 守卫统一重定向到 `/robot-status?denied=1`，不再渲染设置表单或空日志表。✅
+- 初测的“viewer 能看到用户管理/系统设置、operator 保存必 403、viewer oplog 空表”在修复后均不再可达；**保留一句历史记录**，说明是路由守卫而不是后端权限变化解决的。
+- 截图：[perm3_qa_viewer_2342.png](docs/reviews/qa-evidence/perm3_qa_viewer_2342.png)（viewer 顶部已无“系统管理”）、[perm3_qa_operator_2342.png](docs/reviews/qa-evidence/perm3_qa_operator_2342.png)、[perm3_qa_auditor_2342.png](docs/reviews/qa-evidence/perm3_qa_auditor_2342.png)（auditor 仍有“系统管理”，下拉仅系统日志）。
+- 仍需注意：前端守卫只影响 UI，后端 403 才是边界；本次接口矩阵（§5.2）仍然成立。
 
 ---
 
@@ -303,14 +343,15 @@ POST /api/v1/users  {"username":"qa_auditor_2342","password":"QaPass2026!","role
 
 ### 6.1 必须修（P0/P1，带证据）
 
-1. **告警/工单风暴（P0）**
-   - 证据：00:18 `/alarms` 160 条（同源的 141 条采样中 137 条未确认，其余时刻相近）、`/work-orders` 130 条（绝大多数待派单，测试中仅见 2 张已关闭）；47 分钟新增 36 条告警、31 张工单，几乎全部来自同一台离线设备（robot_id=3）。截图 [work-orders.png](docs/reviews/qa-evidence/work-orders.png) 一屏 110 张「紧急 / 待派单」，标题重复「机器人通信中断（5 分钟内第 81/61/41/21 次）」。
-   - 根因：`AlarmStore._check` 的 dedupe 窗口只有 60s；超出窗口后同指标继续新增；`work_orders.ensure_from_alarm()` 对**每一条严重告警**建一张工单（[work_orders.py:19](server/app/services/work_orders.py#L19)）。
-   - 影响：工单队列不可用、消息中心 248 条、SQLite 持续写入、报表/首页被拖慢；值班员会直接忽略告警。
-   - 修复方向：同 `(robot_id, metric)` 只保留一条“活动告警”，后续只更新 `last_seen/count/level`；告警恢复时自动 resolved；一张告警最多一张工单；对已有 130 张重复工单做一次性合并/关闭（需业务确认）。工作树已有 `_touch_open` 尝试（未提交、未验证）。
+1. **存量告警/工单积压（P0，数据清理）**
+   - 修复后（00:33）实测：`/alarms` **174 条（171 条未关闭）**、`/work-orders` **142 张（140 张待派单、2 张已销号）**。这些是修复前（23:31 起至 00:28）由同一台离线设备（robot_id=3）产生的重复数据。
+   - 证据：[alarm_watch2.log](scripts/qa_state_sync/alarm_watch2.log)（174→174→174→174、142→142→142→142）说明**新数据已停止增长**；[work-orders.png](docs/reviews/qa-evidence/work-orders.png) 一屏 110 张「紧急 / 待派单」，标题重复「机器人通信中断（5 分钟内第 81/61/41/21 次）」。
+   - 影响：新告警已不增长，但工单队列仍然被 140 张历史重复单淹没，值班员无法使用；消息中心也被这批历史消息占满。
+   - 处理：修复只阻止新增，**存量需要一次性合并/关闭**（业务确认哪些是同一事件）；同时对 `alarm_record` / `work_order` 做一次重复检测 SQL。不要直接删，建议保留 1 条主记录 + 关闭其余并写清结论。
+   - 备注：第一次修复 `76ef5f1` 无效，因为 `_touch_open()` 过滤了不存在的 `AlarmRecord.status` 列；`7d8fc74` 改为 `resolved_at.is_(None)` 后 90 秒复测才停止增长。这条应加入回归用例。
 
 2. **报表导出 Excel 必 500（P0）**
-   - 证据：
+   - 证据（00:35 复测仍失败）：
      ```bash
      curl -b cookies -o /tmp/x.xlsx -w "%{http_code} %{size_download}" \
        http://127.0.0.1:8000/api/v1/reports/export.xlsx
@@ -324,13 +365,8 @@ POST /api/v1/users  {"username":"qa_auditor_2342","password":"QaPass2026!","role
      `summary()` 的形参已改成 `user`，导出仍用 `summary(..., _=_)`。[reports.py:325](server/app/api/v1/reports.py#L325)
    - 影响：报表页「导出 Excel」按钮 100% 失败（`打印 / PDF` 是另一条路，未验证）。
 
-3. **20 并发重查询可拖死整站（P0）**
-   - 证据：§4；`/health` 返回 000 持续 >90s，需外部重启；一次 20 并发 `reports/summary` 全 25–30s 超时，另一次全 200（46ms）→ 非确定性。
-   - 影响：20 个调度员同时打开报表/运行数据即可让全站 API（含状态轮询、登录）不可用。
-   - 修复方向：除已有的缓存/单飞锁外，给重查询加独立线程池/超时/熔断；`/health` 绝不能依赖 DB/线程池；用 20/50 并发做回归门禁。
-
-4. **审计链校验失败（P1，合规）**
-   - 证据：
+3. **审计链校验失败（P1，合规）**
+   - 证据（00:35 复测仍失败）：
      ```bash
      curl -b cookies http://127.0.0.1:8000/api/v1/audit-logs/verify
      # {"ok":false,"broken_at":1,"reason":"row_hash 对不上（内容被改）","checked":1}
@@ -339,32 +375,23 @@ POST /api/v1/users  {"username":"qa_auditor_2342","password":"QaPass2026!","role
    - 影响：`/oplog` 页面没有“自检”按钮，但一旦监管/验收调 `/audit-logs/verify` 就报“内容被改”，整个审计不可信。
    - 修复方向：把 1–128 标为 legacy（与无哈希老记录同策略），或按旧算法重算并锚定；上线前跑一次全链校验。
 
-5. **切换设备后状态串台（P0，安全相关）**
-   - 证据：§3.2；3 号机已显示“离线/通信中断”，但「接口健康」仍显示“链路在线 是 / 数据年龄 0.6s / 连续失败 0”；地图仍是 1 号机 map1；「当前设备」显示“全部”。截图 [robot_status_after_switch_spa.png](docs/reviews/qa-evidence/robot_status_after_switch_spa.png)。
-   - 影响：操作员可能把 1 号机的健康状态当成 3 号机的，或在错误设备上下文里看地图/点位。
+4. **切换设备后状态串台（P0，安全相关，已知未修）**
+   - 证据（00:34 复测）：3 号机已显示“离线 / 通信中断 / 电量 —”，但机器人状态页「接口健康」仍显示 1 号机「链路在线 是 / 数据年龄 0.9s / 连续失败 0 / 累计轮询 312」；地图仍是 1 号机 `map1` + 6 个点位；首页「当前设备」显示“全部”。截图 [fixcheck_robot_status_device3.png](docs/reviews/qa-evidence/fixcheck_robot_status_device3.png)、[fixcheck_map_device3.png](docs/reviews/qa-evidence/fixcheck_map_device3.png)。
+   - 影响：操作员可能把 1 号机的健康状态当成 3 号机的，或在错误设备上下文里看地图/点位；这是安全相关。
    - 修复：`/health/deep` 按设备返回或明确标注“平台级”；地图按 `robot.deviceId` 取图；设备下拉选项不要被场站过滤；设备选择写入 URL/query 或 localStorage。
 
-6. **菜单把 14 个已交付页面标成「未接入」（P1，验收口径）**
-   - 证据：菜单截图里「环境监测 / 任务模板 / 任务执行 / 人工巡检 / 运行数据 / 巡检报表 / 环境传感器 / 采集网关 / 录像计划 / 录像回放 / 告警通知 / AI 识别结果」都带「未接入」，`/oplog`、`/keys` 也同样；但本次实测这些页面全部有真实数据、真实接口（报表 141 条、运行数据 10527 点、模板 6 条……）。`nav.ts` 里只有 15 个条目标了 `real: true`，其余已实现条目不写（`task-calendar` 是唯一真正未接入的占位页）。[nav.ts:33](web/src/config/nav.ts#L33)
+5. **菜单把 14 个已交付页面标成「未接入」（P1，验收口径）**
+   - 证据（00:33 菜单）：管理员系统管理下拉仍是 `用户管理 / 系统设置 / 告警通知 未接入 / 系统日志 未接入 / 接口密钥 未接入`；业务菜单里「环境监测 / 任务模板 / 任务执行 / 人工巡检 / 运行数据 / 巡检报表 / 环境传感器 / 采集网关 / 录像计划 / 录像回放 / 告警通知 / AI 识别结果」也都带「未接入」。但本次实测这些页面全部有真实数据、真实接口（报表 148 条、运行数据 10527 点、模板 6 条……）。`nav.ts` 里只有 15 个条目标了 `real: true`，其余已实现条目不写（`task-calendar` 是唯一真正未接入的占位页）。[nav.ts:33](web/src/config/nav.ts#L33)
    - 影响：验收方会认为这些功能没做；与“已交付”事实冲突。
    - 修复：按实际状态补 `real: true`；只有「任务日历」保留未接入说明页。
 
-7. **录像计划的 `DarkSelect` 未注册（P1）**
-   - 证据：`/record/plan` 控制台 3 次 `[Vue warn]: Failed to resolve component: DarkSelect`；源码用了 `<DarkSelect>` 但没有 import（[RecordPlan.vue:235](web/src/pages/RecordPlan.vue#L235)）；「新增计划」弹窗的摄像头下拉因此是原生未知元素。
-   - 影响：新增录制计划无法可靠选摄像头（无法真正完成计划创建）。
+**本轮已修复并复测通过（不再列入必须修）**：
 
-8. **权限 UI 与后端 403 不一致（P1）**
-   - 证据：§5.3；operator 设置页改任一项后「保存配置」即启用，但 `PUT /settings` 403；viewer/operator 能看到用户管理/系统设置菜单；viewer 直接访问 `/oplog` 显示“共 0 条”而非 403。
-   - 影响：用户会反复点一个必然失败的按钮，或误以为无数据；三权分立的“不可见”没有做到。
-   - 修复：菜单按角色隐藏 users/settings；operator 的 `canWrite` 与 settings 允许角色对齐（要么放开 operator，要么禁用保存）；oplog 403 显示明确无权限态。
+- 新告警/工单风暴：90 秒 174→174、142→142；id 175 的 `started_at` 固定、message 计数原地更新（41→61→81）。
+- 20 并发 `reports/summary`：3 轮 60/60 200，419 次 `/health` 全 200；初测的整站卡死未复现。
+- viewer/operator/auditor 菜单越权与受限 URL：全部按角色拦截，空菜单组隐藏。
+- 录像计划 `DarkSelect`：无警告，弹窗下拉正常。
 
-9. **部署/升级缺列导致报表 500（P1，环境）**
-   - 证据：23:35 首次 `GET /reports/summary` 返回 500；进程内 traceback：
-     ```
-     sqlite3.OperationalError: no such column: point_draft.arrive_radius_m
-     ```
-     23:41 后端被重启后，DB `point_draft` 出现 `arrive_radius_m` 列，接口恢复 200。说明已有库升级时没有跑迁移，靠重启 `create_all/补列` 才修好。
-   - 影响：滚动升级/未重启的实例会持续 500；应在启动时做 schema 检查并在健康检查里暴露。
 
 ### 6.2 建议修（P2）
 
@@ -376,8 +403,9 @@ POST /api/v1/users  {"username":"qa_auditor_2342","password":"QaPass2026!","role
 6. **回放列表出现已删除摄像头 `#2`**：录像 5 段中第 5 段显示 `#2`，但 `/videos` 只有 1 路；应显示“摄像头已删除”或隐藏。
 7. **告警处置不产生/不回填工单**：`#28` 处置关闭后没有 `source_id=28` 的工单；告警与工单是两条独立链路。若方案承诺“告警→工单闭环”，需补自动建单或处置时选择关联工单。
 8. **手机端已完成任务仍显示可提交**：`/m/task/1` 已 2/2 完成，但「完成本次巡检（2/2）」按钮仍可用（只读未点，疑似可重复 finish）。建议按任务状态禁用。
-9. **操作日志无自检入口、无导出**：`/oplog` 只有查询/分页；`/audit-logs/verify` 只能手工调。建议页面上加“链自检”和导出，配合 §6.1-4 使用。
+9. **操作日志无自检入口、无导出**：`/oplog` 只有查询/分页；`/audit-logs/verify` 只能手工调。建议页面上加“链自检”和导出，配合 §6.1-3 使用。
 10. **设备台账 `⇄` 按钮无反应**：点击后无 UI 变化、无 API 调用（实测），疑似死按钮；要么实现“启用/停用/测试连接”，要么移除。
+11. **部署/升级缺列导致报表 500（已恢复但会复发）**：23:35 首次 `GET /reports/summary` 返回 500，进程内 traceback 为 `sqlite3.OperationalError: no such column: point_draft.arrive_radius_m`；23:41 后端重启补列后恢复 200。说明已有库升级时没有在启动阶段强制迁移/校验，滚动升级或未重启实例会持续 500。建议启动时做 schema 检查并在 `/health/deep` 暴露缺失列。
 
 ### 6.3 可忽略（P3）
 
@@ -401,12 +429,12 @@ POST /api/v1/users  {"username":"qa_auditor_2342","password":"QaPass2026!","role
 - 录像开始/停止；录像下载 `⤓`；打印/PDF 产物；地图导入上传；导出 Excel 修复后的结果。
 - 工单“派单后手机页立即可见”的端到端写入链路（没有开放的已派单工单）。
 - 通知通道“测试”实际投递（会发外部消息）。
-- 修改设备选择后的整页刷新保持（当前实现无持久化，已按代码判断）。
+- 导出 Excel 修复后的结果（当前仍 500，未进入“修复后”状态）。
 
 另有两点环境限制：
 
-- 测试期间后端被外部重启多次，个别时刻的 500/超时可能是重启窗口叠加；已在 §4 标注可复现与不可复现的采样。
-- 工作树有未提交修改（reports 缓存/锁、alarms `_touch_open`、main 预热），本报告不能代表这些修改合并后的最终行为。
+- 初测期间后端被外部重启多次，个别时刻的 500/超时可能是重启窗口叠加；已在 §4 标注“修复前/修复后”的采样。
+- 修复已在 `7d8fc74` 提交；本报告把 `ef31e96`（初测）与 `7d8fc74`（复测）分开记录，涉及数字均带时间点。
 
 ---
 
@@ -437,8 +465,12 @@ curl -s -b cookies http://127.0.0.1:8000/api/v1/audit-logs/verify
 curl -s -b cookies 'http://127.0.0.1:8000/api/v1/alarms?limit=1' | jq '.total'
 curl -s -b cookies 'http://127.0.0.1:8000/api/v1/work-orders?limit=1' | jq '.total'
 
-# 6) 并发/轮询
+# 6) 并发/轮询（修复前基线）
 python scripts/qa_state_sync/load_probe.py
+
+# 7) 修复后复测
+python scripts/qa_state_sync/alarm_watch2.py    # 90s 告警/工单是否停增
+python scripts/qa_state_sync/report_conc3.py    # 3 轮 20 并发 summary + /health
 ```
 
 ### 8.2 脚本与原始结果
@@ -448,31 +480,35 @@ python scripts/qa_state_sync/load_probe.py
 | [recon.py](scripts/qa_state_sync/recon.py) | 34 个路由逐页截图 + 按钮/控制台/HTTP 错误采集 |
 | [recon.json](scripts/qa_state_sync/recon.json) | 34 页快照（按钮、文本、console、HTTP 4xx/5xx） |
 | [click_audit2.py](scripts/qa_state_sync/click_audit2.py) / [click_audit.json](scripts/qa_state_sync/click_audit.json) | 通用按钮点击（前 13 页；后续因误触写入被中止） |
-| [click_targeted.py](scripts/qa_state_sync/click_targeted.py) / [click_targeted.json](scripts/qa_state_sync/click_targeted.json) | 定向只读点击（设备/摄像头/传感器/网关/录像计划/用户/告警弹窗） |
+| [click_targeted.py](scripts/qa_state_sync/click_targeted.py) / [click_targeted.log](scripts/qa_state_sync/click_targeted.log) | 定向只读点击（设备/摄像头/传感器/网关/录像计划/用户/告警弹窗） |
 | [click_targeted2.py](scripts/qa_state_sync/click_targeted2.py) / [click_targeted2.json](scripts/qa_state_sync/click_targeted2.json) | 告警处置/关闭弹窗、报表统计、派给下拉、地图导入弹窗 |
-| [load_probe.py](scripts/qa_state_sync/load_probe.py) / [load_probe.log](scripts/qa_state_sync/load_probe.log) | 20 并发 + 100 轮询 |
+| [load_probe.py](scripts/qa_state_sync/load_probe.py) / [load_probe.log](scripts/qa_state_sync/load_probe.log) | 20 并发 + 100 轮询（修复前） |
+| [report_conc3.py](scripts/qa_state_sync/report_conc3.py) / [report_conc3.log](scripts/qa_state_sync/report_conc3.log) | 修复后 3 轮 20 并发 summary + `/health` 探测 |
+| [alarm_watch2.py](scripts/qa_state_sync/alarm_watch2.py) / [alarm_watch2.log](scripts/qa_state_sync/alarm_watch2.log) | 修复后 90 秒告警/工单增长监控 |
+| [permission_ui3.json](scripts/qa_state_sync/permission_ui3.json) | 修复后三角色菜单/直访结果 |
 | [permission_api.json](scripts/qa_state_sync/permission_api.json) | viewer/operator/auditor 接口矩阵 |
 | [accounts.json](scripts/qa_state_sync/accounts.json) | 三个 QA 账号 id |
-| [docs/reviews/qa-evidence/](docs/reviews/qa-evidence/) | 55 张页面/弹窗截图 + 1 个导出 500 响应样本 |
+| [docs/reviews/qa-evidence/](docs/reviews/qa-evidence/) | 66 张页面/弹窗截图 + 1 个导出 500 响应样本 |
 
 ### 8.3 重点截图
 
 - [首页（8 秒后统计已对齐）](docs/reviews/qa-evidence/dash_loaded.png)
 - [工单风暴：110 张紧急待派单](docs/reviews/qa-evidence/work-orders.png)
-- [切换 3 号机后：离线，但接口健康仍显示 1 号机在线](docs/reviews/qa-evidence/robot_status_after_switch_spa.png)
-- [切换 3 号机后：地图仍是 map1](docs/reviews/qa-evidence/map_device3.png)
-- [viewer 菜单仍显示用户管理/系统设置](docs/reviews/qa-evidence/perm_viewer_menu.png)
-- [operator 设置页：表单可编辑、保存可用（后端 403）](docs/reviews/qa-evidence/perm_operator_settings.png)
-- [录像计划新增弹窗（DarkSelect 未注册）](docs/reviews/qa-evidence/modal_record_plan.png)
+- [切换 3 号机后：离线，但接口健康仍显示 1 号机在线（修复后复测）](docs/reviews/qa-evidence/fixcheck_robot_status_device3.png)
+- [切换 3 号机后：地图仍是 map1（修复后复测）](docs/reviews/qa-evidence/fixcheck_map_device3.png)
+- [viewer 菜单（初测，仍显示用户管理/系统设置）](docs/reviews/qa-evidence/perm_viewer_menu.png)
+- [修复后 viewer 顶部菜单已无“系统管理”](docs/reviews/qa-evidence/perm3_qa_viewer_2342.png)
+- [修复后录像计划新增弹窗（下拉正常）](docs/reviews/qa-evidence/record_plan_modal_fixed.png)
 - [手机工单 #1：与 API 一致](docs/reviews/qa-evidence/m_wo_1.png)
 
 ---
 
 ## 9. 最终判定
 
-- **按钮逐一点击**：只读按钮（查询/重置/刷新/详情/分页/导出 CSV/播放/弹窗打开）大部分能真实工作；写按钮按约束只验证到弹窗，未提交。真正“点了完不成”的明确项是 **报表导出 Excel（500）** 和 **录像计划新增弹窗（组件未注册）**；其余写按钮是“被设计锁定/需要授权”，不是坏。
-- **状态同步**：机器人 1 的电量/在线/状态、告警数量、用户/点位/模板/录像数量、阈值在当前时刻一致；**切换设备后地图/接口健康/设备下拉三项串台**，是最高优先级的状态同步缺陷。
-- **并发**：正常轮询 p50 17ms、100 次 0 个 5xx；但 20 并发重查询存在把全站（含 `/health`）拖死的非确定性故障，必须在上线前做并发回归。
-- **权限**：后端 403 矩阵基本正确；前端菜单/按钮与后端允许角色不一致，operator 的“保存配置”是典型的必然 403 的按钮。
+- **按钮逐一点击**：只读按钮（查询/重置/刷新/详情/分页/导出 CSV/播放/弹窗打开）大部分能真实工作；写按钮按约束只验证到弹窗，未提交。修复后 `录像计划` 弹窗已正常；仍“点了完不成”的明确项是 **报表导出 Excel（500）**，其余写按钮是“被设计锁定/需要授权”，不是坏。
+- **状态同步**：机器人 1 的电量/在线/状态、告警数量、用户/点位/模板/录像数量、阈值在当前时刻一致；**切换设备后地图/接口健康/设备下拉三项串台**仍未修，是当前最高优先级的状态同步缺陷。
+- **并发**：修复后 20 并发 summary 三轮 60/60 200，419 次 `/health` 全 200；100 次状态轮询 p50 17.4ms、0 个 5xx、0 个 >200ms 尖刺。修复前“20 并发拖死整站”未再复现，但建议把该场景固化为回归门禁。
+- **权限**：后端 403 矩阵正确；修复后前端菜单与路由守卫已按角色拦截（viewer/operator/auditor 看不到用户/设置/通知/日志/密钥，auditor 仅系统日志），直访受限 URL 统一跳 `/robot-status?denied=1`。
+- **告警风暴**：新数据已停（90 秒 0 增长），但修复前产生的 **174 条告警 / 142 张工单（140 待派单）** 仍需一次性清理，否则工单队列依旧不可用。
 
 > 本报告只记录实际执行过的命令/截图/接口返回。未执行写操作的部分已统一列在 §7，未用“应该可以”替代实测。
