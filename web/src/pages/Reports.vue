@@ -22,6 +22,7 @@ interface Summary {
   points?: { total: number; by_group: { group: string; points: number; maps: number }[]; covered_by_templates: number; uncovered: number }
   templates?: { total: number; actions: number; maps: number }
   alarms_by_robot?: { robot_id: number; count: number }[]
+  inspection_performance?: { user_id: number; username: string; tasks: number; done: number; overdue: number; items: number; abnormal: number; orders: number; closed: number; done_rate: number | null }[]
   operations: {
     samples: number
     online_ratio: number | null
@@ -197,6 +198,35 @@ onMounted(() => applyPreset('7d'))
                 </tr>
               </tbody>
             </table>
+          </div>
+
+          <div class="block wide">
+            <div class="block-title">人工巡检考核（按人）</div>
+            <table class="grid">
+              <thead>
+                <tr><th>人员</th><th style="width: 80px">任务</th><th style="width: 80px">完成</th>
+                  <th style="width: 80px">超期</th><th style="width: 90px">完成率</th>
+                  <th style="width: 80px">打点</th><th style="width: 80px">异常</th>
+                  <th style="width: 80px">工单</th><th style="width: 80px">销号</th></tr>
+              </thead>
+              <tbody>
+                <tr v-for="p in data.inspection_performance ?? []" :key="p.user_id">
+                  <td>{{ p.username }}</td>
+                  <td class="num">{{ p.tasks }}</td>
+                  <td class="num">{{ p.done }}</td>
+                  <td class="num" :class="p.overdue ? 'warn' : ''">{{ p.overdue }}</td>
+                  <td class="num">{{ p.done_rate === null ? '—' : p.done_rate + '%' }}</td>
+                  <td class="num">{{ p.items }}</td>
+                  <td class="num" :class="p.abnormal ? 'warn' : ''">{{ p.abnormal }}</td>
+                  <td class="num">{{ p.orders }}</td>
+                  <td class="num">{{ p.closed }}</td>
+                </tr>
+                <tr v-if="!data.inspection_performance?.length">
+                  <td colspan="9" class="dim">区间内没有人工巡检任务或工单</td>
+                </tr>
+              </tbody>
+            </table>
+            <p class="muted small">完成率 = 已完成 / 分派任务；超期 = 过了截止时间还没完成</p>
           </div>
 
           <div class="block wide">

@@ -33,6 +33,55 @@ const code = ref('')
 const note = ref('')
 const checksDone = ref<string[]>([])
 const busy = ref(false)
+const photos = ref<string[]>([])
+const uploading = ref(false)
+const scanMsg = ref('')
+
+async function uploadPhoto(ev: Event) {
+  const input = ev.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file || !cur.value) return
+  uploading.value = true
+  try {
+    const res = await api.uploadInspectionPhoto(taskId, cur.value.id, file)
+    photos.value = [...photos.value, res.url]
+    toast('照片已上传', 'ok')
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : '上传失败', 'danger')
+  } finally {
+    uploading.value = false
+    input.value = ''
+  }
+}
+
+async function scanCode() {
+  // 浏览器支持 BarcodeDetector 时直接扫；不支持就提示手输
+  const BD = (window as unknown as { BarcodeDetector?: any }).BarcodeDetector
+  if (!BD) {
+    scanMsg.value = '这台手机/浏览器不支持扫码，请手动输入点位码'
+    return
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+    const video = document.createElement('video')
+    video.srcObject = stream
+    await video.play()
+    const detector = new BD({ formats: ['qr_code'] })
+    const t0 = Date.now()
+    while (Date.now() - t0 < 10000) {
+      const codes = await detector.detect(video)
+      if (codes.length) {
+        code.value = String(codes[0].rawValue || '').trim()
+        scanMsg.value = '已扫码：' + code.value
+        break
+      }
+      await new Promise((r) => setTimeout(r, 300))
+    }
+    stream.getTracks().forEach((t) => t.stop())
+  } catch (e) {
+    scanMsg.value = '扫码失败：' + (e instanceof Error ? e.message : '')
+  }
+}
 
 const done = computed(() => items.value.filter((i) => i.result !== 'pending').length)
 const progress = computed(() =>
@@ -50,6 +99,8 @@ async function load() {
 }
 
 function syncForm() {
+  photos.value = []
+  scanMsg.value = ''
   code.value = ''
   note.value = cur.value?.note ?? ''
   checksDone.value = cur.value?.result === 'pending' ? [] : [...(cur.value?.checks ?? [])]
@@ -69,7 +120,7 @@ async function submit(result: 'ok' | 'abnormal' | 'skipped') {
       code: code.value.trim() || null,
       note: note.value || null,
       checks_done: checksDone.value,
-      photos: [],
+      photos: photos.value,
     })
     toast(result === 'ok' ? '已记录：正常' : result === 'abnormal' ? '已记录：异常' : '已跳过', 'ok')
     await load()
@@ -121,7 +172,20 @@ onMounted(load)
 
       <label class="fld">
         <span>扫码编号{{ cur.code ? `（点位码 ${cur.code}）` : '' }}</span>
-        <input class="input" v-model="code" :placeholder="cur.code ? '扫或输入点位码' : '无码点位可留空'" />
+        <div class="scanrow">
+          <input class="input" v-model="code" :placeholder="cur.code ? '扫或输入点位码' : '无码点位可留空'" />
+          <button class="btn-scan" @click="scanCode">扫码</button>
+        </div>
+        <em v-if="scanMsg" class="scanmsg">{{ scanMsg }}</em>
+      </label>
+
+      <label class="fld">
+        <span>现场照片（可选，最多 6MB）</span>
+        <input type="file" accept="image/*" capture="environment" class="filein" @change="uploadPhoto" />
+        <div v-if="photos.length || cur.photos?.length" class="thumbs">
+          <img v-for="(u, i) in [...(cur.photos ?? []), ...photos]" :key="i" :src="u" alt="现场照片" />
+        </div>
+        <em v-if="uploading" class="scanmsg">上传中…</em>
       </label>
 
       <div v-if="cur.checks.length" class="checks">
@@ -173,6 +237,13 @@ onMounted(load)
 .fld .input { width: 100%; box-sizing: border-box; font-size: 15px; padding: 10px; }
 .checks { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
 .chk { display: flex; align-items: center; gap: 6px; font-size: 14px; }
+.scanrow { display: flex; gap: 8px; }
+.scanrow .input { flex: 1; }
+.btn-scan { padding: 0 16px; border: 1px solid rgba(111,227,255,.5); background: rgba(41,212,255,.18); color: #eaf7ff; border-radius: 6px; font-size: 14px; }
+.scanmsg { display: block; margin-top: 4px; font-size: 12px; color: #9fd2ff; font-style: normal; }
+.filein { width: 100%; font-size: 13px; color: #cfe9ff; }
+.thumbs { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.thumbs img { width: 72px; height: 72px; object-fit: cover; border-radius: 4px; border: 1px solid rgba(111,227,255,.4); }
 .acts { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
 .big { padding: 16px 0; font-size: 16px; font-weight: 600; border: none; border-radius: 6px; color: #04203c; }
 .big.ok { background: linear-gradient(180deg, #8ef0c0, #35d67a); }
