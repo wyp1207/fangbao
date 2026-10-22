@@ -328,6 +328,59 @@ def export_points(map_id: int, db: Session = Depends(get_db),
     )
 
 
+class BulkIn(BaseModel):
+    ids: list[int] = Field(min_length=1, max_length=500)
+    action: str = Field(pattern="^(group|delete|note)$")
+    group: str | None = None
+    note: str | None = None
+
+
+@router.patch("/{map_id}/points/bulk", dependencies=[Depends(require_csrf)])
+def bulk_update_points(
+    map_id: int,
+    body: BulkIn,
+    db: Session = Depends(get_db),
+    me: User = Depends(require_roles("admin", "safety", "operator")),
+) -> dict:
+    """批量改分组 / 改备注 / 删除。
+
+    只动属于这张地图的点位——传了别的地图的 id 直接报错，
+    避免"以为在改 A 图，其实把 B 图的点删了"。
+    """
+    rows = db.query(PointDraft).filter(PointDraft.id.in_(body.ids)).all()
+    found = {r.id for r in rows}
+    missing = [i for i in body.ids if i not in found]
+    if missing:
+        raise BadRequest(f"点位不存在：{missing}", code="NO_POINT")
+    wrong = [r.id for r in rows if r.map_id != map_id]
+    if wrong:
+        raise BadRequest(f"这些点位不属于当前地图：{wrong}", code="POINT_MISMATCH")
+
+    if body.action == "delete":
+        n = db.query(PointDraft).filter(PointDraft.id.in_(body.ids)).delete(synchronize_session=False)
+        db.commit()
+        audit(db=db, action="point.bulk_delete", target=f"map{map_id}", user=me,
+              detail={"count": n})
+        return {"ok": True, "affected": n, "action": "delete"}
+
+    if body.action == "group":
+        if not (body.group or "").strip():
+            raise BadRequest("分组名不能为空", code="EMPTY_GROUP")
+        for r in rows:
+            r.group_name = body.group.strip()
+        db.commit()
+        audit(db=db, action="point.bulk_group", target=f"map{map_id}", user=me,
+              detail={"count": len(rows), "group": body.group})
+        return {"ok": True, "affected": len(rows), "action": "group"}
+
+    for r in rows:
+        r.note = body.note
+    db.commit()
+    audit(db=db, action="point.bulk_note", target=f"map{map_id}", user=me,
+          detail={"count": len(rows)})
+    return {"ok": True, "affected": len(rows), "action": "note"}
+
+
 @router.delete("/points/{point_id}", dependencies=[Depends(require_csrf)])
 def delete_point(point_id: int, db: Session = Depends(get_db),
                  me: User = Depends(require_roles("admin", "operator"))) -> dict:

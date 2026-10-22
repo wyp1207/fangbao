@@ -19,6 +19,9 @@ interface Summary {
     by_resolution: { key: string; label: string; count: number }[]
   }
   environment: { name: string; kind: string; unit: string; count: number; min: number; max: number; over: number; over_rate: number }[]
+  points?: { total: number; by_group: { group: string; points: number; maps: number }[]; covered_by_templates: number; uncovered: number }
+  templates?: { total: number; actions: number; maps: number }
+  alarms_by_robot?: { robot_id: number; count: number }[]
   operations: {
     samples: number
     online_ratio: number | null
@@ -152,6 +155,38 @@ onMounted(() => applyPreset('7d'))
                   <td>{{ r.label }}</td><td class="num">{{ r.count }}</td>
                 </tr>
                 <tr v-if="!data.alarms.by_resolution.length"><td colspan="2" class="dim">还没有关闭的告警</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="block">
+            <div class="block-title">点位分组</div>
+            <table class="grid">
+              <thead><tr><th>分组</th><th style="width: 90px">点位数</th><th style="width: 90px">涉及地图</th></tr></thead>
+              <tbody>
+                <tr v-for="g in data.points?.by_group ?? []" :key="g.group">
+                  <td>{{ g.group }}</td><td class="num">{{ g.points }}</td><td class="num">{{ g.maps }}</td>
+                </tr>
+                <tr v-if="!data.points?.by_group?.length"><td colspan="3" class="dim">还没有点位</td></tr>
+              </tbody>
+            </table>
+            <p class="muted small" v-if="data.points">
+              共 {{ data.points.total }} 个点位，被模板覆盖 {{ data.points.covered_by_templates }} 个，
+              未覆盖 {{ data.points.uncovered }} 个
+            </p>
+          </div>
+
+          <div class="block">
+            <div class="block-title">任务模板 / 告警按设备</div>
+            <table class="grid">
+              <thead><tr><th>项目</th><th style="width: 110px">数值</th></tr></thead>
+              <tbody>
+                <tr><td>模板数量</td><td class="num">{{ data.templates?.total ?? 0 }}</td></tr>
+                <tr><td>动作总数</td><td class="num">{{ data.templates?.actions ?? 0 }}</td></tr>
+                <tr><td>涉及地图</td><td class="num">{{ data.templates?.maps ?? 0 }}</td></tr>
+                <tr v-for="r in data.alarms_by_robot ?? []" :key="r.robot_id">
+                  <td>告警 · 设备 #{{ r.robot_id }}</td><td class="num">{{ r.count }}</td>
+                </tr>
               </tbody>
             </table>
           </div>

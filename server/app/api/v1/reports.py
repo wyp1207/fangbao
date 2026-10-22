@@ -41,6 +41,14 @@ def _range(date_from: str | None, date_to: str | None) -> tuple[datetime, dateti
     return start, end
 
 
+def _safe_actions(t) -> list:
+    import json as _json
+    try:
+        return _json.loads(t.actions_json or "[]")
+    except Exception:  # noqa: BLE001
+        return []
+
+
 def _avg_seconds(values: list[float]) -> float | None:
     return round(sum(values) / len(values), 1) if values else None
 
@@ -122,8 +130,53 @@ def summary(
         round(sum(1 for s in samples if s.online) / len(samples) * 100, 1) if samples else None
     )
 
+    # 按设备统计（多机器人后有意义）
+    by_robot: dict[int, int] = {}
+    for a in alarms:
+        rid = a.robot_id or 0
+        by_robot[rid] = by_robot.get(rid, 0) + 1
+
+    # 点位分组 / 模板覆盖（点位维度没有告警，只能统计配置规模）
+    from app.models.map_library import PlatformMap, PointDraft
+    from app.models.task_template import TaskTemplate
+
+    drafts = db.query(PointDraft).all()
+    groups: dict[str, dict] = {}
+    for p in drafts:
+        g = p.group_name or "默认分组"
+        st = groups.setdefault(g, {"group": g, "points": 0, "maps": set()})
+        st["points"] += 1
+        st["maps"].add(p.map_id)
+    groups_out = [{"group": v["group"], "points": v["points"], "maps": len(v["maps"])}
+                  for v in groups.values()]
+
+    templates = db.query(TaskTemplate).all()
+    covered: set[int] = set()
+    for t in templates:
+        try:
+            import json as _json
+            for a in _json.loads(t.actions_json or "[]"):
+                if a.get("point_id"):
+                    covered.add(int(a["point_id"]))
+        except Exception:  # noqa: BLE001
+            pass
+
     return {
         "range": {"from": start.date().isoformat(), "to": (end - timedelta(days=1)).date().isoformat()},
+        "alarms_by_robot": [
+            {"robot_id": k, "count": v} for k, v in sorted(by_robot.items())
+        ],
+        "points": {
+            "total": len(drafts),
+            "by_group": sorted(groups_out, key=lambda x: -x["points"]),
+            "covered_by_templates": len(covered),
+            "uncovered": len(drafts) - len(covered),
+        },
+        "templates": {
+            "total": len(templates),
+            "actions": sum(len((_safe_actions(t))) for t in templates),
+            "maps": len({t.map_id for t in templates if t.map_id}),
+        },
         "alarms": {
             "total": len(alarms),
             "by_level": [{"key": k, "label": LEVELS.get(k, k), "count": v} for k, v in by_level.items()],

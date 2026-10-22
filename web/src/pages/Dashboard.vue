@@ -72,6 +72,31 @@ const thermalStream = computed(() => {
 
 // 消息中心未读数（和消息页用同一个 localStorage 时间戳）
 const msgUnread = ref(0)
+
+// 多设备同屏总览：每台车的在线/电量/速度
+type DeviceStat = { id: number; name: string; online: boolean; battery: number | null; speed: number | null; age: number }
+const deviceStats = ref<DeviceStat[]>([])
+
+async function loadDeviceStats() {
+  const list = devices.value
+  if (list.length < 2) { deviceStats.value = []; return }
+  const out: DeviceStat[] = []
+  for (const d of list) {
+    try {
+      const st = await api.status(d.id)
+      out.push({
+        id: d.id, name: d.name,
+        online: st.online ?? false,
+        battery: typeof st.info?.battery === 'number' ? st.info.battery : null,
+        speed: typeof st.galileo?.currentSpeedX === 'number' ? st.galileo.currentSpeedX : null,
+        age: st.age_s ?? -1,
+      })
+    } catch {
+      out.push({ id: d.id, name: d.name, online: false, battery: null, speed: null, age: -1 })
+    }
+  }
+  deviceStats.value = out
+}
 const READ_KEY = 'jc_msg_read_ts'
 async function refreshMsgUnread() {
   try {
@@ -113,6 +138,8 @@ function onDevice(v: string) {
   void api.videos().then((rows) => { videoRows.value = rows as never }).catch(() => undefined)
   void loadEnv()
   void loadTrend()
+  void loadDeviceStats()
+  timers.push(window.setInterval(loadDeviceStats, 5000))
   timers.push(window.setInterval(loadEnv, 15000))
   timers.push(window.setInterval(loadTrend, 60000))
 }
@@ -228,6 +255,8 @@ onMounted(async () => {
   void api.videos().then((rows) => { videoRows.value = rows as never }).catch(() => undefined)
   void loadEnv()
   void loadTrend()
+  void loadDeviceStats()
+  timers.push(window.setInterval(loadDeviceStats, 5000))
   timers.push(window.setInterval(loadEnv, 15000))
   timers.push(window.setInterval(loadTrend, 60000))
   void api.devices().then((rows) => {
@@ -285,6 +314,20 @@ async function logout() {
     </header>
 
     <!-- 状态带：左选择器 / 中时钟 / 右状态（参考图就是靠右） -->
+      <div class="devstrip" v-if="deviceStats.length">
+        <button
+          v-for="d in deviceStats" :key="d.id"
+          class="devchip" :class="{ on: String(d.id) === deviceId, offline: !d.online }"
+          @click="onDevice(String(d.id))"
+        >
+          <span class="dot" />
+          <b>{{ d.name }}</b>
+          <span class="num">{{ d.battery ?? '—' }}%</span>
+          <span class="num dim">{{ d.speed !== null ? d.speed.toFixed(2) : '—' }} m/s</span>
+          <span class="dim">{{ d.online ? '在线' : (d.age < 0 ? '未连接' : Math.round(d.age) + 's 前') }}</span>
+        </button>
+      </div>
+
     <div class="subbar">
       <div class="sb-left">
         <div class="field"><label>当前场站</label><DarkSelect :model-value="site" :options="sites" width="190px" @update:model-value="onSite" /></div>
@@ -505,10 +548,27 @@ async function logout() {
 </template>
 
 <style scoped>
+.devstrip {
+  display: flex; align-items: center; gap: 8px; padding: 2px 14px;
+  overflow-x: auto; min-height: 0;
+}
+.devchip {
+  display: flex; align-items: center; gap: 8px;
+  padding: 3px 10px; border-radius: 4px; cursor: pointer; white-space: nowrap;
+  background: rgba(0, 60, 110, 0.5); color: #cfe9ff;
+  border: 1px solid rgba(111, 227, 255, 0.25);
+  font-size: 12px;
+}
+.devchip .dot { width: 6px; height: 6px; border-radius: 50%; background: #35d67a; box-shadow: 0 0 6px #35d67a; }
+.devchip.offline .dot { background: #ff5a5a; box-shadow: 0 0 6px #ff5a5a; }
+.devchip.on { border-color: #7fe9ff; background: rgba(41, 212, 255, 0.18); }
+.devchip b { color: #eaf7ff; font-weight: 600; }
+.devchip .num { font-variant-numeric: tabular-nums; }
+
 .board {
   position: fixed; inset: 0; z-index: 40;
   display: grid;
-  grid-template-rows: 54px 40px minmax(0, 1fr) 26px;
+  grid-template-rows: 54px 40px auto minmax(0, 1fr) 26px;
   overflow: hidden;   /* 整页固定，滚动只发生在面板内部 */
   color: #dff0ff;
   font-size: 13px;

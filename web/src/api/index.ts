@@ -337,6 +337,10 @@ export const api = {
       `/maps/library/${mapId}/points/import`, { method: 'POST', raw: fd })
   },
   exportPointsUrl: (mapId: number) => `/api/v1/maps/library/${mapId}/points/export`,
+  bulkPoints: (mapId: number, body: { ids: number[]; action: 'group' | 'delete' | 'note'; group?: string | null; note?: string | null }) =>
+    request<{ ok: boolean; affected: number; action: string }>(`/maps/library/${mapId}/points/bulk`, { method: 'PATCH', body }),
+  duplicateTaskTemplate: (id: number) =>
+    request<Record<string, unknown>>(`/task-templates/${id}/duplicate`, { method: 'POST' }),
   deleteLibraryPoint: (pointId: number) =>
     request<{ ok: boolean }>(`/maps/library/points/${pointId}`, { method: 'DELETE' }),
   currentMap: (id = 1) => request<{ name: string; md5sum?: string }>(`/robots/${id}/map/current`),

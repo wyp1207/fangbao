@@ -153,6 +153,31 @@ def update_template(
     return _out(t)
 
 
+@router.post("/{template_id}/duplicate", dependencies=[Depends(require_csrf)])
+def duplicate_template(
+    template_id: int,
+    db: Session = Depends(get_db),
+    me: User = Depends(require_roles("admin", "safety", "operator")),
+) -> dict:
+    src = db.get(TaskTemplate, template_id)
+    if not src:
+        raise NotFound("模板不存在")
+    suffix = " 副本"
+    name = (src.name + suffix)[:64]
+    n = 2
+    while db.query(TaskTemplate).filter(TaskTemplate.name == name).first():
+        name = f"{src.name} 副本{n}"[:64]
+        n += 1
+    t = TaskTemplate(name=name, map_id=src.map_id, robot_id=src.robot_id,
+                     actions_json=src.actions_json, loop=src.loop, note=src.note)
+    db.add(t)
+    db.commit()
+    db.refresh(t)
+    audit(db=db, action="task_template.duplicate", target=t.name, user=me,
+          detail={"from": src.id})
+    return _out(t)
+
+
 @router.delete("/{template_id}", dependencies=[Depends(require_csrf)])
 def delete_template(
     template_id: int, db: Session = Depends(get_db),

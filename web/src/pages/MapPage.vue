@@ -21,6 +21,41 @@ const selectedPoint = ref<NavPoint | null>(null)
 const error = ref('')
 
 // 打点模式
+// 批量选择（只针对草稿点位）
+const selectedIds = ref<number[]>([])
+const bulkGroup = ref('')
+
+const allDraftSelected = computed(() =>
+  drafts.value.length > 0 && selectedIds.value.length === drafts.value.length)
+
+function toggleSelect(id: number) {
+  const i = selectedIds.value.indexOf(id)
+  if (i >= 0) selectedIds.value.splice(i, 1)
+  else selectedIds.value.push(id)
+}
+
+function toggleSelectAll() {
+  selectedIds.value = allDraftSelected.value ? [] : drafts.value.map((d) => d.id)
+}
+
+async function bulk(action: 'group' | 'delete') {
+  if (!libId.value || !selectedIds.value.length) return
+  if (action === 'delete' && !window.confirm(`删除选中的 ${selectedIds.value.length} 个点位？`)) return
+  if (action === 'group' && !bulkGroup.value.trim()) return toast('先填分组名', 'warn')
+  try {
+    const res = await api.bulkPoints(libId.value, {
+      ids: selectedIds.value, action,
+      group: action === 'group' ? bulkGroup.value.trim() : null,
+    })
+    toast(`${action === 'group' ? '已改分组' : '已删除'} ${res.affected} 个`, 'ok')
+    selectedIds.value = []
+    await loadDrafts(libId.value)
+    await refreshLibrary()
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : '批量操作失败', 'danger')
+  }
+}
+
 const picking = ref(false)
 const pickAt = ref<{ x: number; y: number } | null>(null)
 const draftName = ref('')
@@ -258,9 +293,24 @@ onMounted(async () => {
         </details>
       </div>
 
-      <div class="panel-title" style="margin-top: 14px">点位（{{ pointRows.length }}）</div>
+      <div class="panel-title" style="margin-top: 14px">
+        <span>点位（{{ pointRows.length }}）</span>
+        <button v-if="drafts.length" class="btn btn-xs" @click="toggleSelectAll">
+          {{ allDraftSelected ? '取消全选' : '全选草稿' }}
+        </button>
+      </div>
+
+      <div v-if="selectedIds.length" class="bulk-bar">
+        <span>已选 {{ selectedIds.length }}</span>
+        <input class="input" v-model="bulkGroup" placeholder="分组名" style="width: 92px" />
+        <button class="btn btn-xs" @click="bulk('group')">改分组</button>
+        <button class="btn btn-xs danger" @click="bulk('delete')">删除</button>
+      </div>
+
       <ul class="points">
         <li v-for="p in pointRows" :key="p.key">
+          <input v-if="p.draft" type="checkbox" :checked="selectedIds.includes(p.id)"
+                 @change="toggleSelect(p.id)" />
           <span :class="{ draft: p.draft }">{{ p.draft ? '草' : '机' }}</span>
           <span>{{ p.name }}</span>
           <span class="muted mono">{{ p.x.toFixed(1) }}, {{ p.y.toFixed(1) }}</span>
@@ -362,6 +412,14 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.bulk-bar {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 8px; margin-bottom: 6px; font-size: 12px;
+  background: rgba(41, 212, 255, 0.12);
+  border: 1px solid rgba(111, 227, 255, 0.3); border-radius: 4px;
+}
+.points li { grid-template-columns: 18px 22px 1fr auto 20px; }
+
 .map-guide { margin: 10px 0 4px; font-size: 12px; }
 .map-guide summary {
   cursor: pointer; color: #7fe9ff; padding: 4px 0; list-style: none;

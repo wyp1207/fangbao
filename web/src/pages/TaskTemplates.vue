@@ -115,6 +115,16 @@ async function submit() {
   }
 }
 
+async function duplicate(t: TemplateRow) {
+  try {
+    const cp = await api.duplicateTaskTemplate(t.id)
+    toast(`已复制为「${cp.name}」`, 'ok')
+    await load()
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : '复制失败', 'danger')
+  }
+}
+
 async function remove(t: TemplateRow) {
   if (!window.confirm(`删除模板「${t.name}」？`)) return
   await api.deleteTaskTemplate(t.id)
@@ -170,6 +180,7 @@ onMounted(async () => {
             <td>
               <div class="row-actions">
                 <button class="btn btn-xs" disabled :title="dispatchTip(t)">下发</button>
+                <button class="btn btn-xs" title="复制一份，改两个点就是新路线" @click="duplicate(t)">复制</button>
                 <button class="act" title="编辑" :disabled="!auth.canWrite" @click="openEdit(t)">✎</button>
                 <button class="act danger" title="删除" :disabled="!auth.canWrite" @click="remove(t)">🗑</button>
               </div>
