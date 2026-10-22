@@ -88,6 +88,12 @@ class JcrobHttpClient:
     async def get(self, path: str, params: dict[str, Any] | None = None) -> Any:
         return await self._request("GET", path, params=params)
 
+    async def post(self, path: str, json_body: Any = None) -> Any:
+        return await self._request("POST", path, json_body=json_body)
+
+    async def request(self, method: str, path: str, json_body: Any = None) -> Any:
+        return await self._request(method, path, json_body=json_body)
+
     async def get_bytes(self, path: str, params: dict[str, Any] | None = None) -> bytes:
         return await self._request("GET", path, params=params, raw=True)
 

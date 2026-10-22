@@ -141,16 +141,50 @@ class HttpJcrobAdapter:
 
     # ---- 写操作：协议字段未确认，先明确拒绝（不假装支持） ----
     async def dispatch(self, order: dict) -> dict:
-        raise jerr.NotSupported("写操作协议未确认：等真机联调后按接口文档填 dispatch API")
+        """平台订单 → 真机 task JSON（sub_tasks: nav_action/image_action/sleep_action）。"""
+        sub_tasks = []
+        for a in order.get("actions") or []:
+            params = {p.get("key"): p.get("value") for p in a.get("actionParameters", [])}
+            action = a.get("actionType", "photo")
+            if action in ("photo", "video", "thermal"):
+                sub_tasks.append({"type": "image_action", "topic": "/camera_node/image_raw"})
+            elif action == "wait":
+                sub_tasks.append({"type": "sleep_action", "wait_time": int(params.get("sec") or 5)})
+            else:
+                sub_tasks.append({
+                    "type": "nav_action",
+                    "x": float(params.get("x") or 0),
+                    "y": float(params.get("y") or 0),
+                    "theta": float(params.get("yaw") or 0),
+                })
+        body = {"name": (order.get("orderId") or "platform-task")[:40],
+                "loop_flag": bool(order.get("loop")), "sub_tasks": sub_tasks}
+        res = await self.client.post(PATHS["task"], body)
+        if isinstance(res, dict) and res.get("id"):
+            return {"id": res["id"], "state": "RUNNING", "raw": res}
+        if isinstance(res, list) and res:
+            return {"id": res[0].get("id", ""), "state": "RUNNING", "raw": res[0]}
+        return {"id": "", "state": "FAILED", "raw": res}
 
     async def pause(self) -> dict:
-        raise jerr.NotSupported("暂停协议未确认")
+        raise jerr.NotSupported("JCROB 没有独立的暂停接口（只能取消任务）")
 
     async def resume(self) -> dict:
-        raise jerr.NotSupported("继续协议未确认")
+        raise jerr.NotSupported("JCROB 没有独立的继续接口")
 
     async def cancel(self) -> dict:
-        raise jerr.NotSupported("取消协议未确认")
+        try:
+            return await self.client.post("/task/cancel", {})
+        except jerr.JcrobError:
+            # 退路：有些固件是 DELETE /task
+            return await self.client.request("DELETE", PATHS["task"])
 
     async def get_order(self) -> dict:
-        return {}
+        tasks = await self.get_tasks()
+        if isinstance(tasks, list) and tasks:
+            state = str(tasks[0].get("state", "")).upper()
+            mapped = {"COMPLETE": "FINISHED", "FINISHED": "FINISHED",
+                      "RUNNING": "RUNNING", "PAUSED": "PAUSED",
+                      "CANCELLED": "FAILED", "ERROR": "FAILED"}.get(state, "RUNNING")
+            return {"state": mapped, "raw": tasks[0]}
+        return {"state": "FINISHED"}
