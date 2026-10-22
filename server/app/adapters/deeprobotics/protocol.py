@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import socket
 import struct
+import threading
 import time
 from datetime import datetime
 from xml.etree import ElementTree as ET
@@ -99,18 +100,46 @@ class X30Client:
         self.magic = magic
         self._mid = 0
         self.last_magic: bytes | None = None
+        # 复用连接：机器人每次新建连接要 0.1~8s（实测），频繁重连会一直超时
+        self._sock: socket.socket | None = None
+        self._lock = threading.Lock()
+
+    def _connect(self) -> socket.socket:
+        sock = socket.create_connection((self.host, self.port), timeout=self.timeout)
+        sock.settimeout(self.timeout)
+        return sock
+
+    def close(self) -> None:
+        if self._sock is not None:
+            try:
+                self._sock.close()
+            except OSError:
+                pass
+            self._sock = None
+
+    def __del__(self) -> None:  # pragma: no cover
+        self.close()
 
     def request(self, msg_type: int, items: dict | None = None,
                 command: str = "1", timeout: float | None = None) -> dict:
         asdu = build_asdu(msg_type, items, command)
-        self._mid = (self._mid + 1) & 0xFFFF
         t = timeout or self.timeout
-        with socket.create_connection((self.host, self.port), timeout=t) as sock:
-            sock.settimeout(t)
-            sock.sendall(frame(asdu, self._mid, self.magic))
-            magic, body = read_frame(sock)
-            self.last_magic = magic
-        return parse_asdu(body)
+        with self._lock:
+            self._mid = (self._mid + 1) & 0xFFFF
+            for attempt in (0, 1):
+                try:
+                    if self._sock is None:
+                        self._sock = self._connect()
+                    self._sock.settimeout(t)
+                    self._sock.sendall(frame(asdu, self._mid, self.magic))
+                    magic, body = read_frame(self._sock)
+                    self.last_magic = magic
+                    return parse_asdu(body)
+                except (OSError, ValueError, ConnectionError):
+                    self.close()
+                    if attempt:
+                        raise
+        raise ConnectionError("unreachable")
 
     # ---- 只读 ----
     def status(self) -> dict:

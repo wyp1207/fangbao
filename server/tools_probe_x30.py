@@ -12,7 +12,7 @@ from __future__ import annotations
 import argparse
 import socket
 
-from app.adapters.deeprobotics.protocol import X30Client
+from app.adapters.deeprobotics.protocol import MAGIC_DOC, MAGIC_FIELD, X30Client
 
 
 def main() -> int:
@@ -33,16 +33,26 @@ def main() -> int:
         print("  排查：是否同网段 / 是否配置了到 192.168.1.0/24 的路由 / 机器人是否上电")
         return 2
 
-    c = X30Client(args.host, args.port, args.timeout)
-    for label, fn in (("实时状态 1002", c.query_status),
-                      ("电池信息 2001", c.query_battery),
-                      ("任务状态 1007", c.query_task)):
-        try:
-            print(f"\n== {label} ==")
-            print(fn())
-        except Exception as exc:  # noqa: BLE001
-            print(f"  失败：{exc.__class__.__name__}: {exc}")
-    return 0
+    for magic, name in ((MAGIC_FIELD, "EB90EB90（现场实现）"), (MAGIC_DOC, "EB91EB90（官方文档）")):
+        c = X30Client(args.host, args.port, args.timeout, magic=magic)
+        print(f"\n=== 帧头 {name} ===")
+        ok = False
+        for label, fn in (("实时状态 1002", c.status),
+                          ("电池信息 2001", c.battery),
+                          ("任务状态 1007", c.nav_status)):
+            try:
+                data = fn()
+                ok = True
+                print(f"  -- {label}: {len(data)} 个字段")
+                for k, v in list(data.items())[:20]:
+                    print(f"     {k} = {v}")
+            except Exception as exc:  # noqa: BLE001
+                print(f"  -- {label} 失败: {exc.__class__.__name__}: {exc}")
+        if ok:
+            print(f"\n结论：这个帧头可用（{magic.hex()}）")
+            return 0
+    print("\n两种帧头都没成功，检查 robot_server 版本（需 >= V3.0.26）")
+    return 1
 
 
 if __name__ == "__main__":

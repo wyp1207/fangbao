@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
+    # 云深处 X30（导航主机本体监控协议）
+    x30_host: str = "192.168.1.106"
+    x30_port: int = 30000
+    x30_timeout: float = 15.0
+
     # 机器人
     robot_mode: str = "mock"
     # 转流服务（MediaMTX 等）的 HLS 前缀；空 = 没配转流，前端不做假播放
