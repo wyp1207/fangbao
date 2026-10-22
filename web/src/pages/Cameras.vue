@@ -15,6 +15,7 @@ const keyword = ref('')
 const groupFilter = ref('')
 
 const editing = ref<VideoRow | null>(null)
+const tried = ref(false)
 const creating = ref(false)
 const testing = ref<number | null>(null)
 
@@ -107,7 +108,8 @@ function openEdit(v: VideoRow) {
 }
 
 async function submitCreate() {
-  if (!form.value.name || !form.value.url) {
+  tried.value = true
+  if (!form.value.name.trim() || !form.value.url.trim()) {
     toast('名称和视频流地址必填', 'warn')
     return
   }
@@ -271,12 +273,12 @@ onMounted(() => { void reload(); void loadGo2rtc() })
     <!-- 新增 -->
     <div v-if="creating" class="modal-mask" @click.self="creating = false">
       <div class="modal">
-        <div class="panel-title"><span>新增视频源</span></div>
-        <label class="fld"><span>名称</span><input class="input" v-model="form.name" placeholder="如：充电房-可见光" /></label>
+        <div class="panel-title"><span>新增视频源</span><span class="req-legend">带 * 为必填</span></div>
+        <label class="fld"><span>名称<i class="req">*</i></span><input class="input" :class="{ missing: tried && !form.name.trim() }" v-model="form.name" placeholder="如：充电房-可见光" /></label>
         <label class="fld"><span>分组</span><input class="input" v-model="form.group_name" placeholder="如：充电房 / 机器人本体" /></label>
         <label class="fld"><span>厂商</span><DarkSelect v-model="form.vendor" :options="vendors" width="180px" /></label>
         <label class="fld">
-          <span>视频流地址</span>
+          <span>视频流地址<i class="req">*</i></span>
           <input class="input" v-model="form.url" placeholder="rtsp://user:password@host:554/..." />
         </label>
         <label class="fld">
@@ -304,7 +306,7 @@ onMounted(() => { void reload(); void loadGo2rtc() })
         <label class="fld"><span>分组</span><input class="input" v-model="form.group_name" /></label>
         <label class="fld"><span>厂商</span><DarkSelect v-model="form.vendor" :options="vendors" width="180px" /></label>
         <label class="fld">
-          <span>视频流地址</span>
+          <span>视频流地址<i class="req">*</i></span>
           <input class="input" v-model="form.url" />
           <em class="hint">密码显示为 ***，原样提交即保留原密码</em>
         </label>

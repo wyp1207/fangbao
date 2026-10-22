@@ -168,6 +168,7 @@ export interface LibraryMap {
 export interface PointDraft {
   id: number
   name: string
+  group?: string
   x: number
   y: number
   theta: number
@@ -269,6 +270,16 @@ export const api = {
     if (dateTo) q.push(`date_to=${dateTo}`)
     return request<Record<string, unknown>>(`/reports/summary${q.length ? '?' + q.join('&') : ''}`)
   },
+  taskTemplates: () => request<Record<string, unknown>[]>('/task-templates'),
+  taskTemplateMeta: () => request<{ actions: { value: string; label: string }[] }>('/task-templates/meta'),
+  createTaskTemplate: (body: Record<string, unknown>) =>
+    request<Record<string, unknown>>('/task-templates', { method: 'POST', body }),
+  updateTaskTemplate: (id: number, body: Record<string, unknown>) =>
+    request<Record<string, unknown>>(`/task-templates/${id}`, { method: 'PATCH', body }),
+  deleteTaskTemplate: (id: number) =>
+    request<{ ok: boolean }>(`/task-templates/${id}`, { method: 'DELETE' }),
+  dispatchTaskTemplate: (id: number) =>
+    request<{ ok: boolean }>(`/task-templates/${id}/dispatch`, { method: 'POST' }),
   messages: () => request<{ items: { id: number; ts: number; level: string; source: string; title: string; body: string; link: Record<string, unknown> }[]; unread: number }>('/messages'),
 
   // 录像

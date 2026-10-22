@@ -229,9 +229,9 @@ onBeforeUnmount(() => window.clearInterval(timer))
       <div class="modal">
         <div class="panel-title"><span>新增录制计划</span></div>
         <div class="two">
-          <label class="fld"><span>名称</span><input class="input" v-model="planForm.name" placeholder="白天巡检录制" /></label>
+          <label class="fld"><span>名称<i class="req">*</i></span><input class="input" v-model="planForm.name" placeholder="白天巡检录制" /></label>
           <label class="fld">
-            <span>摄像头</span>
+            <span>摄像头<i class="req">*</i></span>
             <DarkSelect v-model="planForm.videoId" :options="videoOptions" width="100%" />
           </label>
         </div>

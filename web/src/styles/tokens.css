@@ -248,3 +248,21 @@ table.grid tbody tr:hover td { background: rgba(41, 212, 255, 0.16); }
 .act[disabled]:hover { color: #cfe8ff; background: linear-gradient(180deg, rgba(20, 130, 220, 0.6), rgba(0, 70, 140, 0.75)); box-shadow: none; }
 .act.danger { border-color: rgba(255, 90, 90, 0.5); color: #ffb3b3; }
 .act.danger:hover { background: linear-gradient(180deg, #ff9a9a, #d32020); color: #fff; }
+
+/* ---------- 表单必填标注 ---------- */
+.req {
+  color: #ff6b6b;
+  font-weight: 700;
+  margin-left: 2px;
+}
+.req-legend {
+  font-size: 11.5px;
+  color: #ff9a9a;
+  margin-left: 8px;
+  font-weight: 400;
+}
+/* 必填未填时给输入框一个红边，别只靠 toast */
+.input.missing {
+  border-color: rgba(255, 90, 90, 0.85) !important;
+  box-shadow: 0 0 0 1px rgba(255, 90, 90, 0.35);
+}

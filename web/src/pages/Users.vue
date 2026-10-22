@@ -28,6 +28,7 @@ const newPassword = ref('')
 
 const creating = ref(false)
 const form = ref({ username: '', password: '', role: 'operator' })
+const tried = ref(false)
 
 async function reload() {
   loading.value = true
@@ -78,6 +79,7 @@ function openCreate() {
 }
 
 async function submitCreate() {
+  tried.value = true
   if (!form.value.username || form.value.password.length < 6) {
     toast('账号至少 2 位，密码至少 6 位', 'warn')
     return
@@ -184,14 +186,14 @@ onMounted(reload)
     <div v-if="creating" class="modal-mask" @click.self="creating = false">
       <div class="modal">
         <div class="panel-title"><span>新建账号</span></div>
-        <label class="fld"><span>用户名</span><input class="input" v-model="form.username" placeholder="2–64 位" /></label>
+        <label class="fld"><span>用户名<i class="req">*</i></span><input class="input" :class="{ missing: tried && !form.username.trim() }" v-model="form.username" placeholder="2–64 位" /></label>
         <label class="fld"><span>初始密码</span><input class="input" v-model="form.password" type="password" placeholder="至少 6 位" /></label>
         <label class="fld"><span>角色</span>
           <DarkSelect v-model="form.role" :options="roleOptions" width="180px" />
         </label>
         <div class="modal-actions">
           <button class="btn btn-sm" @click="creating = false">取消</button>
-          <button class="btn btn-sm primary" @click="submitCreate">创建</button>
+          <button class="btn btn-sm primary" :disabled="!form.username.trim() || form.password.length < 8" @click="submitCreate">创建</button>
         </div>
       </div>
     </div>

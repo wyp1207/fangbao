@@ -48,6 +48,7 @@ class PointDraft(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     map_id: Mapped[int] = mapped_column(Integer, index=True)
     name: Mapped[str] = mapped_column(String(64))
+    group_name: Mapped[str] = mapped_column(String(32), default="默认分组")
     x: Mapped[float] = mapped_column(Float)
     y: Mapped[float] = mapped_column(Float)
     theta: Mapped[float] = mapped_column(Float, default=0.0)

@@ -191,7 +191,7 @@ onBeforeUnmount(() => window.clearInterval(timer))
       <div class="modal">
         <div class="panel-title"><span>{{ editing ? '编辑传感器 · ' + editing.name : '新增传感器' }}</span></div>
         <div class="two">
-          <label class="fld"><span>名称</span><input class="input" v-model="form.name" placeholder="可燃气体-泵房" /></label>
+          <label class="fld"><span>名称<i class="req">*</i></span><input class="input" v-model="form.name" placeholder="可燃气体-泵房" /></label>
           <label class="fld">
             <span>类型</span>
             <DarkSelect v-model="form.kind" :options="kindOptions" width="100%" :disabled="!!editing" />

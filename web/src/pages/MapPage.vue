@@ -316,7 +316,7 @@ onMounted(async () => {
       <div class="modal">
         <div class="panel-title"><span>新增点位（草稿）</span></div>
         <p class="muted small">坐标 x={{ pickAt.x.toFixed(2) }} y={{ pickAt.y.toFixed(2) }}（米）</p>
-        <label class="fld"><span>点位名称</span><input class="input" v-model="draftName" autofocus /></label>
+        <label class="fld"><span>点位名称<i class="req">*</i></span><input class="input" v-model="draftName" autofocus /></label>
         <label class="fld"><span>备注</span><input class="input" v-model="draftNote" placeholder="如：1号配电柜正面" /></label>
         <div class="modal-actions">
           <button class="btn" @click="pickAt = null">取消</button>
@@ -331,11 +331,11 @@ onMounted(async () => {
         <div class="panel-title"><span>导入地图</span><span class="muted small">PNG/JPG 图纸或截图，人工标定比例尺与原点</span></div>
 
         <label class="fld">
-          <span>地图文件（PNG/JPG，≤20MB）</span>
+          <span>地图文件（PNG/JPG，≤20MB）<i class="req">*</i></span>
           <input class="input" type="file" accept="image/png,image/jpeg" @change="onFile" />
         </label>
         <div class="two">
-          <label class="fld"><span>名称</span><input class="input" v-model="impForm.name" placeholder="泰安厂区-1F" /></label>
+          <label class="fld"><span>名称<i class="req">*</i></span><input class="input" v-model="impForm.name" placeholder="泰安厂区-1F" /></label>
           <label class="fld"><span>楼层</span><input class="input" v-model="impForm.floor" /></label>
         </div>
         <div class="two">
@@ -343,7 +343,7 @@ onMounted(async () => {
           <label class="fld"><span>对应机器人地图名</span><input class="input" v-model="impForm.robot_map_name" placeholder="留空=仅平台底图" /></label>
         </div>
         <div class="three">
-          <label class="fld"><span>分辨率 m/px</span><input class="input" type="number" step="0.001" v-model.number="impForm.resolution" /></label>
+          <label class="fld"><span>分辨率 m/px<i class="req">*</i></span><input class="input" type="number" step="0.001" v-model.number="impForm.resolution" /></label>
           <label class="fld"><span>原点 X (m)</span><input class="input" type="number" step="0.1" v-model.number="impForm.origin_x" /></label>
           <label class="fld"><span>原点 Y (m)</span><input class="input" type="number" step="0.1" v-model.number="impForm.origin_y" /></label>
         </div>

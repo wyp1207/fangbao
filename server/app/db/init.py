@@ -16,6 +16,7 @@ from app.models.record_plan import RecordPlan  # noqa: F401
 from app.models.robot import Robot
 from app.models.sensor import Sensor, SensorReading  # noqa: F401
 from app.models.setting import Setting  # noqa: F401
+from app.models.task_template import TaskTemplate  # noqa: F401
 from app.models.telemetry import TelemetrySample  # noqa: F401
 from app.models.user import User
 from app.models.video_source import VideoSource  # noqa: F401  create_all 需要先导入

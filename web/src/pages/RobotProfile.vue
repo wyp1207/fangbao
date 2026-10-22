@@ -23,6 +23,7 @@ const testing = ref<number | null>(null)
 
 const editing = ref<DeviceItem | null>(null)
 const creating = ref(false)
+const tried = ref(false)
 const form = ref({
   name: '', device_type: 'jcrob_wheel', adapter: 'jcrob_http', station: '默认场站',
   ip: '', port: 3546, ws_port: 3547, username: 'admin', password: '', mode: 'http', note: '',
@@ -71,7 +72,8 @@ function openEdit(d: DeviceItem) {
 }
 
 async function submitCreate() {
-  if (!form.value.name || !form.value.ip) {
+  tried.value = true
+  if (!form.value.name.trim() || !form.value.ip.trim()) {
     toast('设备名和 IP 必填', 'warn')
     return
   }
@@ -208,8 +210,8 @@ onMounted(async () => {
     <!-- 新增 -->
     <div v-if="creating" class="modal-mask" @click.self="creating = false">
       <div class="modal">
-        <div class="panel-title"><span>新增设备</span></div>
-        <label class="fld"><span>设备名称</span><input class="input" v-model="form.name" placeholder="如 X30-巡检狗" /></label>
+        <div class="panel-title"><span>新增设备</span><span class="req-legend">带 * 为必填</span></div>
+        <label class="fld"><span>设备名称<i class="req">*</i></span><input class="input" :class="{ missing: tried && !form.name.trim() }" v-model="form.name" placeholder="如 X30-巡检狗" /></label>
         <label class="fld">
           <span>本体类型</span>
           <DarkSelect v-model="form.device_type" :options="deviceTypeOptions" width="100%" @update:model-value="form.adapter = adapterOptions[0]?.value ?? form.adapter" />
@@ -223,8 +225,8 @@ onMounted(async () => {
         </p>
         <label class="fld"><span>场站</span><input class="input" v-model="form.station" /></label>
         <div class="two">
-          <label class="fld"><span>IP / 主机</span><input class="input" v-model="form.ip" placeholder="192.168.1.105" /></label>
-          <label class="fld"><span>端口</span><input class="input" type="number" v-model.number="form.port" /></label>
+          <label class="fld"><span>IP / 主机<i class="req">*</i></span><input class="input" :class="{ missing: tried && !form.ip.trim() }" v-model="form.ip" placeholder="192.168.1.105" /></label>
+          <label class="fld"><span>端口<i class="req">*</i></span><input class="input" type="number" v-model.number="form.port" /></label>
         </div>
         <div class="two">
           <label class="fld"><span>账号</span><input class="input" v-model="form.username" /></label>
@@ -233,7 +235,7 @@ onMounted(async () => {
         <label class="fld"><span>备注</span><input class="input" v-model="form.note" /></label>
         <div class="modal-actions">
           <button class="btn btn-sm" @click="creating = false">取消</button>
-          <button class="btn btn-sm primary" @click="submitCreate">保存</button>
+          <button class="btn btn-sm primary" :disabled="!form.name.trim() || !form.ip.trim()" @click="submitCreate">保存</button>
         </div>
       </div>
     </div>
@@ -241,14 +243,14 @@ onMounted(async () => {
     <!-- 编辑 -->
     <div v-if="editing" class="modal-mask" @click.self="editing = null">
       <div class="modal">
-        <div class="panel-title"><span>编辑 · {{ editing.name }}</span></div>
+        <div class="panel-title"><span>编辑 · {{ editing.name }}</span><span class="req-legend">带 * 为必填</span></div>
         <label class="fld"><span>设备名称</span><input class="input" v-model="form.name" /></label>
         <label class="fld"><span>本体类型</span><DarkSelect v-model="form.device_type" :options="deviceTypeOptions" width="100%" /></label>
         <label class="fld"><span>通信协议</span><DarkSelect v-model="form.adapter" :options="adapterOptions" width="100%" /></label>
         <label class="fld"><span>场站</span><input class="input" v-model="form.station" /></label>
         <div class="two">
           <label class="fld"><span>IP / 主机</span><input class="input" v-model="form.ip" /></label>
-          <label class="fld"><span>端口</span><input class="input" type="number" v-model.number="form.port" /></label>
+          <label class="fld"><span>端口<i class="req">*</i></span><input class="input" type="number" v-model.number="form.port" /></label>
         </div>
         <div class="two">
           <label class="fld"><span>账号</span><input class="input" v-model="form.username" /></label>

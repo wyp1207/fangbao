@@ -178,6 +178,7 @@ class PointIn(BaseModel):
     y: float
     theta: float = 0.0
     note: str | None = None
+    group: str = "默认分组"
 
 
 @router.get("/{map_id}/points")
@@ -186,7 +187,7 @@ def list_points(map_id: int, db: Session = Depends(get_db),
     rows = db.query(PointDraft).filter(PointDraft.map_id == map_id).order_by(PointDraft.id).all()
     return [
         {"id": r.id, "name": r.name, "x": r.x, "y": r.y, "theta": r.theta,
-         "note": r.note, "synced": r.synced}
+         "note": r.note, "synced": r.synced, "group": r.group_name}
         for r in rows
     ]
 
@@ -215,7 +216,7 @@ def add_point(
             )
 
     p = PointDraft(map_id=map_id, name=body.name, x=body.x, y=body.y,
-                   theta=body.theta, note=body.note)
+                   theta=body.theta, note=body.note, group_name=body.group or "默认分组")
     db.add(p)
     db.commit()
     db.refresh(p)
@@ -284,10 +285,13 @@ def import_points(
             p = existing[name]
             p.x, p.y, p.theta = x, y, theta
             p.note = row.get("note") or p.note
+            if (row.get("group") or "").strip():
+                p.group_name = row["group"].strip()
             updated += 1
         else:
             p = PointDraft(map_id=map_id, name=name, x=x, y=y, theta=theta,
-                           note=row.get("note") or None)
+                           note=row.get("note") or None,
+                           group_name=(row.get("group") or "默认分组").strip() or "默认分组")
             db.add(p)
             existing[name] = p
             created += 1
@@ -311,9 +315,9 @@ def export_points(map_id: int, db: Session = Depends(get_db),
 
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["name", "x", "y", "theta", "note"])
+    w.writerow(["name", "x", "y", "theta", "note", "group"])
     for r in rows:
-        w.writerow([r.name, r.x, r.y, r.theta, r.note or ""])
+        w.writerow([r.name, r.x, r.y, r.theta, r.note or "", r.group_name or "默认分组"])
 
     from fastapi.responses import Response
 

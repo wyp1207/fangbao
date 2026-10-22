@@ -21,6 +21,7 @@ const router = createRouter({
 
         // 巡检管理
         { path: 'tasks', name: 'tasks', component: () => import('@/pages/Tasks.vue') },
+        { path: 'task-templates', name: 'task-templates', component: () => import('@/pages/TaskTemplates.vue') },
         { path: 'points', name: 'points', component: () => import('@/pages/Points.vue') },
         { path: 'task-calendar', name: 'task-calendar', component: () => import('@/pages/PlaceholderPage.vue') },
 

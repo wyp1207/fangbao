@@ -258,7 +258,7 @@ onMounted(load)
         <div class="panel-title"><span>{{ editing ? '编辑通道 · ' + editing.name : '新增通知通道' }}</span></div>
 
         <div class="two">
-          <label class="fld"><span>名称</span><input class="input" v-model="form.name" placeholder="值班群（企微）" /></label>
+          <label class="fld"><span>名称<i class="req">*</i></span><input class="input" v-model="form.name" placeholder="值班群（企微）" /></label>
           <label class="fld">
             <span>类型</span>
             <DarkSelect v-model="form.type" :options="typeOptions" width="100%" :disabled="!!editing" />
@@ -267,20 +267,20 @@ onMounted(load)
 
         <template v-if="form.type !== 'email'">
           <label class="fld">
-            <span>Webhook 地址</span>
+            <span>Webhook 地址<i class="req">*</i></span>
             <input class="input" v-model="form.url" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..." />
           </label>
         </template>
         <template v-else>
           <div class="two">
-            <label class="fld"><span>SMTP 主机</span><input class="input" v-model="form.host" placeholder="smtp.example.com" /></label>
+            <label class="fld"><span>SMTP 主机<i class="req">*</i></span><input class="input" v-model="form.host" placeholder="smtp.example.com" /></label>
             <label class="fld"><span>端口</span><input class="input" type="number" v-model.number="form.port" /></label>
           </div>
           <div class="two">
             <label class="fld"><span>账号</span><input class="input" v-model="form.user" /></label>
             <label class="fld"><span>密码/授权码</span><input class="input" type="password" v-model="form.password" placeholder="留空不改" /></label>
           </div>
-          <label class="fld"><span>收件人（逗号分隔）</span><input class="input" v-model="form.to" /></label>
+          <label class="fld"><span>收件人（逗号分隔）<i class="req">*</i></span><input class="input" v-model="form.to" /></label>
           <label class="chk"><input type="checkbox" v-model="form.tls" /> 使用 SSL（465 端口一般要勾）</label>
         </template>
 
