@@ -96,6 +96,10 @@ def create_user(
         is_active=True,
     )
     db.add(user)
+    db.flush()
+    from app.models.user import PasswordHistory
+    db.add(PasswordHistory(user_id=user.id, password_hash=user.password_hash))
+    user.password_changed_at = datetime.now()
     db.commit()
     db.refresh(user)
     msg_store.add("info", "user", f"新建账号：{user.username}",
@@ -148,6 +152,9 @@ def reset_password(
         raise BadRequest(str(exc), code="WEAK_PASSWORD") from exc
     user.password_hash = hash_password(body.password)
     user.must_change_password = True      # 重置后强制改密
+    user.password_changed_at = datetime.now()
+    from app.models.user import PasswordHistory
+    db.add(PasswordHistory(user_id=user.id, password_hash=user.password_hash))
     db.commit()
     msg_store.add("warn", "user", f"管理员重置密码：{user.username}",
                   f"操作人 {me.username}", {"to": "users"})

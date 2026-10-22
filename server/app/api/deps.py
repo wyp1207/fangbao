@@ -39,13 +39,22 @@ _PWD_CHANGE_ALLOWED = ("/auth/password", "/auth/me", "/auth/logout", "/auth/logi
 
 def _enforce_password_change(request: Request, user: User) -> None:
     """后端也要拦：只靠前端弹窗，绕过前端直接调接口就形同虚设。"""
-    if not getattr(user, "must_change_password", False):
+    expired = False
+    changed = getattr(user, "password_changed_at", None)
+    if getattr(user, "must_change_password", False):
+        pass
+    elif changed is not None:
+        from datetime import datetime as _dt, timedelta as _td
+        expired = _dt.now() - changed > _td(days=90)
+    else:
+        expired = False          # 老账号没有记录时不强制，避免上线当天全员被锁
+    if not getattr(user, "must_change_password", False) and not expired:
         return
     path = request.url.path
     if any(path.endswith(p) for p in _PWD_CHANGE_ALLOWED):
         return
-    raise PlatformError("请先修改初始密码再使用平台", code="MUST_CHANGE_PASSWORD",
-                        status_code=403)
+    msg = "密码已超过 90 天，请修改后再使用" if expired else "请先修改初始密码再使用平台"
+    raise PlatformError(msg, code="MUST_CHANGE_PASSWORD", status_code=403)
 
 
 def require_roles(*roles: str):

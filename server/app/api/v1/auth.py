@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, Field
@@ -31,33 +31,78 @@ def _ip(request: Request) -> str | None:
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-# 登录防爆破：同账号+IP 10 分钟内失败 5 次，锁 10 分钟
+# 登录防爆破：连续失败 5 次锁 10 分钟。落库，重启不清零
 LOGIN_MAX_FAIL = 5
-LOGIN_WINDOW_S = 600
-LOGIN_LOCK_S = 600
-_fail_log: dict[str, list[float]] = {}
-_locked_until: dict[str, float] = {}
+LOGIN_LOCK_MIN = 10
+PASSWORD_HISTORY = 5
 
 
-def _login_key(username: str, ip: str | None) -> str:
+def _attempt_key(username: str, ip: str | None) -> str:
     return f"{username.lower()}|{ip or '-'}"
 
 
-def _check_locked(key: str) -> int:
-    """返回剩余锁定秒数，0 表示没锁。"""
-    until = _locked_until.get(key, 0)
-    left = int(until - time.time())
-    return left if left > 0 else 0
+def _locked_seconds(db: Session, key: str) -> int:
+    from app.models.user import LoginAttempt
+
+    row = db.scalar(select(LoginAttempt).where(LoginAttempt.key == key))
+    if row is None or row.locked_until is None:
+        return 0
+    left = int((row.locked_until - datetime.now()).total_seconds())
+    if left <= 0:
+        row.locked_until = None
+        row.fails = 0
+        db.commit()
+        return 0
+    return left
 
 
-def _record_fail(key: str) -> None:
-    now = time.time()
-    hits = [t for t in _fail_log.get(key, []) if now - t <= LOGIN_WINDOW_S]
-    hits.append(now)
-    _fail_log[key] = hits
-    if len(hits) >= LOGIN_MAX_FAIL:
-        _locked_until[key] = now + LOGIN_LOCK_S
-        _fail_log[key] = []
+def _record_fail(db: Session, key: str) -> None:
+    """失败的账号不管存不存在都计数：否则爆破不存在的用户名永远不锁。"""
+    from app.models.user import LoginAttempt
+
+    row = db.scalar(select(LoginAttempt).where(LoginAttempt.key == key))
+    if row is None:
+        row = LoginAttempt(key=key, fails=0)
+        db.add(row)
+    row.fails = (row.fails or 0) + 1
+    row.updated_at = datetime.now()
+    if row.fails >= LOGIN_MAX_FAIL:
+        row.locked_until = datetime.now() + timedelta(minutes=LOGIN_LOCK_MIN)
+        row.fails = 0
+    db.commit()
+
+
+def _clear_fail(db: Session, key: str) -> None:
+    from app.models.user import LoginAttempt
+
+    row = db.scalar(select(LoginAttempt).where(LoginAttempt.key == key))
+    if row is not None:
+        row.fails = 0
+        row.locked_until = None
+        db.commit()
+
+
+def _record_password(db: Session, user: User, plain: str) -> None:
+    """记录新密码哈希，并裁剪到最近 5 条。"""
+    from app.models.user import PasswordHistory
+
+    db.add(PasswordHistory(user_id=user.id, password_hash=hash_password(plain)))
+    rows = (db.query(PasswordHistory)
+            .filter(PasswordHistory.user_id == user.id)
+            .order_by(PasswordHistory.id.desc()).all())
+    for old in rows[PASSWORD_HISTORY:]:
+        db.delete(old)
+    user.password_changed_at = datetime.now()
+    db.commit()
+
+
+def _reused_password(db: Session, user: User, plain: str) -> bool:
+    from app.models.user import PasswordHistory
+
+    rows = (db.query(PasswordHistory)
+            .filter(PasswordHistory.user_id == user.id)
+            .order_by(PasswordHistory.id.desc()).limit(PASSWORD_HISTORY).all())
+    return any(verify_password(plain, r.password_hash) for r in rows)
 
 
 class LoginIn(BaseModel):
@@ -80,23 +125,26 @@ class LoginOut(BaseModel):
 @router.post("/login", response_model=LoginOut)
 def login(body: LoginIn, response: Response, request: Request,
           db: Session = Depends(get_db)) -> LoginOut:
-    key = _login_key(body.username, request.client.host if request.client else None)
-    left = _check_locked(key)
+    settings = get_settings()
+    key = _attempt_key(body.username, request.client.host if request.client else None)
+    left = _locked_seconds(db, key)
     if left:
         raise Unauthorized(f"登录失败次数过多，请 {left // 60 + 1} 分钟后再试")
-    settings = get_settings()
+
     user = db.scalar(select(User).where(User.username == body.username))
     if not user or not user.is_active or not verify_password(body.password, user.password_hash):
-        _record_fail(key)
+        _record_fail(db, key)
         from app.services.messages import store as msg_store
 
         msg_store.add("warn", "user", f"登录失败：{body.username}",
                       "账号不存在、已停用或密码错误" if user else "账号不存在",
                       {"to": "users"} if user else {})
+        # 失败登录也要进审计（等保要求的"登录事件可追溯"）
+        audit(db=db, action="auth.login_failed", target=body.username, user=None,
+              client_ip=_ip(request), summary="登录失败")
         raise Unauthorized("用户名或密码错误")
 
-    _fail_log.pop(key, None)          # 登录成功清零
-    _locked_until.pop(key, None)
+    _clear_fail(db, key)              # 登录成功清零
 
     audit(db=db, action="auth.login", target=user.username, user=user,
           client_ip=_ip(request), summary="登录成功")
@@ -157,8 +205,12 @@ def change_own_password(
     except ValueError as exc:
         raise BadRequest(str(exc), code="WEAK_PASSWORD") from exc
 
+    if _reused_password(db, user, body.new_password):
+        raise BadRequest(f"不能重复使用最近 {PASSWORD_HISTORY} 次用过的密码",
+                         code="PASSWORD_REUSED")
     user.password_hash = hash_password(body.new_password)
     user.must_change_password = False
+    _record_password(db, user, body.new_password)
     db.commit()
     from app.services.messages import store as msg_store
     msg_store.add("info", "user", f"密码已修改：{user.username}", "本人在线自助修改", {})

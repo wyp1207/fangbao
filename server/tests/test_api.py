@@ -551,3 +551,32 @@ def test_retry_once_resends_failed(auth_client):
         db.query(NotifyChannel).filter(NotifyChannel.id == cid).delete()
         db.query(NotifyLog).filter(NotifyLog.id == rid).delete()
         db.commit()
+
+
+def test_password_history_and_audit(auth_client):
+    """改密不能复用最近用过的密码；失败登录要进审计。"""
+    from fastapi.testclient import TestClient
+
+    r = auth_client.post("/api/v1/users", json={
+        "username": "pw_hist", "password": "Init12345", "role": "viewer"})
+    assert r.status_code == 200
+
+    c = TestClient(auth_client.app)
+    login = c.post("/api/v1/auth/login", json={"username": "pw_hist", "password": "Init12345"})
+    c.headers.update({"X-CSRF-Token": login.json()["csrf_token"]})
+
+    first = c.post("/api/v1/auth/password",
+                   json={"old_password": "Init12345", "new_password": "Second12345"})
+    assert first.status_code == 200
+
+    # 复用刚用过的 Init12345 应被拒
+    again = c.post("/api/v1/auth/password",
+                   json={"old_password": "Second12345", "new_password": "Init12345"})
+    assert again.status_code == 400
+    assert again.json()["code"] == "PASSWORD_REUSED"
+
+    # 失败登录写审计
+    bad = TestClient(auth_client.app)
+    bad.post("/api/v1/auth/login", json={"username": "pw_hist", "password": "nope-wrong"})
+    logs = auth_client.get("/api/v1/audit-logs?limit=50").json()["items"]
+    assert any(x["action"] == "auth.login_failed" for x in logs)

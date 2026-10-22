@@ -105,6 +105,15 @@ npm run dev          # http://127.0.0.1:5173
 
 ---
 
+## 开启 HTTPS（等保要求通信保密）
+
+```bash
+bash deploy/gen_selfsigned.sh 192.168.8.40        # 内网自签；正式交付换 CA 证书
+docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d
+```
+
+443 开启 TLSv1.2/1.3 + HSTS，80 自动跳转；Cookie 会按协议自动加 `Secure`。
+
 ## 测试
 
 ```bash

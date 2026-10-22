@@ -21,7 +21,7 @@ from app.models.setting import Setting  # noqa: F401
 from app.models.task_run import TaskRun, TaskRunStep  # noqa: F401
 from app.models.task_template import TaskTemplate  # noqa: F401
 from app.models.telemetry import TelemetrySample  # noqa: F401
-from app.models.user import User
+from app.models.user import LoginAttempt, PasswordHistory, User  # noqa: F401
 from app.models.video_source import VideoSource  # noqa: F401  create_all 需要先导入
 
 log = logging.getLogger(__name__)
