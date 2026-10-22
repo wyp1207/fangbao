@@ -912,3 +912,49 @@ def test_three_role_separation(auth_client):
         "username": "role_z", "password": "Init12345", "role": "viewer"}).status_code == 403
     # 系统管理员看不到审计？——过渡期 admin 可以，sysadmin 只有 auditor/admin 能看
     assert sysadmin.get("/api/v1/audit-logs").status_code == 403
+
+
+def test_x30_protocol_roundtrip():
+    """X30 协议帧：按官方文档组帧（EB91EB90 + 长度 LE + ID + 8 字节 0），并能解析回包。"""
+    import socket
+    import threading
+    import xml.etree.ElementTree as ET
+
+    from app.adapters.deeprobotics.protocol import (
+        MAGIC, X30Client, build_asdu, frame, read_frame,
+    )
+
+    asdu = build_asdu(1002)
+    raw = frame(asdu, 7)
+    assert raw[:4] == MAGIC
+    length = int.from_bytes(raw[4:6], "little")
+    assert length == len(asdu)
+    assert raw[6:8] == (7).to_bytes(2, "little")
+    assert raw[8:16] == b"\x00" * 8
+    assert b"<Type>1002</Type>" in raw
+
+    # 起一个假机器人：收到请求就回一帧状态 XML
+    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(1)
+    port = srv.getsockname()[1]
+
+    reply = build_asdu(1002, 1, "<Battery>88</Battery><X>1.2</X><Y>-0.5</Y>")
+
+    def serve():
+        conn, _ = srv.accept()
+        with conn:
+            got = conn.recv(4096)
+            assert got[:4] == MAGIC
+            conn.sendall(frame(reply, 7))
+
+    threading.Thread(target=serve, daemon=True).start()
+    client = X30Client("127.0.0.1", port, timeout=3)
+    xml = client.query_status()
+    srv.close()
+
+    root = ET.fromstring(xml)
+    assert root.findtext("Type") == "1002"
+    assert root.findtext("Items/Battery") == "88"
+    assert root.findtext("Items/X") == "1.2"
