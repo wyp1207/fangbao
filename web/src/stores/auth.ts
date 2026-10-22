@@ -9,7 +9,7 @@ export const useAuthStore = defineStore('auth', {
   }),
   getters: {
     isLoggedIn: (s) => !!s.user,
-    canWrite: (s) => s.user?.role === 'admin' || s.user?.role === 'operator',
+    canWrite: (s) => ['admin', 'safety', 'operator'].includes(s.user?.role ?? ''),
   },
   actions: {
     async login(username: string, password: string) {

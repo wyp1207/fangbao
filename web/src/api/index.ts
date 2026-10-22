@@ -1,6 +1,6 @@
 import { request } from './client'
 
-export type Role = 'admin' | 'operator' | 'viewer'
+export type Role = 'admin' | 'safety' | 'operator' | 'viewer'
 
 export interface User {
   id: number
@@ -38,7 +38,7 @@ export interface RecordingItem {
 export interface UserRow {
   id: number
   username: string
-  role: 'admin' | 'operator' | 'viewer'
+  role: 'admin' | 'safety' | 'operator' | 'viewer'
   is_active: boolean
   created_at: string | null
   last_login_at: string | null

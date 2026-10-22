@@ -13,11 +13,12 @@ const error = ref('')
 
 const roleOptions = [
   { value: 'admin', label: '管理员' },
+  { value: 'safety', label: '安全管理员' },
   { value: 'operator', label: '操作员' },
   { value: 'viewer', label: '只读' },
 ]
-const roleText: Record<string, string> = { admin: '管理员', operator: '操作员', viewer: '只读' }
-const roleTone: Record<string, string> = { admin: 'danger', operator: 'ok', viewer: '' }
+const roleText: Record<string, string> = { admin: '管理员', safety: '安全管理员', operator: '操作员', viewer: '只读' }
+const roleTone: Record<string, string> = { admin: 'danger', safety: 'warn', operator: 'ok', viewer: '' }
 
 const isAdmin = computed(() => auth.user?.role === 'admin')
 

@@ -218,3 +218,32 @@ def test_map_point_out_of_range(auth_client):
     )
     assert bad_res.status_code == 400
     assert bad_res.json()["code"] == "BAD_RESOLUTION"
+
+
+def test_safety_role_scope(auth_client):
+    """安全管理员只能改告警类设置；运维类（录像/视频）仍归管理员。"""
+    made = auth_client.post("/api/v1/users", json={
+        "username": "safety_t", "password": "Safety12345", "role": "safety",
+    })
+    assert made.status_code == 200
+
+    # 用安全管理员登录
+    import http.cookiejar
+    from fastapi.testclient import TestClient
+    c2 = TestClient(auth_client.app)
+    r = c2.post("/api/v1/auth/login", json={"username": "safety_t", "password": "Safety12345"})
+    assert r.status_code == 200
+    c2.headers.update({"X-CSRF-Token": r.json()["csrf_token"]})
+
+    ok = c2.put("/api/v1/settings", json={"values": {"alarm.battery_warn": 21}})
+    assert ok.status_code == 200
+
+    denied = c2.put("/api/v1/settings", json={"values": {"record.keep_days": 10}})
+    assert denied.status_code == 400
+    assert denied.json()["code"] == "FORBIDDEN"
+
+    assert c2.post("/api/v1/users", json={
+        "username": "x_t", "password": "Abcd12345", "role": "viewer"}).status_code == 403
+
+    # 还原
+    auth_client.put("/api/v1/settings", json={"values": {"alarm.battery_warn": 20}})

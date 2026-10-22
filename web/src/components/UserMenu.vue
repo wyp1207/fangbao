@@ -23,7 +23,7 @@ const pwdBusy = ref(false)
 
 const username = computed(() => auth.user?.username ?? '未登录')
 const initial = computed(() => username.value.slice(0, 1).toUpperCase())
-const ROLE_TEXT: Record<string, string> = { admin: '管理员', operator: '操作员', viewer: '只读' }
+const ROLE_TEXT: Record<string, string> = { admin: '管理员', safety: '安全管理员', operator: '操作员', viewer: '只读' }
 const roleText = computed(() => ROLE_TEXT[auth.user?.role ?? ''] ?? '未知角色')
 const isAdmin = computed(() => auth.user?.role === 'admin')
 

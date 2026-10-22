@@ -43,6 +43,11 @@ SCHEMA: dict[str, dict[str, Any]] = {
         "group": "告警", "effect": "严重告警未确认超过这个时间就升级",
     },
 
+    "clock.max_skew_s": {
+        "label": "时钟偏差告警（秒）", "type": "int", "default": 2, "min": 1, "max": 600,
+        "group": "平台", "effect": "机器人上报时间与平台差超过此值时告警（时间对不齐就没法复盘）",
+    },
+
     # ---- 磁盘 ----
     "disk.warn_free_gb": {
         "label": "磁盘提醒（GB）", "type": "int", "default": 20, "min": 1, "max": 500,

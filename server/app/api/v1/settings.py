@@ -110,10 +110,21 @@ def read_settings(
 def update_settings(
     body: SettingPatch,
     db: Session = Depends(get_db),
-    me: User = Depends(require_roles("admin")),
+    me: User = Depends(require_roles("admin", "safety")),
 ) -> dict:
     if not body.values:
         raise BadRequest("没有要保存的项", code="EMPTY")
+
+    # 安全管理员只能改"和告警有关"的设置：阈值、升级、时钟偏差。
+    # 录像/视频/平台名这些运维项仍然只有 admin 能改。
+    SAFETY_PREFIXES = ("alarm.", "notify.", "clock.")
+    if me.role != "admin":
+        illegal = [k for k in body.values if not k.startswith(SAFETY_PREFIXES)]
+        if illegal:
+            raise BadRequest(
+                f"该账号只能修改告警类设置，以下项需要管理员：{', '.join(illegal)}",
+                code="FORBIDDEN",
+            )
 
     changed: dict[str, Any] = {}
     for key, raw in body.values.items():

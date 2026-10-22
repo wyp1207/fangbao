@@ -24,7 +24,7 @@ from app.services.messages import audit, store as msg_store
 
 router = APIRouter(prefix="/users", tags=["users"])
 
-ROLES = ("admin", "operator", "viewer")
+ROLES = ("admin", "safety", "operator", "viewer")
 
 
 class UserOut(BaseModel):

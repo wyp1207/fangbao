@@ -48,6 +48,12 @@ function onEdit(key: string, raw: unknown) {
   dirty.value = { ...dirty.value, [key]: raw }
 }
 
+function canEditKey(key: string): boolean {
+  if (auth.user?.role === 'admin') return true
+  if (auth.user?.role === 'safety') return key.startsWith('alarm.') || key.startsWith('notify.') || key.startsWith('clock.')
+  return false
+}
+
 async function saveSettings() {
   if (!dirtyCount.value) return
   saving.value = true
@@ -123,7 +129,7 @@ onMounted(async () => {
       <div class="set-grid">
         <div v-for="(items, g) in groups" :key="g" class="set-group">
           <div class="set-head">{{ g }}</div>
-          <div v-for="it in items" :key="it.key" class="set-row">
+          <div v-for="it in items" :key="it.key" class="set-row" :class="{ wide: it.type === 'str' }">
             <label :title="it.effect">{{ it.label }}</label>
             <DarkSelect
               v-if="it.type === 'bool'"
@@ -235,8 +241,9 @@ onMounted(async () => {
 .small { font-size: 12px; line-height: 1.6; }
 
 /* 设置分组 */
-.set-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 12px; }
+.set-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
 .set-group {
+  overflow: hidden;
   border: 1px solid rgba(111, 227, 255, 0.18);
   background: rgba(0, 60, 110, 0.28);
   border-radius: 6px; padding: 8px 10px 10px;
@@ -247,11 +254,15 @@ onMounted(async () => {
   border-bottom: 1px solid rgba(255, 207, 63, 0.22);
 }
 .set-row {
-  display: grid; grid-template-columns: 1fr 120px; gap: 8px 10px;
+  display: grid; grid-template-columns: minmax(0, 1fr) 104px; gap: 8px 10px;
   align-items: center; margin-bottom: 9px;
 }
+/* 不加这两条，input 的 padding/border 会把行撑出格子 */
+.set-row > * { min-width: 0; }
+.set-row .input, .set-row .dasel { width: 100%; box-sizing: border-box; }
+.set-row.wide { grid-template-columns: minmax(0, 1fr) 190px; }
 .set-row label { font-size: 12.5px; color: #dceeff; }
-.set-row .input { width: 100%; }
+
 .num-in { text-align: right; }
 .eff { grid-column: 1 / -1; font-size: 11px; color: #7fa8cc; line-height: 1.5; margin-top: -4px; }
 </style>

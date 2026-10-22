@@ -126,11 +126,13 @@ def update_sensor(
 
     # 把已经标定的阈值清空 = 让这个测点永久静默，属于高危动作
     threshold_keys = ("warn_low", "warn_high", "crit_low", "crit_high")
+    if any(k in body for k in threshold_keys) and me.role not in ("admin", "safety"):
+        raise BadRequest("修改阈值需要管理员或安全管理员", code="FORBIDDEN")
     if any(k in body for k in threshold_keys):
         before = any(getattr(s, k) is not None for k in threshold_keys)
         after = any((body.get(k, getattr(s, k)) is not None) for k in threshold_keys)
         if before and not after:
-            if me.role != "admin":
+            if me.role not in ("admin", "safety"):
                 raise BadRequest("清空阈值会让该测点停止告警，只有管理员可以操作",
                                  code="NEED_ADMIN")
             from app.services.messages import store as msg_store

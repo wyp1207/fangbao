@@ -25,10 +25,16 @@ async function load() {
     const h = await api.deepHealth()
     const list: { name: string; ok: boolean; detail: string }[] = []
 
+    const age = h.cache.age_s
+    const never = age < 0 || h.cache.poll_count === 0
     list.push({
       name: '机器人数据链路',
       ok: h.cache.online,
-      detail: h.cache.online ? '' : `已 ${Math.round(h.cache.age_s)}s 未收到数据${h.cache.last_error ? '：' + h.cache.last_error : ''}`,
+      detail: h.cache.online
+        ? ''
+        : never
+          ? '服务刚启动，还没取到第一帧数据'
+          : `已 ${Math.round(age)}s 未收到数据${h.cache.last_error ? '：' + h.cache.last_error : ''}`,
     })
     for (const s of h.services ?? []) {
       if (s.name === 'uvicorn' || s.name === 'server') continue

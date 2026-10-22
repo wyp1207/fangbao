@@ -32,6 +32,7 @@ class RobotRuntime:
     cache: StateCache = field(default_factory=StateCache)
     error: str | None = None
     task: asyncio.Task | None = None
+    clock_skew_s: float | None = None     # 机器人时间 - 平台时间（秒）
 
     def status(self) -> dict:
         snap = self.cache.as_dict()
@@ -41,6 +42,7 @@ class RobotRuntime:
             "online": snap["online"],
             "age_s": snap["age_s"],
             "last_error": self.error or snap["last_error"],
+            "clock_skew_s": self.clock_skew_s,
         }
 
 
@@ -99,6 +101,7 @@ class RobotRegistry:
                 pose = await rt.adapter.get_pose()
                 rt.cache.update(status=status, info=info, galileo=galileo, pose=pose)
                 rt.error = None
+                rt.clock_skew_s = self._check_clock(rt, status, info, galileo)
                 if self._alarms is not None:
                     self._alarms.evaluate(status=status, info=info, age_s=0.0,
                                           robot_id=rt.robot_id)
@@ -116,6 +119,53 @@ class RobotRegistry:
                 rt.error = f"{exc.__class__.__name__}: {exc}"
                 log.exception("设备 %s 轮询异常", rt.name)
             await asyncio.sleep(interval)
+
+    def _check_clock(self, rt: RobotRuntime, status: dict, info: dict, galileo: dict) -> float | None:
+        """机器人上报时间 vs 平台时间。
+
+        JCROB 不同固件字段名不一样，这里按常见键名找；找不到就返回 None
+        （= 无法核对，不是"没有偏差"），页面显示「未上报时间」。
+        """
+        raw = None
+        for src in (status, info, galileo):
+            if not isinstance(src, dict):
+                continue
+            for key in ("timestamp", "time", "ts", "now", "server_time"):
+                if key in src and src[key] is not None:
+                    raw = src[key]
+                    break
+            if raw is not None:
+                break
+        if raw is None:
+            return None
+
+        import datetime as _dt
+
+        robot_ts = None
+        if isinstance(raw, (int, float)):
+            v = float(raw)
+            robot_ts = v / 1000 if v > 1e11 else v       # 毫秒/秒都兼容
+        elif isinstance(raw, str):
+            try:
+                robot_ts = _dt.datetime.fromisoformat(raw.replace("Z", "+00:00")).timestamp()
+            except ValueError:
+                return None
+        if robot_ts is None:
+            return None
+
+        skew = round(robot_ts - _dt.datetime.now().timestamp(), 1)
+        try:
+            from app.api.v1.settings import load_all
+            limit = float(load_all().get("clock.max_skew_s", 2))
+        except Exception:  # noqa: BLE001
+            limit = 2.0
+        if abs(skew) > limit and self._alarms is not None:
+            self._alarms.raise_external(
+                metric=f"clock_skew_{rt.robot_id}", level="warn",
+                message=f"{rt.name} 时钟偏差 {skew:+.1f}s（超过 {limit:g}s），"
+                        f"录像/告警/遥测时间会对不齐",
+            )
+        return skew
 
     async def stop(self) -> None:
         for rt in self._runtimes.values():
