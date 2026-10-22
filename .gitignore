@@ -47,3 +47,7 @@ docs/screenshots/_*.json
 # Playwright 运行产物
 web/test-results/
 web/playwright-report/
+
+# 评审 agent 留下的临时探测文件
+.pt_big.bin
+web/_*.mjs
