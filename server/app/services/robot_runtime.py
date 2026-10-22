@@ -95,16 +95,31 @@ class RobotRegistry:
 
         while True:
             try:
-                status = await rt.adapter.get_status()
-                info = await rt.adapter.get_info()
-                galileo = await rt.adapter.get_galileo()
-                pose = await rt.adapter.get_pose()
-                rt.cache.update(status=status, info=info, galileo=galileo, pose=pose)
+                # 并行取四路：串行时最坏 4×超时会把"在线"打成"离线"
+                import asyncio as _aio
+
+                results = await _aio.gather(
+                    rt.adapter.get_status(), rt.adapter.get_info(),
+                    rt.adapter.get_galileo(), rt.adapter.get_pose(),
+                    return_exceptions=True,
+                )
+                if all(isinstance(r, Exception) for r in results):
+                    raise results[0]
+                prev = rt.cache.as_dict()
+                keys = ("status", "info", "galileo", "pose")
+                merged = {
+                    k: (prev.get(k) or {}) if isinstance(results[i], Exception) else results[i]
+                    for i, k in enumerate(keys)
+                }
+                fresh = not any(isinstance(r, Exception) for r in results)
+                rt.cache.update(**merged, fresh=fresh)
+                status, info, galileo = merged["status"], merged["info"], merged["galileo"]
                 rt.error = None
                 rt.clock_skew_s = self._check_clock(rt, status, info, galileo)
                 if self._alarms is not None:
                     self._alarms.evaluate(
-                        status=status, info=info, age_s=0.0, robot_id=rt.robot_id,
+                        status=status, info=info,
+                        age_s=rt.cache.as_dict()["age_s"], robot_id=rt.robot_id,
                         offline_after_s=getattr(rt.adapter, "offline_after_s", None))
             except jerr.JcrobError as exc:
                 rt.cache.mark_failure(exc.code)

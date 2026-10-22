@@ -137,8 +137,21 @@ async def lifespan(app: FastAPI):
         while True:
             try:
                 from app.api.v1.settings import load_all
-                days = int(load_all().get("telemetry.keep_days", 7))
-                telemetry_purge(_SL, keep_days=days)
+                cfg = load_all()
+                telemetry_purge(_SL, keep_days=int(cfg.get("telemetry.keep_days", 7)))
+                # 环境读数单独保留期：10 测点 5s 采样一年 6300 万行，不清会先 OOM 再爆盘
+                try:
+                    from datetime import datetime as _dt, timedelta as _td
+
+                    from app.models.sensor import SensorReading
+
+                    cutoff = _dt.now() - _td(days=int(cfg.get("sensor.keep_days", 90)))
+                    with _SL() as _db:
+                        _db.query(SensorReading).filter(SensorReading.ts < cutoff).delete(
+                            synchronize_session=False)
+                        _db.commit()
+                except Exception:  # noqa: BLE001
+                    pass
             except Exception:  # noqa: BLE001
                 pass
             _t.sleep(6 * 3600)
