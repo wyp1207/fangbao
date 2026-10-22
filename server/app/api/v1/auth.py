@@ -17,10 +17,12 @@ def _cookie_secure(request: Request, settings) -> bool:
         return bool(settings.cookie_secure)
     proto = (request.headers.get("x-forwarded-proto") or request.url.scheme or "").lower()
     return proto == "https"
-from app.core.errors import BadRequest, Unauthorized
+from app.core.errors import BadRequest, PlatformError, Unauthorized
 import time
 
-from app.core.security import create_access_token, validate_password, hash_password, new_csrf_token, verify_password
+from app.core.security import (create_access_token, hash_password, new_csrf_token,
+                               totp_code, totp_secret, totp_uri, totp_verify,
+                               validate_password, verify_password)
 from app.db.session import get_db
 from app.services.messages import audit
 from app.models.user import User
@@ -108,6 +110,7 @@ def _reused_password(db: Session, user: User, plain: str) -> bool:
 class LoginIn(BaseModel):
     username: str = Field(min_length=1, max_length=64)
     password: str = Field(min_length=1, max_length=128)
+    totp_code: str | None = None          # 开了双因子的账号必须带
 
 
 class UserOut(BaseModel):
@@ -132,6 +135,13 @@ def login(body: LoginIn, response: Response, request: Request,
         raise Unauthorized(f"登录失败次数过多，请 {left // 60 + 1} 分钟后再试")
 
     user = db.scalar(select(User).where(User.username == body.username))
+    if user and user.totp_enabled and user.is_active and verify_password(body.password, user.password_hash):
+        if not body.totp_code:
+            raise PlatformError("该账号已开启双因子，请输入动态码", code="TOTP_REQUIRED",
+                                status_code=401)
+        if not totp_verify(user.totp_secret or "", body.totp_code):
+            raise PlatformError("动态码不正确", code="TOTP_INVALID", status_code=401)
+
     if not user or not user.is_active or not verify_password(body.password, user.password_hash):
         _record_fail(db, key)
         from app.services.messages import store as msg_store
@@ -230,3 +240,55 @@ def verify_own_password(
     if not verify_password(body.password, user.password_hash):
         raise Unauthorized("密码不正确")
     return {"ok": True}
+
+
+# ---------------- 双因子（TOTP） ----------------
+
+@router.post("/totp/start", dependencies=[Depends(require_csrf)])
+def totp_start(
+    db: Session = Depends(get_db),
+    me: User = Depends(get_current_user),
+) -> dict:
+    """生成密钥并返回 otpauth:// 链接（还没启用，等输对一次码）。"""
+    secret = totp_secret()
+    me.totp_secret = secret
+    db.commit()
+    return {"secret": secret, "uri": totp_uri(secret, me.username),
+            "enabled": bool(me.totp_enabled)}
+
+
+class TotpIn(BaseModel):
+    code: str = Field(min_length=6, max_length=6)
+
+
+@router.post("/totp/enable", dependencies=[Depends(require_csrf)])
+def totp_enable(
+    body: TotpIn, db: Session = Depends(get_db),
+    me: User = Depends(get_current_user),
+) -> dict:
+    if not me.totp_secret:
+        raise BadRequest("请先生成密钥", code="NO_SECRET")
+    if not totp_verify(me.totp_secret, body.code):
+        raise BadRequest("动态码不正确，请确认手机时间准确", code="TOTP_INVALID")
+    me.totp_enabled = True
+    db.commit()
+    audit(db=db, action="auth.totp_enable", target=me.username, user=me)
+    return {"ok": True, "enabled": True}
+
+
+class TotpOff(BaseModel):
+    password: str = Field(min_length=1, max_length=128)
+
+
+@router.post("/totp/disable", dependencies=[Depends(require_csrf)])
+def totp_disable(
+    body: TotpOff, db: Session = Depends(get_db),
+    me: User = Depends(get_current_user),
+) -> dict:
+    if not verify_password(body.password, me.password_hash):
+        raise BadRequest("密码不正确", code="BAD_PASSWORD")
+    me.totp_enabled = False
+    me.totp_secret = None
+    db.commit()
+    audit(db=db, action="auth.totp_disable", target=me.username, user=me)
+    return {"ok": True, "enabled": False}

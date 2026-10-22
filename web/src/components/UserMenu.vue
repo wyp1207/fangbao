@@ -66,6 +66,54 @@ function switchAccount() {
   void logout()
 }
 
+const totpOpen = ref(false)
+const totpSecret = ref('')
+const totpUri = ref('')
+const totpCode = ref('')
+const totpBusy = ref(false)
+const totpEnabled = ref(false)
+const totpErr = ref('')
+
+async function openTotp() {
+  totpOpen.value = true
+  totpErr.value = ''
+  totpCode.value = ''
+  try {
+    const res = await api.totpStart()
+    totpSecret.value = res.secret
+    totpUri.value = res.uri
+    totpEnabled.value = res.enabled
+  } catch (e) {
+    totpErr.value = e instanceof ApiError ? e.message : '生成密钥失败'
+  }
+}
+
+async function enableTotp() {
+  totpBusy.value = true
+  totpErr.value = ''
+  try {
+    await api.totpEnable(totpCode.value.trim())
+    totpEnabled.value = true
+    toast('双因子已开启', 'ok')
+  } catch (e) {
+    totpErr.value = e instanceof ApiError ? e.message : '开启失败'
+  } finally {
+    totpBusy.value = false
+  }
+}
+
+async function disableTotp() {
+  const pwd = window.prompt('关闭双因子需要输入当前密码')
+  if (!pwd) return
+  try {
+    await api.totpDisable(pwd)
+    totpEnabled.value = false
+    toast('已关闭双因子', 'warn')
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : '关闭失败', 'danger')
+  }
+}
+
 function openPwd() {
   close()
   oldPwd.value = ''
@@ -135,6 +183,7 @@ onBeforeUnmount(() => {
         <li v-if="isAdmin" @click="go('users')">用户管理</li>
         <li @click="go('settings')">系统设置</li>
         <li @click="openPwd">修改密码</li>
+        <li @click="openTotp">双因子认证</li>
         <li class="divider" />
         <li @click="switchAccount">切换账户</li>
         <li class="danger" @click="logout">退出登录</li>
@@ -150,6 +199,29 @@ onBeforeUnmount(() => {
           <button class="btn btn-sm" @click="pwdOpen = false">取消</button>
           <button class="btn btn-sm primary" :disabled="pwdBusy" @click="submitPwd">确认修改</button>
         </div>
+      </div>
+    </div>
+
+    <div v-if="totpOpen" class="um-mask" @click.self="totpOpen = false">
+      <div class="um-modal">
+        <div class="panel-title"><span>双因子认证 · {{ username }}</span></div>
+        <template v-if="totpEnabled">
+          <p class="um-ok">已开启：登录时需要输入 Authenticator 的 6 位动态码。</p>
+          <button class="btn btn-sm danger" @click="disableTotp">关闭双因子</button>
+        </template>
+        <template v-else>
+          <p class="um-hint">用 Google Authenticator / 微软 Authenticator 添加这个密钥：</p>
+          <code class="um-secret">{{ totpSecret }}</code>
+          <p class="um-hint">或直接打开：<span class="um-uri">{{ totpUri }}</span></p>
+          <label class="um-fld"><span>输入 App 显示的 6 位码</span>
+            <input class="input" v-model="totpCode" inputmode="numeric" maxlength="6" />
+          </label>
+          <p v-if="totpErr" class="um-err">{{ totpErr }}</p>
+          <div class="um-actions">
+            <button class="btn btn-sm" @click="totpOpen = false">取消</button>
+            <button class="btn btn-sm primary" :disabled="totpBusy || totpCode.length !== 6" @click="enableTotp">开启</button>
+          </div>
+        </template>
       </div>
     </div>
   </div>
@@ -198,6 +270,17 @@ onBeforeUnmount(() => {
 
 <style>
 /* Teleport 到 body 的菜单用全局样式 */
+.um-mask { position: fixed; inset: 0; z-index: 2147483400; display: grid; place-items: center; background: rgba(2, 14, 30, 0.7); }
+.um-modal { width: 430px; padding: 16px; background: linear-gradient(180deg, rgba(0,112,200,.98), rgba(0,56,110,.99)); border: 1px solid rgba(111,227,255,.6); border-radius: 6px; }
+.um-hint { font-size: 12.5px; color: #9fd2ff; margin: 8px 0; }
+.um-secret { display: block; padding: 8px; background: #04203c; border: 1px solid rgba(111,227,255,.4); font-family: ui-monospace, monospace; word-break: break-all; font-size: 13px; }
+.um-uri { font-size: 11px; color: #cfe9ff; word-break: break-all; }
+.um-fld { display: block; margin: 10px 0; }
+.um-fld > span { display: block; font-size: 12px; color: #9fd2ff; margin-bottom: 4px; }
+.um-fld .input { width: 100%; box-sizing: border-box; }
+.um-err { color: #ff8a8a; font-size: 12px; }
+.um-ok { color: #6ff0c0; font-size: 13px; }
+.um-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
 .um-menu {
   position: fixed;
   z-index: 2147483000;

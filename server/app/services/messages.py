@@ -98,6 +98,23 @@ class MessageStore:
 store = MessageStore()
 
 
+def _canonical(row) -> str:
+    """定长、可复算的字符串。字段顺序固定，避免"改一行但哈希不变"。"""
+    return "|".join([
+        str(row.ts.isoformat(timespec="microseconds") if row.ts else ""),
+        str(row.user_id or ""), str(row.username or ""), str(row.client_ip or ""),
+        str(row.action or ""), str(row.target or ""),
+        str(row.params_json or ""), "1" if row.success else "0",
+        str(row.result_summary or ""), str(row.duration_ms or ""),
+    ])
+
+
+def _row_hash(prev: str | None, row) -> str:
+    import hashlib
+
+    return hashlib.sha256(((prev or "") + "|" + _canonical(row)).encode()).hexdigest()
+
+
 def audit(db: Session, *, action: str, target: str | None = None,
           user: Any = None, detail: dict | None = None,
           client_ip: str | None = None, success: bool = True,
@@ -117,7 +134,14 @@ def audit(db: Session, *, action: str, target: str | None = None,
             success=success,
             result_summary=summary,
         )
+        last = (db.query(OperationLog)
+                .filter(OperationLog.row_hash.isnot(None))
+                .order_by(OperationLog.id.desc()).first())
+        row.prev_hash = last.row_hash if last else None
+        # 先 flush 拿到 id（id 不进哈希，避免自引用）
         db.add(row)
+        db.flush()
+        row.row_hash = _row_hash(row.prev_hash, row)
         db.commit()
     except Exception:  # noqa: BLE001 - 审计失败不影响业务，但要留在日志里
         import logging
@@ -162,3 +186,29 @@ def audit_list(db: Session, *, limit: int = 100, offset: int = 0,
             for r in rows
         ],
     }
+
+
+def verify_audit_chain(db: Session, limit: int = 100000) -> dict:
+    """逐行复算哈希，返回第一个断点。
+
+    能发现：改了内容、删了中间行（链断）、改了顺序。
+    发现不了：整链重算（需要外部锚定/第三方时间戳，二期）。
+    """
+    from app.models.operation_log import OperationLog
+
+    # 上线前写的老记录没有哈希（row_hash 为 NULL），不算断链；从第一条带哈希的开始校验
+    legacy = db.query(OperationLog).filter(OperationLog.row_hash.is_(None)).count()
+    rows = (db.query(OperationLog)
+            .filter(OperationLog.row_hash.isnot(None))
+            .order_by(OperationLog.id).limit(limit).all())
+    prev = rows[0].prev_hash if rows else None
+    for r in rows:
+        expect = _row_hash(r.prev_hash, r)
+        if (r.prev_hash or None) != (prev or None):
+            return {"ok": False, "broken_at": r.id, "reason": "prev_hash 对不上（可能缺行）",
+                    "checked": r.id}
+        if r.row_hash != expect:
+            return {"ok": False, "broken_at": r.id, "reason": "row_hash 对不上（内容被改）",
+                    "checked": r.id}
+        prev = r.row_hash
+    return {"ok": True, "checked": len(rows), "last_hash": prev, "legacy_rows": legacy}

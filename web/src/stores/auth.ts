@@ -13,10 +13,10 @@ export const useAuthStore = defineStore('auth', {
     mustChangePassword: (s) => !!s.user?.must_change_password,
   },
   actions: {
-    async login(username: string, password: string) {
+    async login(username: string, password: string, totpCode?: string) {
       this.loading = true
       try {
-        const res = await api.login(username, password)
+        const res = await api.login(username, password, totpCode)
         this.user = res.user
         this.checked = true
       } finally {

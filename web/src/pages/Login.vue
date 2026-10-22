@@ -9,14 +9,26 @@ const router = useRouter()
 const username = ref('admin')
 const password = ref('')
 const error = ref('')
+const totp = ref('')
+const needTotp = ref(false)
 
 async function submit() {
   error.value = ''
   try {
-    await auth.login(username.value, password.value)
+    await auth.login(username.value, password.value, needTotp.value ? totp.value : undefined)
     await router.push({ name: 'dashboard' })
   } catch (e) {
-    error.value = e instanceof ApiError ? e.message : '登录失败'
+    if (e instanceof ApiError) {
+      // 开了双因子：服务端会先要动态码，这时才把输入框亮出来
+      if (e.code === 'TOTP_REQUIRED' || e.code === 'TOTP_INVALID') {
+        needTotp.value = true
+        error.value = e.code === 'TOTP_INVALID' ? '动态码不正确' : '请输入 6 位动态码'
+        return
+      }
+      error.value = e.message
+      return
+    }
+    error.value = '登录失败'
   }
 }
 </script>
@@ -38,6 +50,12 @@ async function submit() {
         <span>账 号</span>
         <input v-model="username" autocomplete="username" @keyup.enter="submit" />
       </label>
+      <label v-if="needTotp" class="field">
+        <span>动态码</span>
+        <input v-model="totp" inputmode="numeric" maxlength="6" placeholder="Authenticator 里的 6 位数字"
+               @keyup.enter="submit" />
+      </label>
+
       <label class="field">
         <span>密 码</span>
         <input v-model="password" type="password" autocomplete="current-password" @keyup.enter="submit" />

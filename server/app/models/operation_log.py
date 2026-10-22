@@ -27,3 +27,6 @@ class OperationLog(Base):
     success: Mapped[bool] = mapped_column(Boolean, default=True)
     result_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # 哈希链：row_hash = sha256(prev_hash + 本条内容)，改任何一行都会断链
+    prev_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    row_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)

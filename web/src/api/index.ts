@@ -204,11 +204,14 @@ export interface AlarmItem {
 }
 
 export const api = {
-  login: (username: string, password: string) =>
+  login: (username: string, password: string, totpCode?: string) =>
     request<{ user: User; csrf_token: string }>('/auth/login', {
       method: 'POST',
-      body: { username, password },
+      body: { username, password, totp_code: totpCode ?? null },
     }),
+  totpStart: () => request<{ secret: string; uri: string; enabled: boolean }>('/auth/totp/start', { method: 'POST' }),
+  totpEnable: (code: string) => request<{ ok: boolean }>('/auth/totp/enable', { method: 'POST', body: { code } }),
+  totpDisable: (password: string) => request<{ ok: boolean }>('/auth/totp/disable', { method: 'POST', body: { password } }),
   logout: () => request<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
   verifyPassword: (password: string) =>
     request<{ ok: boolean }>('/auth/verify', { method: 'POST', body: { password } }),

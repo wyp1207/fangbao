@@ -580,3 +580,77 @@ def test_password_history_and_audit(auth_client):
     bad.post("/api/v1/auth/login", json={"username": "pw_hist", "password": "nope-wrong"})
     logs = auth_client.get("/api/v1/audit-logs?limit=50").json()["items"]
     assert any(x["action"] == "auth.login_failed" for x in logs)
+
+
+def test_audit_chain_detects_tamper(auth_client):
+    """审计哈希链：正常通过；改一行内容/删一行都会被抓出来。"""
+    from app.db.session import SessionLocal
+    from app.models.operation_log import OperationLog
+
+    # 产生几条真实审计
+    auth_client.post("/api/v1/settings", json={"values": {"alarm.battery_warn": 19}})
+    auth_client.post("/api/v1/settings", json={"values": {"alarm.battery_warn": 20}})
+
+    ok = auth_client.get("/api/v1/audit-logs/verify").json()
+    assert ok["ok"] is True and ok["checked"] >= 2
+
+    with SessionLocal() as db:
+        row = db.query(OperationLog).order_by(OperationLog.id.desc()).first()
+        rid = row.id
+        row.target = "被人改过了"
+        db.commit()
+
+    bad = auth_client.get("/api/v1/audit-logs/verify").json()
+    assert bad["ok"] is False
+    assert bad["broken_at"] == rid
+    assert "row_hash" in bad["reason"]
+
+    # 删中间一行：链断（prev_hash 对不上）
+    with SessionLocal() as db:
+        victim = db.query(OperationLog).order_by(OperationLog.id.desc()).offset(1).first()
+        db.delete(victim)
+        db.commit()
+    again = auth_client.get("/api/v1/audit-logs/verify").json()
+    assert again["ok"] is False
+
+
+def test_totp_two_factor(auth_client):
+    """开双因子：不带码不能登录；带对了才能进；密码正确也绕不过。"""
+    from fastapi.testclient import TestClient
+
+    from app.core.security import totp_code
+
+    made = auth_client.post("/api/v1/users", json={
+        "username": "totp_user", "password": "Init12345", "role": "viewer"})
+    assert made.status_code == 200
+
+    c = TestClient(auth_client.app)
+    r = c.post("/api/v1/auth/login", json={"username": "totp_user", "password": "Init12345"})
+    c.headers.update({"X-CSRF-Token": r.json()["csrf_token"]})
+    # 先改初始密码，否则被强制改密拦住
+    assert c.post("/api/v1/auth/password",
+                  json={"old_password": "Init12345", "new_password": "Second12345"}).status_code == 200
+
+    start = c.post("/api/v1/auth/totp/start")
+    assert start.status_code == 200
+    secret = start.json()["secret"]
+    assert "otpauth://totp/" in start.json()["uri"]
+
+    # 错误码启不了
+    assert c.post("/api/v1/auth/totp/enable", json={"code": "000000"}).status_code == 400
+    good = totp_code(secret)
+    assert c.post("/api/v1/auth/totp/enable", json={"code": good}).status_code == 200
+
+    fresh = TestClient(auth_client.app)
+    # 只给密码 → 要求动态码
+    need = fresh.post("/api/v1/auth/login",
+                      json={"username": "totp_user", "password": "Second12345"})
+    assert need.status_code == 401 and need.json()["code"] == "TOTP_REQUIRED"
+    # 错码 → 拒绝
+    wrong = fresh.post("/api/v1/auth/login", json={
+        "username": "totp_user", "password": "Second12345", "totp_code": "000000"})
+    assert wrong.status_code == 401 and wrong.json()["code"] == "TOTP_INVALID"
+    # 对码 → 通过
+    ok = fresh.post("/api/v1/auth/login", json={
+        "username": "totp_user", "password": "Second12345", "totp_code": totp_code(secret)})
+    assert ok.status_code == 200

@@ -129,3 +129,47 @@ def validate_password(password: str, *, username: str = "") -> None:
     has_digit = any(c.isdigit() for c in password)
     if not (has_alpha and has_digit):
         raise ValueError("密码要同时包含字母和数字")
+
+
+# ---------------- TOTP（RFC 6238，双因子） ----------------
+# 不引第三方库：RFC 6238 就是 HMAC-SHA1 截断，标准库够用
+def totp_secret() -> str:
+    import base64
+    import secrets
+
+    return base64.b32encode(secrets.token_bytes(20)).decode().rstrip("=")
+
+
+def totp_code(secret: str, at: int | None = None, step: int = 30, digits: int = 6) -> str:
+    import base64
+    import hashlib
+    import hmac
+    import struct
+    import time
+
+    key = base64.b32decode(secret + "=" * (-len(secret) % 8))
+    counter = int((at if at is not None else time.time()) // step)
+    msg = struct.pack(">Q", counter)
+    digest = hmac.new(key, msg, hashlib.sha1).digest()
+    offset = digest[-1] & 0x0F
+    code = struct.unpack(">I", digest[offset:offset + 4])[0] & 0x7FFFFFFF
+    return str(code % (10 ** digits)).zfill(digits)
+
+
+def totp_verify(secret: str, code: str, window: int = 1) -> bool:
+    """允许前后各一个时间窗（时钟漂移 ±30s）。"""
+    import time
+
+    code = (code or "").strip()
+    if not secret or not code.isdigit() or len(code) != 6:
+        return False
+    now = time.time()
+    return any(totp_code(secret, at=now + i * 30) == code for i in range(-window, window + 1))
+
+
+def totp_uri(secret: str, account: str, issuer: str = "防爆巡检平台") -> str:
+    from urllib.parse import quote
+
+    label = quote(f"{issuer}:{account}")
+    return (f"otpauth://totp/{label}?secret={secret}&issuer={quote(issuer)}"
+            f"&algorithm=SHA1&digits=6&period=30")
