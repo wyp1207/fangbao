@@ -5,6 +5,7 @@ import { api, type AlarmItem } from '@/api'
 import { useRobotStore } from '@/stores/robot'
 import { useAuthStore } from '@/stores/auth'
 import DarkSelect from '@/components/DarkSelect.vue'
+import { ApiError } from '@/api/client'
 import { toast } from '@/composables/useToast'
 
 const robot = useRobotStore()
@@ -109,6 +110,23 @@ async function ack(id: number) {
   }
 }
 
+// ---- 转工单 ----
+async function asWorkOrder(a: AlarmItem) {
+  try {
+    const o = await api.createWorkOrder({
+      title: a.message || `${a.metric} 告警`,
+      source: 'alarm',
+      source_id: a.id,
+      level: a.level,
+      due_hours: a.level === 'critical' ? 4 : 24,
+      description: `告警 #${a.id} · ${a.metric} · ${(a.started_at ?? '').replace('T', ' ')}`,
+    })
+    toast(`已生成工单 ${o.code ?? ''}，去「工单」页派单`, 'ok', 4000)
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : '转工单失败', 'danger')
+  }
+}
+
 // ---- 处置 / 关闭 ----
 const acting = ref<AlarmItem | null>(null)
 const actMode = ref<'handle' | 'close'>('handle')
@@ -153,6 +171,28 @@ function reset() {
   page.value = 1
 }
 
+function exportCsv() {
+  const head = ['时间', '指标', '级别', '状态', '内容', '确认人', '延时(s)']
+  const data = rows.value.map((a) => [
+    (a.started_at ?? '').replace('T', ' ').slice(0, 19),
+    a.metric, a.level === 'critical' ? '严重' : '提醒',
+    a.status === 'new' ? '未确认' : a.status === 'acked' ? '已确认' : a.status === 'handled' ? '已处置' : '已关闭',
+    (a.message ?? '').replace(/[\r\n,]/g, ' '),
+    a.acked_by ?? '',
+    a.acked_at ? Math.round((Date.parse(a.acked_at) - Date.parse(a.started_at)) / 1000) : '',
+  ])
+  const csv = [head, ...data]
+    .map((r) => r.map((c: unknown) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','))
+    .join('\n')
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = `告警_${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(a.href)
+  toast(`已导出 ${data.length} 条`, 'ok')
+}
+
 onMounted(async () => {
   applyQuery()
   await reload()
@@ -182,7 +222,7 @@ watch([levelFilter, ackFilter], async () => { page.value = 1; await reload() })
         <button class="btn btn-sm warn" @click="reset">重置</button>
         <span class="grow" />
         <button class="btn btn-sm" @click="robot.refreshAlarms()">刷新</button>
-        <button class="btn btn-sm" @click="toast('导出待 W5 落库后开放', 'warn')">导出</button>
+        <button class="btn btn-sm" @click="exportCsv">导出 CSV</button>
       </div>
 
       <table class="grid">
@@ -213,6 +253,7 @@ watch([levelFilter, ackFilter], async () => { page.value = 1; await reload() })
               <div class="row-actions">
                 <button class="act" title="确认告警" :disabled="!!a.acked_at || !auth.canWrite" @click="ack(a.id)">✓</button>
                 <button class="act" title="处置（写清做了什么）" :disabled="!auth.canWrite || !!a.closed_at" @click="openAct(a, 'handle')">✎</button>
+                <button class="act" title="转工单（派单闭环）" :disabled="!auth.canWrite || !!a.closed_at" @click="asWorkOrder(a)">→</button>
                 <button class="act danger" title="关闭（给结论）" :disabled="!auth.canWrite || !!a.closed_at" @click="openAct(a, 'close')">⏹</button>
                 <button class="act" title="回看这个时刻的录像" @click="router.push({ name: 'record-playback', query: { date: a.started_at.slice(0, 10), t: a.started_at.slice(11, 19) } })">⟲</button>
               </div>

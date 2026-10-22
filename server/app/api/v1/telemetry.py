@@ -110,12 +110,16 @@ def purge(session_factory: Callable[[], _Session], keep_days: int = KEEP_DAYS) -
 def query_telemetry(
     hours: int = Query(24, ge=1, le=24 * 14),
     points: int = Query(180, ge=10, le=1000),
+    robot_id: int | None = Query(None),
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ) -> dict:
     since = datetime.now() - timedelta(hours=hours)
+    conds = [TelemetrySample.ts >= since]
+    if robot_id is not None:
+        conds.append(TelemetrySample.robot_id == robot_id)
     rows = db.scalars(
-        select(TelemetrySample).where(TelemetrySample.ts >= since).order_by(TelemetrySample.ts)
+        select(TelemetrySample).where(*conds).order_by(TelemetrySample.ts)
     ).all()
     if not rows:
         return {"count": 0, "series": [], "stats": None, "hours": hours}

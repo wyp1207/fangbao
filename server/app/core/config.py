@@ -34,6 +34,8 @@ class Settings(BaseSettings):
 
     bootstrap_admin: str = "admin"
     bootstrap_password: str = "admin123"
+    # 初始管理员是否强制改密：生产必须开；测试环境关掉，否则夹具没法跑
+    force_password_change: bool = True
 
     log_level: str = "INFO"
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"

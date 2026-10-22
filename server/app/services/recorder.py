@@ -30,7 +30,8 @@ FFPROBE = shutil.which("ffprobe")
 
 ROOT = Path(os.environ.get("JC_RECORD_DIR", Path(__file__).resolve().parents[2] / "data" / "recordings"))
 SEGMENT_SECONDS = int(os.environ.get("JC_RECORD_SEGMENT_SECONDS", "300"))
-MAX_RECORDERS = 2
+# 并发录制路数：按 CPU 和码流定，运维可用环境变量调，不用改代码
+MAX_RECORDERS = int(os.getenv("JC_RECORD_MAX_STREAMS", "2"))
 NAME_RE = re.compile(r"^(?P<vid>\d+)_(?P<ts>\d{8}_\d{6})\.mp4$")
 
 

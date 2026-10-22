@@ -6,7 +6,7 @@ from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.core.errors import Forbidden, Unauthorized
+from app.core.errors import Forbidden, PlatformError, Unauthorized
 from app.core.security import csrf_matches, decode_access_token
 from app.db.session import get_db
 from app.models.user import User
@@ -29,7 +29,23 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     user = db.get(User, int(payload["sub"]))
     if not user or not user.is_active:
         raise Unauthorized("账号不可用")
+    _enforce_password_change(request, user)
     return user
+
+
+# 初始密码没改之前，只允许这几个接口
+_PWD_CHANGE_ALLOWED = ("/auth/password", "/auth/me", "/auth/logout", "/auth/login")
+
+
+def _enforce_password_change(request: Request, user: User) -> None:
+    """后端也要拦：只靠前端弹窗，绕过前端直接调接口就形同虚设。"""
+    if not getattr(user, "must_change_password", False):
+        return
+    path = request.url.path
+    if any(path.endswith(p) for p in _PWD_CHANGE_ALLOWED):
+        return
+    raise PlatformError("请先修改初始密码再使用平台", code="MUST_CHANGE_PASSWORD",
+                        status_code=403)
 
 
 def require_roles(*roles: str):

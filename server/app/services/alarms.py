@@ -105,15 +105,17 @@ class AlarmStore:
             found.append(("estop", "critical", "硬件急停被按下", True))
 
         if age_s < 0 or age_s > cfg["offline"]:
-            found.append(("offline", "critical",
-                          f"机器人通信中断（{age_s:.0f}s 未更新）" if age_s >= 0 else "机器人通信中断",
-                          round(age_s, 1)))
+            # 抖动只报提醒，持续断线才升级成严重（默认 3 倍判定时间）
+            lvl = "critical" if age_s > cfg["offline"] * 3 else "warn"
+            msg = f"机器人通信中断（{age_s:.0f}s 未更新）" if age_s >= 0 else "机器人通信中断"
+            found.append(("offline", lvl, msg, round(age_s, 1)))
 
         # 置信度升级：同一指标 5 分钟内第 3 次出现，就按严重处理，
         # 避免"网络抖动 → 一直提示 → 值班忽略 → 真事故漏掉"
         with self._lock:
             for metric, level, message, value in list(found):
-                hits = self._recent_hits.setdefault(metric, [])
+                rkey = f"{robot_id}:{metric}" if robot_id is not None else metric
+                hits = self._recent_hits.setdefault(rkey, [])
                 hits.append(now)
                 hits[:] = [t for t in hits if now - t <= self.escalate_window_s]
                 if level == "warn" and len(hits) >= self.escalate_hits:
@@ -136,10 +138,10 @@ class AlarmStore:
                 first = self._first_seen.setdefault(dkey, now)
                 if cfg["sustain"] > 0 and now - first < cfg["sustain"]:
                     continue  # 还没持续够久，先不报（防抖）
-                last = self._last_raised.get(metric)
+                last = self._last_raised.get(dkey)
                 if last is not None and now - last < cfg["dedupe"]:
                     continue
-                self._last_raised[metric] = now
+                self._last_raised[dkey] = now
                 alarm = Alarm(id=0, metric=metric, level=level, message=message, value=value)
                 alarm.camera_id = camera_id  # type: ignore[attr-defined]
                 if self._session_factory is not None:
@@ -167,6 +169,14 @@ class AlarmStore:
             db.refresh(rec)
             alarm.id = rec.id
             alarm.started_at = rec.started_at.isoformat(timespec="seconds")
+
+            # 严重告警自动进工单（PPT 模块五：异常自动进工单）
+            if alarm.level == "critical":
+                try:
+                    from app.services.work_orders import ensure_from_alarm
+                    ensure_from_alarm(db, alarm)
+                except Exception:  # noqa: BLE001 - 建单失败不能影响告警
+                    pass
             # 落库后立即入队外发（非阻塞）
             try:
                 from app.services import notify as notify_svc
@@ -188,6 +198,13 @@ class AlarmStore:
             alarm.camera_id = camera_id  # type: ignore[attr-defined]
             if self._session_factory is not None:
                 self._persist(alarm, robot_id)
+                if alarm.level == "critical":
+                    try:
+                        from app.services.work_orders import ensure_from_alarm
+                        with self._session_factory() as _db:
+                            ensure_from_alarm(_db, alarm)
+                    except Exception:  # noqa: BLE001
+                        pass
             else:
                 alarm.id = len(self._items) + 1
             self._items.append(alarm)

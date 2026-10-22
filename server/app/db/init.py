@@ -10,6 +10,7 @@ from app.core.config import get_settings
 from app.core.security import hash_password
 from app.db.session import Base, SessionLocal, engine
 from app.models.alarm import AlarmRecord  # noqa: F401
+from app.models.inspection import InspectionItem, InspectionPlan, InspectionTask, WorkOrder  # noqa: F401
 from app.models.map_library import PlatformMap, PointDraft  # noqa: F401
 from app.models.message import MessageRecord  # noqa: F401
 from app.models.record_plan import RecordPlan  # noqa: F401
@@ -42,7 +43,7 @@ def ensure_bootstrap() -> None:
                 username=settings.bootstrap_admin,
                 password_hash=hash_password(settings.bootstrap_password),
                 role="admin",
-                must_change_password=True,      # 初始密码必须改掉
+                must_change_password=settings.force_password_change,
             ))
             log.warning(
                 "库是空的，已创建初始管理员 %s（密码取自 JC_BOOTSTRAP_PASSWORD）——"
@@ -62,7 +63,7 @@ def bootstrap() -> None:
                 username=settings.bootstrap_admin,
                 password_hash=hash_password(settings.bootstrap_password),
                 role="admin",
-                must_change_password=True,      # 初始密码必须改掉
+                must_change_password=settings.force_password_change,
             ))
             log.info("创建初始管理员 %s", settings.bootstrap_admin)
         if not db.scalar(select(Robot)):

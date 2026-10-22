@@ -5,6 +5,7 @@ const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/login', name: 'login', component: () => import('@/pages/Login.vue') },
+  { path: '/m/task/:id', name: 'mobile-check', component: () => import('@/pages/MobileCheck.vue') },
     // 驾驶舱是整屏大屏，独立于后台布局，避免叠两层顶栏
     { path: '/dashboard', name: 'dashboard', component: () => import('@/pages/Dashboard.vue') },
     {
@@ -21,6 +22,8 @@ const router = createRouter({
 
         // 巡检管理
         { path: 'tasks', name: 'tasks', component: () => import('@/pages/Tasks.vue') },
+        { path: 'inspection', name: 'inspection', component: () => import('@/pages/Inspection.vue') },
+        { path: 'work-orders', name: 'work-orders', component: () => import('@/pages/WorkOrders.vue') },
         { path: 'task-runs', name: 'task-runs', component: () => import('@/pages/TaskRuns.vue') },
         { path: 'task-templates', name: 'task-templates', component: () => import('@/pages/TaskTemplates.vue') },
         { path: 'points', name: 'points', component: () => import('@/pages/Points.vue') },

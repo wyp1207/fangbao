@@ -125,7 +125,8 @@ async def import_map(
 
 
 @router.get("/{map_id}/image")
-def get_image(map_id: int, db: Session = Depends(get_db)) -> FileResponse:
+def get_image(map_id: int, db: Session = Depends(get_db),
+              _: User = Depends(get_current_user)) -> FileResponse:
     m = db.get(PlatformMap, map_id)
     if not m:
         raise NotFound("地图不存在")

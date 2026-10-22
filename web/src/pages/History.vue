@@ -192,7 +192,7 @@ onMounted(async () => {
       </table>
 
       <p class="muted small">
-        告警目前是服务端内存里的环形缓冲（重启即清空）；状态/环境历史采样表与 7 天/180 天保留策略在 W5 落库，
+        告警已落库（alarm_record），重启不丢；状态/环境采样也存在 telemetry_sample / sensor_reading 里，
         那之后这里的“按时间范围查询”才是真正查库。
       </p>
     </section>

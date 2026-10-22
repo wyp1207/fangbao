@@ -272,6 +272,32 @@ export const api = {
     if (dateTo) q.push(`date_to=${dateTo}`)
     return request<Record<string, unknown>>(`/reports/summary${q.length ? '?' + q.join('&') : ''}`)
   },
+  inspectionPlans: () => request<Record<string, unknown>[]>('/inspection/plans'),
+  createInspectionPlan: (body: Record<string, unknown>) =>
+    request<Record<string, unknown>>('/inspection/plans', { method: 'POST', body }),
+  inspectionTasks: (params: { status?: string; mine?: boolean } = {}) => {
+    const qs = Object.entries(params).filter(([, v]) => v).map(([k, v]) => `${k}=${v}`).join('&')
+    return request<{ total: number; items: Record<string, unknown>[] }>(`/inspection/tasks${qs ? '?' + qs : ''}`)
+  },
+  inspectionTask: (id: number) => request<Record<string, unknown>>(`/inspection/tasks/${id}`),
+  generateInspectionTask: (body: { plan_id: number; due_hours?: number }) =>
+    request<Record<string, unknown>>('/inspection/tasks/generate', { method: 'POST', body }),
+  checkInspectionItem: (taskId: number, itemId: number, body: Record<string, unknown>) =>
+    request<Record<string, unknown>>(`/inspection/tasks/${taskId}/items/${itemId}/check`, { method: 'POST', body }),
+  finishInspectionTask: (taskId: number) =>
+    request<Record<string, unknown>>(`/inspection/tasks/${taskId}/finish`, { method: 'POST' }),
+  workOrders: (params: { status?: string } = {}) => {
+    const qs = params.status ? `?status=${params.status}` : ''
+    return request<{ total: number; items: Record<string, unknown>[] }>(`/work-orders${qs}`)
+  },
+  createWorkOrder: (body: Record<string, unknown>) =>
+    request<Record<string, unknown>>('/work-orders', { method: 'POST', body }),
+  assignWorkOrder: (id: number, body: { assignee_id: number; due_hours?: number }) =>
+    request<Record<string, unknown>>(`/work-orders/${id}/assign`, { method: 'POST', body }),
+  transitionWorkOrder: (id: number, body: { status: string; resolution?: string | null }) =>
+    request<Record<string, unknown>>(`/work-orders/${id}/transition`, { method: 'POST', body }),
+  escalateWorkOrder: (id: number) =>
+    request<Record<string, unknown>>(`/work-orders/${id}/escalate`, { method: 'POST' }),
   taskRuns: (params: { status?: string; limit?: number } = {}) => {
     const qs = Object.entries(params).filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&')
     return request<{ total: number; items: Record<string, unknown>[] }>(`/task-runs${qs ? '?' + qs : ''}`)

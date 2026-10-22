@@ -38,7 +38,7 @@ if [ ! -f env ]; then
   echo "   openssl rand -hex 32   # 生成密钥"
   exit 1
 fi
-if grep -q "please-change-this" env; then
+if grep -qE "please-change-this|please-change-on-first-login" env; then
   echo "!! deploy/env 里还是占位密钥，先改掉再部署"
   exit 1
 fi

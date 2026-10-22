@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 from app.adapters.jcrob import build_adapter
 from app.adapters.jcrob import errors as jerr
 from app.api.v1 import (alarms, audit, auth, devices, health, map_library,
-                        messages, notify, record_plans, recordings, reports, robots, sensors,
+                        inspection, messages, notify, record_plans, recordings, reports, robots, sensors,
                         task_runs, task_templates, telemetry,
                         settings as settings_api, users, videos)
 from app.core.config import get_settings
@@ -110,6 +110,24 @@ async def lifespan(app: FastAPI):
 
     from app.services.disk_monitor import monitor as disk_monitor
     disk_monitor.attach(alarms)
+
+    # 遥测/环境读数保留期清理（原来 purge() 只定义没调度，表会无限长）
+    def _telemetry_janitor():
+        import time as _t
+        while True:
+            try:
+                telemetry_purge(_SL)
+            except Exception:  # noqa: BLE001
+                pass
+            _t.sleep(6 * 3600)
+
+    import threading as _th
+    telemetry_janitor = _th.Thread(target=_telemetry_janitor, daemon=True)
+    telemetry_janitor.start()
+
+    from app.services.work_orders import WorkOrderEscalator
+    wo_escalator = WorkOrderEscalator(_SL)
+    wo_escalator.start()
     disk_monitor.start()
 
     # 多设备：按台账给每台启用的设备起一个轮询任务
@@ -126,6 +144,10 @@ async def lifespan(app: FastAPI):
         # 录像进程是外部 ffmpeg，必须显式收掉，否则会变成孤儿进程
         from app.services.recorder import registry as recorder_registry
         recorder_registry.stop_all()
+        try:
+            wo_escalator.stop()
+        except Exception:  # noqa: BLE001
+            pass
         try:
             from app.services.disk_monitor import monitor as disk_monitor
             disk_monitor.stop()
@@ -187,6 +209,7 @@ def create_app() -> FastAPI:
     app.include_router(reports.router, prefix=settings.api_prefix)
     app.include_router(task_templates.router, prefix=settings.api_prefix)
     app.include_router(task_runs.router, prefix=settings.api_prefix)
+    app.include_router(inspection.router, prefix=settings.api_prefix)
     app.include_router(telemetry.router, prefix=settings.api_prefix)
     return app
 

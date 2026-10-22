@@ -235,6 +235,13 @@ def test_safety_role_scope(auth_client):
     assert r.status_code == 200
     c2.headers.update({"X-CSRF-Token": r.json()["csrf_token"]})
 
+    # 新账号必须先改初始密码（后端也会拦）
+    assert c2.put("/api/v1/settings", json={"values": {"alarm.battery_warn": 21}}).status_code == 403
+    changed = c2.post("/api/v1/auth/password",
+                      json={"old_password": "Safety12345", "new_password": "Safety67890"})
+    assert changed.status_code == 200
+    c2.headers.update({"X-CSRF-Token": changed.json().get("csrf_token", r.json()["csrf_token"])})
+
     ok = c2.put("/api/v1/settings", json={"values": {"alarm.battery_warn": 21}})
     assert ok.status_code == 200
 
@@ -334,3 +341,62 @@ def test_must_change_password_flow(auth_client):
     assert auth_client.get("/api/v1/users").json()[-1] is not None
     rows = {u["username"]: u for u in auth_client.get("/api/v1/users").json()}
     assert rows["pw_flow"]["must_change_password"] is True
+
+
+def test_inspection_flow(auth_client):
+    """人工巡检：计划 → 生成任务 → 扫码错码被拒 → 正确打卡 → 全打完才能完成。"""
+    plan = auth_client.post("/api/v1/inspection/plans", json={
+        "name": "泵房巡检", "shift": "早班",
+        "items": [{"name": "泵房A", "code": "P-001", "checks": ["外观", "渗漏"]},
+                  {"name": "配电柜B", "code": "P-002", "checks": ["指示灯"]}],
+    })
+    assert plan.status_code == 200
+    assert plan.json()["point_count"] == 2
+
+    empty = auth_client.post("/api/v1/inspection/plans", json={"name": "x", "items": []})
+    assert empty.status_code == 400
+
+    task = auth_client.post("/api/v1/inspection/tasks/generate",
+                            json={"plan_id": plan.json()["id"], "due_hours": 8})
+    assert task.status_code == 200
+    t = task.json()
+    assert t["status"] == "pending" and t["progress"]["total"] == 2
+
+    first, second = t["items"][0]["id"], t["items"][1]["id"]
+    bad = auth_client.post(f"/api/v1/inspection/tasks/{t['id']}/items/{first}/check",
+                           json={"result": "ok", "code": "WRONG"})
+    assert bad.status_code == 400
+
+    ok = auth_client.post(f"/api/v1/inspection/tasks/{t['id']}/items/{first}/check",
+                          json={"result": "abnormal", "code": "P-001", "note": "渗漏"})
+    assert ok.status_code == 200 and ok.json()["item"]["scanned"] is True
+
+    assert auth_client.post(f"/api/v1/inspection/tasks/{t['id']}/finish").status_code == 400
+
+    auth_client.post(f"/api/v1/inspection/tasks/{t['id']}/items/{second}/check",
+                     json={"result": "ok", "code": "P-002"})
+    done = auth_client.post(f"/api/v1/inspection/tasks/{t['id']}/finish")
+    assert done.status_code == 200 and done.json()["status"] == "done"
+
+
+def test_work_order_flow(auth_client):
+    """工单：不能跳步、销号必须填结论；告警可转工单。"""
+    made = auth_client.post("/api/v1/work-orders", json={
+        "title": "泵体渗漏", "source": "manual", "level": "critical"})
+    assert made.status_code == 200
+    o = made.json()
+    assert o["status"] == "open" and o["code"]
+
+    assert auth_client.post(f"/api/v1/work-orders/{o['id']}/transition",
+                            json={"status": "closed", "resolution": "x"}).status_code == 400
+    assert auth_client.post(f"/api/v1/work-orders/{o['id']}/assign",
+                            json={"assignee_id": 1, "due_hours": 4}).status_code == 200
+    assert auth_client.post(f"/api/v1/work-orders/{o['id']}/transition",
+                            json={"status": "processing"}).status_code == 200
+    assert auth_client.post(f"/api/v1/work-orders/{o['id']}/transition",
+                            json={"status": "review"}).status_code == 200
+    assert auth_client.post(f"/api/v1/work-orders/{o['id']}/transition",
+                            json={"status": "closed"}).status_code == 400
+    closed = auth_client.post(f"/api/v1/work-orders/{o['id']}/transition",
+                              json={"status": "closed", "resolution": "更换密封圈"})
+    assert closed.status_code == 200 and closed.json()["status"] == "closed"

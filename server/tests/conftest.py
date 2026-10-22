@@ -17,6 +17,7 @@ os.environ["JC_DB_URL"] = f"sqlite:///{(_TMP / f'test-{os.getpid()}.db').as_posi
 os.environ["JC_ROBOT_MODE"] = "mock"
 os.environ["JC_BOOTSTRAP_ADMIN"] = "admin"
 os.environ["JC_BOOTSTRAP_PASSWORD"] = "admin123"
+os.environ["JC_FORCE_PASSWORD_CHANGE"] = "0"   # 测试里不要被强制改密拦住
 os.environ["JC_JCROB_FIXTURES"] = str(ROOT.parent / "contracts" / "jcrob" / "fixtures")
 
 import pytest  # noqa: E402
