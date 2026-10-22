@@ -56,9 +56,16 @@ class AuthDisabled(JcrobError):
 def is_status_ok(payload: object) -> bool:
     """PDF 里业务成功标记有 status=ok / result=true 两种写法。"""
     if isinstance(payload, dict):
+        # 注意：/system/status 返回的 status 是运动模式（Free/RobotError…），不是成功标记。
+        # 只把明确的失败词/错误码当失败，别把状态值当业务结果（模拟器测出来的坑）。
         status = payload.get("status")
-        if isinstance(status, str) and status.lower() not in {"ok", "success", "true"}:
+        if isinstance(status, str) and status.lower() in {"error", "fail", "failed", "false"}:
             return False
         if "result" in payload and payload["result"] is False:
+            return False
+        if "success" in payload and payload["success"] is False:
+            return False
+        errcode = payload.get("errcode", payload.get("code"))
+        if isinstance(errcode, int) and errcode != 0:
             return False
     return True
