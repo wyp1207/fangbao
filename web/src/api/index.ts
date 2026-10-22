@@ -319,6 +319,12 @@ export const api = {
   taskRun: (id: number) => request<Record<string, unknown>>(`/task-runs/${id}`),
   createTaskRun: (body: Record<string, unknown>) =>
     request<Record<string, unknown>>('/task-runs', { method: 'POST', body }),
+  dispatchTaskRun: (id: number) =>
+    request<Record<string, unknown>>(`/task-runs/${id}/dispatch`, { method: 'POST' }),
+  pauseTaskRun: (id: number) =>
+    request<Record<string, unknown>>(`/task-runs/${id}/pause`, { method: 'POST' }),
+  resumeTaskRun: (id: number) =>
+    request<Record<string, unknown>>(`/task-runs/${id}/resume`, { method: 'POST' }),
   cancelTaskRun: (id: number) =>
     request<Record<string, unknown>>(`/task-runs/${id}/cancel`, { method: 'POST' }),
   taskTemplates: () => request<Record<string, unknown>[]>('/task-templates'),

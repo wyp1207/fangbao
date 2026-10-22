@@ -131,6 +131,10 @@ async def lifespan(app: FastAPI):
     telemetry_janitor = _th.Thread(target=_telemetry_janitor, daemon=True)
     telemetry_janitor.start()
 
+    from app.services.task_dispatch import TaskWatchdog
+    task_watchdog = TaskWatchdog(_SL)
+    task_watchdog.start()
+
     from app.services.work_orders import WorkOrderEscalator
     wo_escalator = WorkOrderEscalator(_SL)
     wo_escalator.start()
@@ -150,6 +154,10 @@ async def lifespan(app: FastAPI):
         # 录像进程是外部 ffmpeg，必须显式收掉，否则会变成孤儿进程
         from app.services.recorder import registry as recorder_registry
         recorder_registry.stop_all()
+        try:
+            task_watchdog.stop()
+        except Exception:  # noqa: BLE001
+            pass
         try:
             wo_escalator.stop()
         except Exception:  # noqa: BLE001

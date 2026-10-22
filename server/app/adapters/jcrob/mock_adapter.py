@@ -168,6 +168,30 @@ class MockJcrobAdapter:
                 return task
         raise jerr.NotSupported(f"mock 里没有任务 {task_id}")
 
+    # ---- 写操作：mock 里模拟一个状态机，等真机联调时换成 HTTP 调用 ----
+    async def dispatch(self, order: dict) -> dict:
+        self._order = {"id": f"MOCK-{int(time.time())}", "state": "RUNNING",
+                       "progress": 0, "order": order}
+        return dict(self._order)
+
+    async def pause(self) -> dict:
+        if getattr(self, "_order", None):
+            self._order["state"] = "PAUSED"
+        return dict(getattr(self, "_order", {}) or {})
+
+    async def resume(self) -> dict:
+        if getattr(self, "_order", None):
+            self._order["state"] = "RUNNING"
+        return dict(getattr(self, "_order", {}) or {})
+
+    async def cancel(self) -> dict:
+        if getattr(self, "_order", None):
+            self._order["state"] = "FINISHED"
+        return dict(getattr(self, "_order", {}) or {})
+
+    async def get_order(self) -> dict:
+        return dict(getattr(self, "_order", {}) or {})
+
     async def get_actions(self) -> Any:
         return self._load("action")
 

@@ -700,3 +700,73 @@ def test_production_refuses_default_secret(monkeypatch):
 
     with pytest.raises(RuntimeError):
         assert_production_safe()
+
+
+def test_dispatch_write_flow(auth_client):
+    """写开关关着必须 403；开了之后 下发→暂停→继续→取消 全链路通。"""
+    import io as _io
+    from PIL import Image
+
+    buf = _io.BytesIO()
+    Image.new("RGB", (80, 80), "white").save(buf, format="PNG")
+    m = auth_client.post("/api/v1/maps/library",
+                         files={"file": ("d.png", buf.getvalue(), "image/png")},
+                         data={"name": "下发测试图", "resolution": "0.05"})
+    mid = m.json()["id"]
+    pt = auth_client.post(f"/api/v1/maps/library/{mid}/points", json={"name": "P1", "x": 1, "y": 1})
+    tpl = auth_client.post("/api/v1/task-templates", json={
+        "name": "下发模板", "map_id": mid,
+        "actions": [{"point_id": pt.json()["id"], "action": "photo"}]})
+    run = auth_client.post("/api/v1/task-runs", json={"template_id": tpl.json()["id"]})
+    rid = run.json()["id"]
+
+    # 默认关闭
+    locked = auth_client.post(f"/api/v1/task-runs/{rid}/dispatch")
+    assert locked.status_code == 403
+    assert locked.json()["code"] == "WRITE_LOCKED"
+
+    # 打开写开关
+    assert auth_client.put("/api/v1/settings", json={
+        "values": {"robot.write_enabled": True}}).status_code == 200
+
+    d = auth_client.post(f"/api/v1/task-runs/{rid}/dispatch")
+    assert d.status_code == 200, d.text
+    assert d.json()["status"] == "running"
+    assert d.json()["external_id"]
+
+    p = auth_client.post(f"/api/v1/task-runs/{rid}/pause")
+    assert p.status_code == 200 and p.json()["paused"] is True
+
+    r = auth_client.post(f"/api/v1/task-runs/{rid}/resume")
+    assert r.status_code == 200 and r.json()["paused"] is False
+
+    c = auth_client.post(f"/api/v1/task-runs/{rid}/cancel")
+    assert c.status_code == 200 and c.json()["status"] == "cancelled"
+
+    # 关回去，别影响其他用例
+    auth_client.put("/api/v1/settings", json={"values": {"robot.write_enabled": False}})
+
+
+def test_task_watchdog_raises_alarm(auth_client):
+    """下发后长时间无进度 → 看门狗产生 critical 告警（不自动瞎停真机）。"""
+    from datetime import datetime, timedelta
+
+    from app.db.session import SessionLocal
+    from app.models.task_run import TaskRun
+    from app.services.task_dispatch import check_stuck
+
+    with SessionLocal() as db:
+        run = TaskRun(name="卡住的任务", status="running",
+                      dispatched_at=datetime.now() - timedelta(minutes=5),
+                      last_progress_at=datetime.now() - timedelta(minutes=5))
+        db.add(run)
+        db.commit()
+        rid = run.id
+
+    n = check_stuck(SessionLocal)
+    assert n >= 1
+    alarms = auth_client.get("/api/v1/alarms").json()["items"]
+    assert any(a["metric"] == f"task_stuck_{rid}" for a in alarms)
+    with SessionLocal() as db:
+        db.query(TaskRun).filter(TaskRun.id == rid).delete()
+        db.commit()

@@ -37,6 +37,12 @@ class TaskRun(Base):
     external_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     note: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, index=True)
+    # 写链路（下发/暂停/看门狗）
+    dispatched_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_progress_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    paused_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    dispatch_error: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    order_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class TaskRunStep(Base):
