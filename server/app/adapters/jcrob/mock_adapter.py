@@ -190,7 +190,18 @@ class MockJcrobAdapter:
         return dict(getattr(self, "_order", {}) or {})
 
     async def get_order(self) -> dict:
-        return dict(getattr(self, "_order", {}) or {})
+        order = getattr(self, "_order", None) or {}
+        # 模拟"走了一会儿才到"：前两次查询仍是执行中，第三次到点
+        if order.get("state") == "RUNNING":
+            order["polls"] = order.get("polls", 0) + 1
+            if order["polls"] >= 2:
+                order["state"] = "FINISHED"
+        return dict(order)
+
+    async def goto(self, x: float, y: float, yaw: float = 0.0) -> dict:
+        self._order = {"id": f"MOCK-{int(time.time())}", "state": "RUNNING",
+                       "polls": 0, "target": {"x": x, "y": y, "yaw": yaw}}
+        return dict(self._order)
 
     async def get_actions(self) -> Any:
         return self._load("action")

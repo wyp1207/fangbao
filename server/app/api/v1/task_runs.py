@@ -257,6 +257,66 @@ def dispatch_run(
     return _run_out(run, db.query(TaskRunStep).filter(TaskRunStep.run_id == run.id).all())
 
 
+@router.post("/{run_id}/cruise", dependencies=[Depends(require_csrf)])
+def start_cruise(
+    run_id: int, db: Session = Depends(get_db),
+    me: User = Depends(require_roles("admin", "operator")),
+) -> dict:
+    """巡航：按点位顺序逐点下发、等到达、再下一个（平台侧状态机）。"""
+    from app.services import cruise as cruise_mod
+    from app.services.task_dispatch import _require_write
+
+    _require_write()
+    run = db.get(TaskRun, run_id)
+    if not run:
+        raise NotFound("执行记录不存在")
+    if run.status not in ("planned", "failed", "cancelled"):
+        raise BadRequest(f"当前状态 {run.status} 不能启动巡航", code="BAD_STATUS")
+    if cruise_mod.runner is None:
+        raise BadRequest("巡航执行器未启动", code="NO_RUNNER")
+
+    adapter = _adapter_for(db, run)
+    steps = db.query(TaskRunStep).filter(TaskRunStep.run_id == run.id).all()
+    if not steps:
+        raise BadRequest("这条计划没有点位", code="EMPTY_STEPS")
+
+    for s in steps:                     # 重跑时把旧结果清掉
+        s.status = "pending"
+        s.error = None
+        s.finished_at = None
+        s.result_json = None
+    db.commit()
+
+    cruise_mod.runner.start(run.id, adapter)
+    audit(db=db, action="task_run.cruise", target=run.name, user=me,
+          detail={"steps": len(steps)})
+    return {"ok": True, "run_id": run.id, "steps": len(steps)}
+
+
+@router.post("/{run_id}/cruise/cancel", dependencies=[Depends(require_csrf)])
+def cancel_cruise(
+    run_id: int, db: Session = Depends(get_db),
+    me: User = Depends(require_roles("admin", "operator")),
+) -> dict:
+    from app.services import cruise as cruise_mod
+
+    run = db.get(TaskRun, run_id)
+    if not run:
+        raise NotFound("执行记录不存在")
+    adapter = _adapter_for(db, run)
+    ok = cruise_mod.runner.cancel(run_id, adapter) if cruise_mod.runner else False
+    audit(db=db, action="task_run.cruise_cancel", target=run.name, user=me)
+    return {"ok": ok}
+
+
+@router.get("/cruise/status")
+def cruise_status(_: User = Depends(get_current_user)) -> dict:
+    from app.services import cruise as cruise_mod
+
+    running = cruise_mod.runner.running() if cruise_mod.runner else []
+    return {"running": running}
+
+
 @router.post("/{run_id}/pause", dependencies=[Depends(require_csrf)])
 def pause_run(run_id: int, db: Session = Depends(get_db),
               me: User = Depends(require_roles("admin", "operator"))) -> dict:

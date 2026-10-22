@@ -921,12 +921,12 @@ def test_x30_protocol_roundtrip():
     import xml.etree.ElementTree as ET
 
     from app.adapters.deeprobotics.protocol import (
-        MAGIC, X30Client, build_asdu, frame, read_frame,
+        MAGIC_FIELD, X30Client, build_asdu, frame,
     )
 
     asdu = build_asdu(1002)
     raw = frame(asdu, 7)
-    assert raw[:4] == MAGIC
+    assert raw[:4] == MAGIC_FIELD
     length = int.from_bytes(raw[4:6], "little")
     assert length == len(asdu)
     assert raw[6:8] == (7).to_bytes(2, "little")
@@ -940,21 +940,90 @@ def test_x30_protocol_roundtrip():
     srv.listen(1)
     port = srv.getsockname()[1]
 
-    reply = build_asdu(1002, 1, "<Battery>88</Battery><X>1.2</X><Y>-0.5</Y>")
+    reply = build_asdu(1002, {"Battery": 88, "X": 1.2, "Y": -0.5})
 
     def serve():
         conn, _ = srv.accept()
         with conn:
             got = conn.recv(4096)
-            assert got[:4] == MAGIC
+            assert got[:4] == MAGIC_FIELD
             conn.sendall(frame(reply, 7))
 
     threading.Thread(target=serve, daemon=True).start()
     client = X30Client("127.0.0.1", port, timeout=3)
-    xml = client.query_status()
+    data = client.status()
     srv.close()
 
-    root = ET.fromstring(xml)
-    assert root.findtext("Type") == "1002"
-    assert root.findtext("Items/Battery") == "88"
-    assert root.findtext("Items/X") == "1.2"
+    assert data["Type"] == "1002"
+    assert data["Battery"] == "88"
+    assert data["X"] == "1.2"
+
+
+def test_cruise_runner_state_machine(auth_client, monkeypatch):
+    """巡航状态机：逐点下发→等到达→下一个；取消后剩余点跳过。
+
+    用假适配器，不依赖真机：验证的是平台侧逻辑是否自洽。
+    """
+    import time as _t
+
+    from app.services.cruise import CruiseRunner
+
+    class FakeAdapter:
+        def __init__(self, arrive_after=2):
+            self.calls = []
+            self.polls = 0
+            self.arrive_after = arrive_after
+
+        def goto(self, x, y, yaw=0.0):
+            self.calls.append((x, y, yaw))
+            self.polls = 0
+            return {"state": "RUNNING"}
+
+        def get_order(self):
+            self.polls += 1
+            return {"state": "FINISHED" if self.polls >= self.arrive_after else "RUNNING"}
+
+        def cancel(self):
+            self.cancelled = True
+
+    # 造地图 + 点位 + 模板 + 计划
+    import io as _io
+    from PIL import Image
+
+    buf = _io.BytesIO()
+    Image.new("RGB", (100, 100), "white").save(buf, format="PNG")
+    m = auth_client.post("/api/v1/maps/library",
+                         files={"file": ("c.png", buf.getvalue(), "image/png")},
+                         data={"name": "巡航图", "resolution": "0.05"}).json()
+    ids = []
+    for i, (x, y) in enumerate([(1.0, 1.0), (2.0, 2.0)]):
+        p = auth_client.post(f"/api/v1/maps/library/{m['id']}/points",
+                             json={"name": f"C{i}", "x": x, "y": y})
+        ids.append(p.json()["id"])
+    tpl = auth_client.post("/api/v1/task-templates", json={
+        "name": "巡航模板", "map_id": m["id"],
+        "actions": [{"point_id": pid, "action": "photo"} for pid in ids]}).json()
+    run = auth_client.post("/api/v1/task-runs", json={"template_id": tpl["id"]}).json()
+
+    from app.db.session import SessionLocal
+    from app.models.task_run import TaskRun, TaskRunStep
+
+    runner = CruiseRunner(SessionLocal)
+    adapter = FakeAdapter()
+    monkeypatch.setattr("app.services.cruise.POLL_S", 0.01)
+    assert runner.start(run["id"], adapter) is True
+
+    for _ in range(200):
+        with SessionLocal() as db:
+            r = db.get(TaskRun, run["id"])
+            if r.status in ("done", "failed", "cancelled"):
+                break
+        _t.sleep(0.05)
+
+    with SessionLocal() as db:
+        r = db.get(TaskRun, run["id"])
+        steps = db.query(TaskRunStep).filter(TaskRunStep.run_id == run["id"]).all()
+        assert r.status == "done", r.status
+        assert len(adapter.calls) == 2                     # 两个点各下发一次
+        assert [s.status for s in steps] == ["ok", "ok"]    # 每点都有结果
+        assert all(s.result_json for s in steps)            # 带坐标留痕
