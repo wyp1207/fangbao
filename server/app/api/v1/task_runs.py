@@ -78,6 +78,9 @@ def _run_out(r: TaskRun, steps: list[TaskRunStep] | None = None) -> dict:
         "finished_at": r.finished_at.isoformat(timespec="seconds") if r.finished_at else None,
         "created_at": r.created_at.isoformat(timespec="seconds") if r.created_at else None,
         "external_id": r.external_id, "note": r.note,
+        "paused": bool(getattr(r, "paused_at", None)),
+        "dispatched_at": r.dispatched_at.isoformat(timespec="seconds") if getattr(r, "dispatched_at", None) else None,
+        "dispatch_error": getattr(r, "dispatch_error", None),
     }
     if steps is not None:
         ok = sum(1 for s in steps if s.status == "ok")
@@ -223,23 +226,86 @@ def ingest_run(
     return {**_run_out(run, steps), "created": created}
 
 
+def _adapter_for(db: Session, run: TaskRun):
+    from app.services.robot_runtime import registry as robot_registry
+
+    rt = robot_registry.get(run.robot_id or 1)
+    if rt is None or rt.adapter is None:
+        raise BadRequest("该设备没有可用适配器（未启用或适配器未实现）", code="NO_ADAPTER")
+    return rt.adapter
+
+
+@router.post("/{run_id}/dispatch", dependencies=[Depends(require_csrf)])
+def dispatch_run(
+    run_id: int, db: Session = Depends(get_db),
+    me: User = Depends(require_roles("admin", "operator")),
+) -> dict:
+    """下发到机器人。写开关关着时返回 403 WRITE_LOCKED 并说明缺什么。"""
+    from app.services import task_dispatch
+
+    run = db.get(TaskRun, run_id)
+    if not run:
+        raise NotFound("执行记录不存在")
+    try:
+        run = task_dispatch.dispatch(db, run, _adapter_for(db, run))
+    except Exception as exc:  # noqa: BLE001
+        run.dispatch_error = f"{exc.__class__.__name__}: {exc}"[:300]
+        db.commit()
+        raise
+    audit(db=db, action="task_run.dispatch", target=run.name, user=me,
+          detail={"status": run.status, "external_id": run.external_id})
+    return _run_out(run, db.query(TaskRunStep).filter(TaskRunStep.run_id == run.id).all())
+
+
+@router.post("/{run_id}/pause", dependencies=[Depends(require_csrf)])
+def pause_run(run_id: int, db: Session = Depends(get_db),
+              me: User = Depends(require_roles("admin", "operator"))) -> dict:
+    from app.services import task_dispatch
+
+    run = db.get(TaskRun, run_id)
+    if not run:
+        raise NotFound("执行记录不存在")
+    run = task_dispatch.pause(db, run, _adapter_for(db, run))
+    audit(db=db, action="task_run.pause", target=run.name, user=me)
+    return _run_out(run)
+
+
+@router.post("/{run_id}/resume", dependencies=[Depends(require_csrf)])
+def resume_run(run_id: int, db: Session = Depends(get_db),
+               me: User = Depends(require_roles("admin", "operator"))) -> dict:
+    from app.services import task_dispatch
+
+    run = db.get(TaskRun, run_id)
+    if not run:
+        raise NotFound("执行记录不存在")
+    run = task_dispatch.resume(db, run, _adapter_for(db, run))
+    audit(db=db, action="task_run.resume", target=run.name, user=me)
+    return _run_out(run)
+
+
 @router.post("/{run_id}/cancel", dependencies=[Depends(require_csrf)])
 def cancel_run(
     run_id: int,
     db: Session = Depends(get_db),
     me: User = Depends(require_roles("admin", "operator")),
 ) -> dict:
-    """取消"计划中"的记录。已在执行的取消失败——那需要机器人急停/终止协议。"""
+    """取消任务：计划中的直接作废；执行中的要机器人同意取消（写开关必须开）。"""
+    from app.services import task_dispatch
+
     r = db.get(TaskRun, run_id)
     if not r:
         raise NotFound("执行记录不存在")
-    if r.status == "running":
-        raise BadRequest("已经在下发了，平台无法单方面取消；请用机器人本体急停",
-                         code="RUNNING_ON_ROBOT")
-    if r.status != "planned":
+
+    if r.status == "planned":
+        r.status = "cancelled"
+        db.commit()
+        db.refresh(r)
+        audit(db=db, action="task_run.cancel", target=r.name, user=me)
+        return _run_out(r)
+
+    if r.status != "running":
         raise BadRequest(f"当前状态 {r.status} 不能取消", code="BAD_STATUS")
-    r.status = "cancelled"
-    db.commit()
-    db.refresh(r)
-    audit(db=db, action="task_run.cancel", target=r.name, user=me)
+
+    r = task_dispatch.cancel(db, r, _adapter_for(db, r))
+    audit(db=db, action="task_run.cancel", target=r.name, user=me, detail={"mode": "robot"})
     return _run_out(r)

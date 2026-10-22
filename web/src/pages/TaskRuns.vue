@@ -18,6 +18,8 @@ interface RunRow {
   created_at: string | null
   external_id: string | null
   note: string | null
+  paused?: boolean
+  dispatch_error?: string | null
   step_count?: number
 }
 interface Step {
@@ -99,6 +101,37 @@ async function submitCreate() {
   }
 }
 
+async function dispatch(r: RunRow) {
+  try {
+    await api.dispatchTaskRun(r.id)
+    toast('已下发，等待机器人接单', 'ok')
+    await load()
+  } catch (e) {
+    const msg = e instanceof ApiError ? e.message : '下发失败'
+    toast(msg, e instanceof ApiError && e.code === 'WRITE_LOCKED' ? 'warn' : 'danger', 6000)
+  }
+}
+
+async function pause(r: RunRow) {
+  try {
+    await api.pauseTaskRun(r.id)
+    toast('已暂停', 'ok')
+    await load()
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : '暂停失败', 'danger')
+  }
+}
+
+async function resume(r: RunRow) {
+  try {
+    await api.resumeTaskRun(r.id)
+    toast('已继续', 'ok')
+    await load()
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : '继续失败', 'danger')
+  }
+}
+
 async function cancel(r: RunRow) {
   if (!window.confirm(`取消计划「${r.name}」？`)) return
   try {
@@ -165,11 +198,21 @@ onMounted(async () => {
             <td class="num">{{ r.step_count ?? 0 }}</td>
             <td class="num dim">{{ (r.started_at ?? r.created_at ?? '').replace('T', ' ').slice(0, 19) }}</td>
             <td class="num dim">{{ dur(r.started_at, r.finished_at) }}</td>
-            <td class="dim small">{{ r.external_id ? '机器人回传' : '平台计划' }}</td>
+            <td class="dim small">
+              {{ r.external_id ? '机器人回传' : '平台计划' }}
+              <span v-if="r.dispatch_error" class="tag danger" :title="r.dispatch_error">下发失败</span>
+            </td>
             <td>
               <div class="row-actions">
                 <button class="btn btn-xs" @click="openDetail(r)">详情</button>
-                <button v-if="r.status === 'planned'" class="act danger" title="取消计划" @click="cancel(r)">✕</button>
+                <button v-if="r.status === 'planned'" class="btn btn-xs primary"
+                        :disabled="!auth.canWrite" @click="dispatch(r)">下发</button>
+                <template v-if="r.status === 'running'">
+                  <button v-if="!r.paused" class="btn btn-xs" :disabled="!auth.canWrite" @click="pause(r)">暂停</button>
+                  <button v-else class="btn btn-xs ok" :disabled="!auth.canWrite" @click="resume(r)">继续</button>
+                </template>
+                <button v-if="['planned','running'].includes(r.status)" class="act danger"
+                        title="取消" :disabled="!auth.canWrite" @click="cancel(r)">✕</button>
               </div>
             </td>
           </tr>

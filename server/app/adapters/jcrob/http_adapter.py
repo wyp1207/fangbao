@@ -137,3 +137,20 @@ class HttpJcrobAdapter:
 
     async def probe_capabilities(self) -> dict[str, Any]:
         return await probe(self)
+
+
+    # ---- 写操作：协议字段未确认，先明确拒绝（不假装支持） ----
+    async def dispatch(self, order: dict) -> dict:
+        raise jerr.NotSupported("写操作协议未确认：等真机联调后按接口文档填 dispatch API")
+
+    async def pause(self) -> dict:
+        raise jerr.NotSupported("暂停协议未确认")
+
+    async def resume(self) -> dict:
+        raise jerr.NotSupported("继续协议未确认")
+
+    async def cancel(self) -> dict:
+        raise jerr.NotSupported("取消协议未确认")
+
+    async def get_order(self) -> dict:
+        return {}

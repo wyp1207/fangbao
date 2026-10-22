@@ -43,6 +43,12 @@ SCHEMA: dict[str, dict[str, Any]] = {
         "group": "告警", "effect": "严重告警未确认超过这个时间就升级",
     },
 
+    "robot.write_enabled": {
+        "label": "允许下发任务（写操作）", "type": "bool", "default": False,
+        "group": "平台",
+        "effect": "关闭时下发/暂停/取消一律 403，并说明缺什么；真机联调通过并签授权后再开",
+    },
+
     "telemetry.keep_days": {
         "label": "运行数据保留（天）", "type": "int", "default": 7, "min": 1, "max": 3650,
         "group": "平台", "effect": "超过天数的遥测采样自动清理；报表口径以实际覆盖范围为准",
