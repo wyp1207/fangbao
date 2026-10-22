@@ -770,3 +770,66 @@ def test_task_watchdog_raises_alarm(auth_client):
     with SessionLocal() as db:
         db.query(TaskRun).filter(TaskRun.id == rid).delete()
         db.commit()
+
+
+def test_modbus_gateway_end_to_end(auth_client, monkeypatch):
+    """Modbus 网关：读模拟从站 → 入库 → 超限告警，一条链路走通。"""
+    import socket
+    import struct
+    import threading
+
+    from app.services.sensor_gateway import modbus_read, scale
+    from app.services.sensor_io import ingest_value
+
+    # 起一个极简 Modbus 从站：寄存器 0 = 85（×0.1 = 8.5 %LEL）
+    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(1)
+    port = srv.getsockname()[1]
+
+    def serve():
+        conn, _ = srv.accept()
+        with conn:
+            head = conn.recv(7)
+            tid, _proto, length, uid = struct.unpack(">HHHB", head)
+            pdu = conn.recv(length - 1)
+            func, _start, count = struct.unpack(">BHH", pdu[:5])
+            payload = struct.pack(f">{count}H", *([85] * count))
+            body = struct.pack(">BB", func, count * 2) + payload
+            conn.sendall(struct.pack(">HHHB", tid, 0, len(body) + 1, uid) + body)
+
+    threading.Thread(target=serve, daemon=True).start()
+
+    regs = modbus_read("127.0.0.1", port, 1, 0, 1)
+    assert regs == [85]
+    assert scale(regs[0], {"scale": 0.1}) == 8.5
+    srv.close()
+
+    # 建传感器（阈值 5 %LEL）+ 网关，走服务层采集
+    made = auth_client.post("/api/v1/sensors", json={
+        "name": "可燃气体-模拟", "kind": "gas", "unit": "%LEL",
+        "warn_high": 5, "crit_high": 10})
+    assert made.status_code == 200
+    sid = made.json()["id"]
+
+    from app.db.session import SessionLocal
+    from app.services import alarms as alarms_mod
+    from app.models.alarm import AlarmRecord
+
+    with SessionLocal() as db:
+        res = ingest_value(db, sensor_id=sid, value=8.5, source="gateway")
+    assert res["ok"] is True and res["level"] == "warn"
+
+    # 网关 CRUD 配置校验
+    bad = auth_client.post("/api/v1/sensor-gateways", json={
+        "name": "缺映射", "protocol": "modbus", "host": "127.0.0.1", "port": 15020})
+    assert bad.status_code == 400
+
+    ok = auth_client.post("/api/v1/sensor-gateways", json={
+        "name": "模拟网关", "protocol": "modbus", "host": "127.0.0.1", "port": 15020,
+        "mapping": [{"sensor_id": sid, "register": 0, "scale": 0.1}]})
+    assert ok.status_code == 200
+    gid = ok.json()["id"]
+    assert auth_client.get("/api/v1/sensor-gateways").json()[0]["protocol"] == "modbus"
+    assert auth_client.delete(f"/api/v1/sensor-gateways/{gid}").status_code == 200

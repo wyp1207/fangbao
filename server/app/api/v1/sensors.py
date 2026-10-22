@@ -189,27 +189,20 @@ def add_reading(
 
 
 def _add_reading(sensor_id: int, body: ReadingIn, db: Session, store) -> dict:
+    """统一走 services/sensor_io.ingest_value，采集网关和手工录入同一条路径。"""
+    from app.services.sensor_io import ingest_value
+
     s = db.get(Sensor, sensor_id)
     if not s:
         raise NotFound("传感器不存在")
-    r = SensorReading(sensor_id=sensor_id, value=body.value,
-                      ts=body.ts or datetime.now(), source=body.source)
-    db.add(r)
-    db.commit()
-    db.refresh(r)
-
-    level, msg = _judge(s, body.value)
-    raised = None
-    if level:
-        raised = store.raise_external(
-            metric=f"env_{s.kind}_{s.id}_{level}", level=level, message=msg, value=body.value,
-        )
-        if raised is not None:
-            from app.services.messages import store as msg_store
-            msg_store.add("warn" if level == "warn" else "danger", "alarm",
-                          f"环境超限：{s.name}", msg,
-                          {"to": "alarms", "query": {"status": "unacked"}})
-    return {"ok": True, "id": r.id, "level": level, "message": msg, "raised": raised is not None}
+    res = ingest_value(db, sensor_id=sensor_id, value=body.value,
+                       source=body.source, ts=body.ts)
+    if res.get("raised"):
+        from app.services.messages import store as msg_store
+        msg_store.add("warn" if res["level"] == "warn" else "danger", "alarm",
+                      f"环境超限：{s.name}", res["message"],
+                      {"to": "alarms", "query": {"status": "unacked"}})
+    return res
 
 
 def _judge(s: Sensor, value: float) -> tuple[str | None, str]:
