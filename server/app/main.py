@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 
 from app.adapters.jcrob import build_adapter
 from app.adapters.jcrob import errors as jerr
-from app.api.v1 import (alarms, audit, auth, devices, health, map_library,
+from app.api.v1 import (alarms, audit, auth, devices, health, map_library, metrics as health_metrics,
                         ai, api_clients, inspection, messages, notify, sensor_gateways, record_plans, recordings, reports, robots, sensors,
                         task_runs, task_templates, telemetry,
                         settings as settings_api, users, videos)
@@ -237,6 +237,20 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    @app.middleware("http")
+    async def _metrics_mw(request: Request, call_next):
+        """记请求量/耗时/5xx，供 /metrics 抓取。"""
+        import time as _t
+
+        t0 = _t.perf_counter()
+        try:
+            resp = await call_next(request)
+        except Exception:
+            health_metrics.record(request.method, request.url.path, 500, _t.perf_counter() - t0)
+            raise
+        health_metrics.record(request.method, request.url.path, resp.status_code, _t.perf_counter() - t0)
+        return resp
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
@@ -257,6 +271,7 @@ def create_app() -> FastAPI:
         )
 
     app.include_router(health.router)
+    app.include_router(health_metrics.router)
     app.include_router(auth.router, prefix=settings.api_prefix)
     app.include_router(robots.router, prefix=settings.api_prefix)
     app.include_router(alarms.router, prefix=settings.api_prefix)

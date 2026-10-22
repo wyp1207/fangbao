@@ -41,6 +41,8 @@ class Settings(BaseSettings):
 
     # 对外访问地址（手机端链接/推送里用），例如 http://192.168.8.40:8099
     public_base_url: str = ""
+    # /metrics 抓取口令；留空则只允许内网访问
+    metrics_token: str = ""
     log_level: str = "INFO"
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 

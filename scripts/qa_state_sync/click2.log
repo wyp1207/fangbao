@@ -1,0 +1,22 @@
+
+== dashboard
+  [登 录] toast=[] modal=0 net=[('POST', 500, '/api/v1/auth/login')] dl=[] err=None
+
+== robot-status
+
+== map
+
+== video
+  [登 录] toast=[] modal=0 net=[('POST', 500, '/api/v1/auth/login')] dl=[] err=None
+
+== room
+  [登 录] toast=[] modal=0 net=[('POST', 500, '/api/v1/auth/login')] dl=[] err=None
+
+== env
+
+== tasks
+  [登 录] toast=[] modal=0 net=[('POST', 500, '/api/v1/auth/login')] dl=[] err=None
+
+== task-templates
+
+== task-runs
