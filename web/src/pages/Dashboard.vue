@@ -144,6 +144,10 @@ function onDevice(v: string) {
   timers.push(window.setInterval(loadDeviceStats, 5000))
   timers.push(window.setInterval(loadEnv, 15000))
   timers.push(window.setInterval(loadTrend, 60000))
+
+  // 切设备时把场站也对齐，否则下拉显示"全部"、后面地图/健康还停在旧设备
+  const d = devices.value.find((x) => String(x.id) === v)
+  if (d?.station && d.station !== site.value) site.value = d.station
 }
 function goAlarms(status: 'unacked' | 'acked') {
   void router.push({ name: 'alarms', query: { status } })

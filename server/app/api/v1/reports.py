@@ -329,7 +329,7 @@ def export_xlsx(
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill
 
-    data = summary(date_from=date_from, date_to=date_to, db=db, _=_)
+    data = summary(date_from=date_from, date_to=date_to, db=db, user=_)
     start, end = _range(date_from, date_to)
 
     wb = Workbook()

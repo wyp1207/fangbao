@@ -1,0 +1,4 @@
+ROUND1 n=20 p50=208.4 p95=210.7 max=212.6 codes={200: 20}
+ROUND2 n=20 p50=250.9 p95=258.4 max=260.3 codes={200: 20}
+ROUND3 n=20 p50=154.9 p95=159.7 max=161.5 codes={200: 20}
+health n=419 codes={200: 419} max=80.6 p95=28.7
