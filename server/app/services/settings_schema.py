@@ -49,6 +49,11 @@ SCHEMA: dict[str, dict[str, Any]] = {
         "effect": "关闭时下发/暂停/取消一律 403，并说明缺什么；真机联调通过并签授权后再开",
     },
 
+    "sensor.keep_days": {
+        "label": "环境读数保留（天）", "type": "int", "default": 90, "min": 1, "max": 3650,
+        "group": "平台", "effect": "超过天数的传感器读数自动清理；告警记录不受影响",
+    },
+
     "telemetry.keep_days": {
         "label": "运行数据保留（天）", "type": "int", "default": 7, "min": 1, "max": 3650,
         "group": "平台", "effect": "超过天数的遥测采样自动清理；报表口径以实际覆盖范围为准",

@@ -1,7 +1,7 @@
 # TLS 覆盖文件：在基础 compose 之上加 443 与证书挂载
 #   docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d
 services:
-  nginx:
+  jc-nginx:
     ports:
       - "8099:80"
       - "8443:443"

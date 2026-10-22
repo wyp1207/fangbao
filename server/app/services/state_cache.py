@@ -35,15 +35,20 @@ class StateCache:
     def snapshot(self) -> Snapshot:
         return self._snapshot
 
-    def update(self, *, status: dict, info: dict, galileo: dict, pose: dict) -> None:
+    def update(self, *, status: dict, info: dict, galileo: dict, pose: dict,
+               fresh: bool = True) -> None:
         snap = self._snapshot
         snap.status = status
         snap.info = info
         snap.galileo = galileo
         snap.pose = pose
-        snap.recv_ts = time.monotonic()
-        snap.last_error = None
-        snap.consecutive_failures = 0
+        if fresh:
+            snap.recv_ts = time.monotonic()
+            snap.last_error = None
+            snap.consecutive_failures = 0
+        else:
+            # 部分成功：字段更新了，但整体新鲜度不刷新，避免"半坏网络显示 0s 在线"
+            snap.last_error = "部分数据过期"
         snap.poll_count += 1
 
     def mark_failure(self, error: str) -> None:
