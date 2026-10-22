@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { NAV, isActive, type NavGroup } from '@/config/nav'
+import { useAuthStore } from '@/stores/auth'
 
 const props = withDefaults(defineProps<{ start?: number; end?: number }>(), {
   start: 0,
@@ -11,7 +12,20 @@ const props = withDefaults(defineProps<{ start?: number; end?: number }>(), {
 const route = useRoute()
 const router = useRouter()
 
-const groups = computed(() => NAV.slice(props.start, props.end))
+const auth = useAuthStore()
+
+/** 三权分立：菜单按角色过滤（后端也会拦，这里只是别让人点进去看 403） */
+function canSee(it: { roles?: string[] }): boolean {
+  if (!it.roles || !it.roles.length) return true
+  return it.roles.includes(auth.user?.role ?? '')
+}
+
+const groups = computed(() =>
+  NAV.slice(props.start, props.end).map((g) => ({
+    ...g,
+    items: g.items?.filter(canSee),
+  })),
+)
 
 const openKey = ref<string | null>(null)
 const pos = ref({ left: 0, top: 0 })

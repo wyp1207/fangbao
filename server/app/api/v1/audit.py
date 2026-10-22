@@ -18,7 +18,7 @@ def list_audit_logs(
     action: str | None = Query(None, description="按动作过滤，如 alarm.ack"),
     username: str | None = Query(None),
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("admin")),
+    _: User = Depends(require_roles("admin", "auditor")),
 ) -> dict:
     """操作审计：谁在什么时候做了什么。只有管理员能看。"""
     return audit_list(db, limit=limit, offset=offset, action=action, username=username)
@@ -27,6 +27,6 @@ def list_audit_logs(
 @router.get("/verify")
 def verify_chain(limit: int = Query(100000, le=1000000),
                  db: Session = Depends(get_db),
-                 _: User = Depends(require_roles("admin"))) -> dict:
+                 _: User = Depends(require_roles("admin", "auditor"))) -> dict:
     """审计链自检：返回第一个断点，或 ok + 校验条数。"""
     return verify_audit_chain(db, limit=limit)

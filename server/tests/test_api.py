@@ -875,3 +875,40 @@ def test_inspection_photo_and_performance(auth_client):
     # 考核报表里能看到这个人的任务
     perf = auth_client.get("/api/v1/reports/summary").json()["inspection_performance"]
     assert any(p["tasks"] >= 1 for p in perf)
+
+
+def test_three_role_separation(auth_client):
+    """三权分立：系统管理员管账号、审计员只能看审计、安全管理员改安全策略。"""
+    from fastapi.testclient import TestClient
+
+    def make_user(name: str, role: str) -> TestClient:
+        r = auth_client.post("/api/v1/users", json={
+            "username": name, "password": "Init12345", "role": role})
+        assert r.status_code == 200
+        c = TestClient(auth_client.app)
+        lr = c.post("/api/v1/auth/login", json={"username": name, "password": "Init12345"})
+        c.headers.update({"X-CSRF-Token": lr.json()["csrf_token"]})
+        c.post("/api/v1/auth/password",
+               json={"old_password": "Init12345", "new_password": "Second12345"})
+        return c
+
+    sysadmin = make_user("role_sys", "sysadmin")
+    auditor = make_user("role_audit", "auditor")
+    secadmin = make_user("role_sec", "secadmin")
+
+    # 系统管理员：能建账号
+    assert sysadmin.post("/api/v1/users", json={
+        "username": "role_x", "password": "Init12345", "role": "viewer"}).status_code == 200
+    # 安全管理员：不能建账号，但能改安全策略
+    assert secadmin.post("/api/v1/users", json={
+        "username": "role_y", "password": "Init12345", "role": "viewer"}).status_code == 403
+    assert secadmin.put("/api/v1/settings", json={
+        "values": {"alarm.battery_warn": 21}}).status_code == 200
+    # 审计员：能看审计，不能改设置、不能建账号
+    assert auditor.get("/api/v1/audit-logs").status_code == 200
+    assert auditor.put("/api/v1/settings", json={
+        "values": {"alarm.battery_warn": 20}}).status_code in (400, 403)
+    assert auditor.post("/api/v1/users", json={
+        "username": "role_z", "password": "Init12345", "role": "viewer"}).status_code == 403
+    # 系统管理员看不到审计？——过渡期 admin 可以，sysadmin 只有 auditor/admin 能看
+    assert sysadmin.get("/api/v1/audit-logs").status_code == 403

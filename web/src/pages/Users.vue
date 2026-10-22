@@ -12,13 +12,22 @@ const loading = ref(false)
 const error = ref('')
 
 const roleOptions = [
-  { value: 'admin', label: '管理员' },
+  { value: 'admin', label: '超级管理员（过渡）' },
+  { value: 'sysadmin', label: '系统管理员' },
+  { value: 'secadmin', label: '安全管理员' },
+  { value: 'auditor', label: '审计管理员' },
   { value: 'safety', label: '安全管理员' },
   { value: 'operator', label: '操作员' },
   { value: 'viewer', label: '只读' },
 ]
-const roleText: Record<string, string> = { admin: '管理员', safety: '安全管理员', operator: '操作员', viewer: '只读' }
-const roleTone: Record<string, string> = { admin: 'danger', safety: 'warn', operator: 'ok', viewer: '' }
+const roleText: Record<string, string> = {
+  admin: '超级管理员', sysadmin: '系统管理员', secadmin: '安全管理员',
+  auditor: '审计管理员', safety: '安全员', operator: '操作员', viewer: '只读',
+}
+const roleTone: Record<string, string> = {
+  admin: 'danger', sysadmin: 'danger', secadmin: 'warn',
+  auditor: '', safety: 'warn', operator: 'ok', viewer: '',
+}
 
 const isAdmin = computed(() => auth.user?.role === 'admin')
 
