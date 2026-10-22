@@ -24,13 +24,26 @@ from app.services.messages import audit, store as msg_store
 
 router = APIRouter(prefix="/users", tags=["users"])
 
-ROLES = ("admin", "safety", "operator", "viewer")
+ROLES = ("admin", "sysadmin", "secadmin", "auditor", "safety", "operator", "viewer")
+
+# 三权分立：系统管理员管账号/设备/密钥；安全管理员管安全策略；
+# 审计管理员只能看审计，不能改任何东西。admin 是过渡超级角色（保留兼容）。
+ROLE_LABELS = {
+    "admin": "超级管理员（过渡）",
+    "sysadmin": "系统管理员",
+    "secadmin": "安全管理员",
+    "auditor": "审计管理员",
+    "safety": "安全员",
+    "operator": "操作员",
+    "viewer": "只读",
+}
 
 
 class UserOut(BaseModel):
     id: int
     username: str
     role: str
+    role_label: str | None = None
     is_active: bool
     must_change_password: bool = False
     created_at: datetime | None = None
@@ -54,7 +67,8 @@ class PasswordReset(BaseModel):
 
 def _out(u: User) -> UserOut:
     return UserOut(
-        id=u.id, username=u.username, role=u.role, is_active=u.is_active,
+        id=u.id, username=u.username, role=u.role,
+        role_label=ROLE_LABELS.get(u.role, u.role), is_active=u.is_active,
         created_at=u.created_at, last_login_at=u.last_login_at,
         must_change_password=bool(u.must_change_password),
     )
@@ -68,7 +82,7 @@ def _check_role(role: str) -> None:
 @router.get("", response_model=list[UserOut])
 def list_users(
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("admin")),
+    _: User = Depends(require_roles("admin", "sysadmin")),
 ) -> list[UserOut]:
     rows = db.scalars(select(User).order_by(User.id)).all()
     return [_out(u) for u in rows]
@@ -78,7 +92,7 @@ def list_users(
 def create_user(
     body: UserCreate,
     db: Session = Depends(get_db),
-    me: User = Depends(require_roles("admin")),
+    me: User = Depends(require_roles("admin", "sysadmin")),
 ) -> UserOut:
     _check_role(body.role)
     if db.scalar(select(User).where(User.username == body.username)):
@@ -115,7 +129,7 @@ def update_user(
     body: UserUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    me: User = Depends(require_roles("admin")),
+    me: User = Depends(require_roles("admin", "sysadmin")),
 ) -> UserOut:
     user = db.get(User, user_id)
     if not user:
@@ -141,7 +155,7 @@ def reset_password(
     user_id: int,
     body: PasswordReset,
     db: Session = Depends(get_db),
-    me: User = Depends(require_roles("admin")),
+    me: User = Depends(require_roles("admin", "sysadmin")),
 ) -> dict:
     user = db.get(User, user_id)
     if not user:
@@ -167,7 +181,7 @@ def reset_password(
 def delete_user(
     user_id: int,
     db: Session = Depends(get_db),
-    me: User = Depends(require_roles("admin")),
+    me: User = Depends(require_roles("admin", "sysadmin")),
 ) -> dict:
     user = db.get(User, user_id)
     if not user:

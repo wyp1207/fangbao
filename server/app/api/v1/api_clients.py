@@ -40,14 +40,14 @@ def _out(c: ApiClient) -> dict:
 
 @router.get("")
 def list_clients(db: Session = Depends(get_db),
-                 _: User = Depends(require_roles("admin"))) -> list[dict]:
+                 _: User = Depends(require_roles("admin", "sysadmin"))) -> list[dict]:
     return [_out(c) for c in db.query(ApiClient).order_by(ApiClient.id.desc()).all()]
 
 
 @router.post("", dependencies=[Depends(require_csrf)])
 def create_client(
     body: ClientIn, db: Session = Depends(get_db),
-    me: User = Depends(require_roles("admin")),
+    me: User = Depends(require_roles("admin", "sysadmin")),
 ) -> dict:
     bad = [s for s in body.scopes if s not in VALID_SCOPES]
     if bad:
@@ -69,7 +69,7 @@ def create_client(
 @router.delete("/{client_id}", dependencies=[Depends(require_csrf)])
 def revoke_client(
     client_id: int, db: Session = Depends(get_db),
-    me: User = Depends(require_roles("admin")),
+    me: User = Depends(require_roles("admin", "sysadmin")),
 ) -> dict:
     c = db.get(ApiClient, client_id)
     if not c:

@@ -5,6 +5,8 @@ export interface NavItem {
   label: string
   /** true = 有真实数据；false = 进「未接入说明页」 */
   real?: boolean
+  /** 只对这些角色显示（不填=所有人） */
+  roles?: string[]
 }
 
 export interface NavGroup {
@@ -77,8 +79,8 @@ export const NAV: NavGroup[] = [
       { name: 'users', label: '用户管理', real: true },
       { name: 'settings', label: '系统设置', real: true },
       { name: 'notify', label: '告警通知' },
-          { name: 'oplog', label: '系统日志' },
-          { name: 'api-keys', label: '接口密钥' },
+          { name: 'oplog', label: '系统日志', roles: ['admin', 'auditor'] },
+          { name: 'api-keys', label: '接口密钥', roles: ['admin', 'sysadmin'] },
     ],
   },
 ]
