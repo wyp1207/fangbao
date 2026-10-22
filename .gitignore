@@ -43,3 +43,7 @@ _jcrob_pdf_text.txt
 docs/screenshots/_*.png
 docs/screenshots/_*.txt
 docs/screenshots/_*.json
+
+# Playwright 运行产物
+web/test-results/
+web/playwright-report/
