@@ -104,6 +104,16 @@ npm run dev          # http://127.0.0.1:5173
 
 ---
 
+## 测试
+
+```bash
+cd server && python -m pytest -q      # 后端 52 用例
+cd web && npm run test                # 前端 17 用例（vitest）
+cd web && npm run test:e2e            # 24 个路由冒烟（需先起服务）
+```
+
+详细说明见 [docs/测试说明.md](docs/测试说明.md)。
+
 ## 文档
 
 | 文件 | 内容 |
