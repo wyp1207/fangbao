@@ -10,6 +10,7 @@ export const useAuthStore = defineStore('auth', {
   getters: {
     isLoggedIn: (s) => !!s.user,
     canWrite: (s) => ['admin', 'safety', 'operator'].includes(s.user?.role ?? ''),
+    mustChangePassword: (s) => !!s.user?.must_change_password,
   },
   actions: {
     async login(username: string, password: string) {
@@ -21,6 +22,11 @@ export const useAuthStore = defineStore('auth', {
       } finally {
         this.loading = false
       }
+    },
+    async refreshMe() {
+      try {
+        this.user = await api.me()
+      } catch { /* 保持现状 */ }
     },
     async fetchMe() {
       if (this.checked) return

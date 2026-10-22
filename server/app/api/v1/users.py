@@ -32,6 +32,7 @@ class UserOut(BaseModel):
     username: str
     role: str
     is_active: bool
+    must_change_password: bool = False
     created_at: datetime | None = None
     last_login_at: datetime | None = None
 
@@ -55,6 +56,7 @@ def _out(u: User) -> UserOut:
     return UserOut(
         id=u.id, username=u.username, role=u.role, is_active=u.is_active,
         created_at=u.created_at, last_login_at=u.last_login_at,
+        must_change_password=bool(u.must_change_password),
     )
 
 
@@ -89,6 +91,7 @@ def create_user(
     user = User(
         username=body.username,
         password_hash=hash_password(body.password),
+        must_change_password=True,        # 初始密码必须改掉
         role=body.role,
         is_active=True,
     )
@@ -144,6 +147,7 @@ def reset_password(
     except ValueError as exc:
         raise BadRequest(str(exc), code="WEAK_PASSWORD") from exc
     user.password_hash = hash_password(body.password)
+    user.must_change_password = True      # 重置后强制改密
     db.commit()
     msg_store.add("warn", "user", f"管理员重置密码：{user.username}",
                   f"操作人 {me.username}", {"to": "users"})

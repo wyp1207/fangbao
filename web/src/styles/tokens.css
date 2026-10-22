@@ -266,3 +266,28 @@ table.grid tbody tr:hover td { background: rgba(41, 212, 255, 0.16); }
   border-color: rgba(255, 90, 90, 0.85) !important;
   box-shadow: 0 0 0 1px rgba(255, 90, 90, 0.35);
 }
+
+/* ---------- 打印：只留报表内容 ---------- */
+@media print {
+  /* 顶栏、页脚、提示条、设备条、浮动层全部不要 */
+  .hdr, .subbar, .devstrip, .footer, .banner, .force-mask, .toast-host,
+  .no-print, .nav-drop { display: none !important; }
+
+  html, body, #app, .shell, .content {
+    background: #fff !important;
+    color: #111 !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: block !important;
+  }
+
+  /* 打印时面板不要半透明背景和发光 */
+  .panel, .sheet {
+    background: #fff !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: #111 !important;
+  }
+}

@@ -37,6 +37,13 @@ const dateFrom = ref('')
 const dateTo = ref('')
 const data = ref<Summary | null>(null)
 const loading = ref(false)
+const printUrl = computed(() => {
+  const q: string[] = []
+  if (dateFrom.value) q.push(`date_from=${dateFrom.value}`)
+  if (dateTo.value) q.push(`date_to=${dateTo.value}`)
+  return `/reports/print${q.length ? '?' + q.join('&') : ''}`
+})
+
 const exportUrl = computed(() => {
   const q: string[] = []
   if (dateFrom.value) q.push(`date_from=${dateFrom.value}`)
@@ -102,7 +109,8 @@ onMounted(() => applyPreset('7d'))
         <span>巡检报表</span>
         <span class="muted small">告警闭环率、处置时长、环境超限、运行里程——汇报直接用</span>
         <span class="grow" />
-        <a class="btn btn-sm primary" :href="exportUrl" target="_blank">导出 Excel</a>
+        <a class="btn btn-sm" :href="exportUrl" target="_blank">导出 Excel</a>
+        <a class="btn btn-sm primary" :href="printUrl" target="_blank">打印 / PDF</a>
       </div>
 
       <div class="toolbar">

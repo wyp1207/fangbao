@@ -6,6 +6,7 @@ export interface User {
   id: number
   username: string
   role: Role
+  must_change_password?: boolean
 }
 
 export interface StatusSnapshot {
@@ -40,6 +41,7 @@ export interface UserRow {
   username: string
   role: 'admin' | 'safety' | 'operator' | 'viewer'
   is_active: boolean
+  must_change_password?: boolean
   created_at: string | null
   last_login_at: string | null
 }

@@ -34,6 +34,7 @@ const router = createRouter({
         { path: 'history', redirect: '/history/tasks' },
         { path: 'history/tasks', name: 'history-tasks', component: () => import('@/pages/History.vue'), meta: { tab: 'tasks' } },
         { path: 'history/alarms', name: 'history-alarms', component: () => import('@/pages/History.vue'), meta: { tab: 'alarms' } },
+        { path: 'reports/print', name: 'report-print', component: () => import('@/pages/ReportPrint.vue') },
         { path: 'reports', name: 'reports', component: () => import('@/pages/Reports.vue') },
         { path: 'run-data', name: 'run-data', component: () => import('@/pages/RunData.vue') },
 

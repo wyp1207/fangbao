@@ -69,6 +69,7 @@ class UserOut(BaseModel):
     id: int
     username: str
     role: str
+    must_change_password: bool = False
 
 
 class LoginOut(BaseModel):
@@ -116,7 +117,8 @@ def login(body: LoginIn, response: Response, request: Request,
     )
     user.last_login_at = datetime.now(timezone.utc).replace(tzinfo=None)
     db.commit()
-    return LoginOut(user=UserOut(id=user.id, username=user.username, role=user.role),
+    return LoginOut(user=UserOut(id=user.id, username=user.username, role=user.role,
+                                 must_change_password=bool(user.must_change_password)),
                     csrf_token=csrf)
 
 
@@ -130,7 +132,8 @@ def logout(response: Response) -> dict:
 
 @router.get("/me", response_model=UserOut)
 def me(user: User = Depends(get_current_user)) -> UserOut:
-    return UserOut(id=user.id, username=user.username, role=user.role)
+    return UserOut(id=user.id, username=user.username, role=user.role,
+                   must_change_password=bool(user.must_change_password))
 
 
 class PasswordChange(BaseModel):
@@ -155,6 +158,7 @@ def change_own_password(
         raise BadRequest(str(exc), code="WEAK_PASSWORD") from exc
 
     user.password_hash = hash_password(body.new_password)
+    user.must_change_password = False
     db.commit()
     from app.services.messages import store as msg_store
     msg_store.add("info", "user", f"密码已修改：{user.username}", "本人在线自助修改", {})

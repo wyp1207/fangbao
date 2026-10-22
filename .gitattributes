@@ -1,0 +1,5 @@
+# Shell / Dockerfile / nginx 配置必须 LF，否则 Linux 上会报 "set: pipefail: invalid option"
+*.sh            text eol=lf
+*.Dockerfile    text eol=lf
+deploy/nginx/*  text eol=lf
+*.yml           text eol=lf

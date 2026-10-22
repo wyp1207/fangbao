@@ -42,6 +42,7 @@ def ensure_bootstrap() -> None:
                 username=settings.bootstrap_admin,
                 password_hash=hash_password(settings.bootstrap_password),
                 role="admin",
+                must_change_password=True,      # 初始密码必须改掉
             ))
             log.warning(
                 "库是空的，已创建初始管理员 %s（密码取自 JC_BOOTSTRAP_PASSWORD）——"
@@ -61,6 +62,7 @@ def bootstrap() -> None:
                 username=settings.bootstrap_admin,
                 password_hash=hash_password(settings.bootstrap_password),
                 role="admin",
+                must_change_password=True,      # 初始密码必须改掉
             ))
             log.info("创建初始管理员 %s", settings.bootstrap_admin)
         if not db.scalar(select(Robot)):

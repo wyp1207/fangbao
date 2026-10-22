@@ -305,3 +305,32 @@ def test_task_run_flow(auth_client):
     # 计划可以取消；已完成的不能
     assert auth_client.post(f"/api/v1/task-runs/{body['id']}/cancel").status_code == 200
     assert auth_client.post(f"/api/v1/task-runs/{first.json()['id']}/cancel").status_code == 400
+
+
+def test_must_change_password_flow(auth_client):
+    """初始密码必须改：新建/重置置 True，自己改完变 False。"""
+    from fastapi.testclient import TestClient
+
+    made = auth_client.post("/api/v1/users", json={
+        "username": "pw_flow", "password": "Init12345", "role": "operator"})
+    assert made.status_code == 200
+
+    c = TestClient(auth_client.app)
+    r = c.post("/api/v1/auth/login", json={"username": "pw_flow", "password": "Init12345"})
+    assert r.status_code == 200
+    assert r.json()["user"]["must_change_password"] is True
+    c.headers.update({"X-CSRF-Token": r.json()["csrf_token"]})
+
+    changed = c.post("/api/v1/auth/password",
+                     json={"old_password": "Init12345", "new_password": "Changed12345"})
+    assert changed.status_code == 200
+    me = c.get("/api/v1/auth/me").json()
+    assert me["must_change_password"] is False
+
+    # 管理员重置密码后又要改
+    uid = made.json()["id"]
+    assert auth_client.post(f"/api/v1/users/{uid}/password",
+                            json={"password": "Reset12345"}).status_code == 200
+    assert auth_client.get("/api/v1/users").json()[-1] is not None
+    rows = {u["username"]: u for u in auth_client.get("/api/v1/users").json()}
+    assert rows["pw_flow"]["must_change_password"] is True
