@@ -68,6 +68,22 @@ async def lifespan(app: FastAPI):
     from app.services import notify as notify_svc
     notify_svc.init(_SessionLocal)
     message_store.attach_db(_SessionLocal)
+    # 服务重启后，上次残留的 running 任务状态已不可知：标成 failed 并写明原因，
+    # 不要让它一直显示"执行中"（评审共识：宁可显示未知，也不要撒谎）
+    try:
+        from app.models.task_run import TaskRun as _TR
+        with _SL() as _db:
+            stale = _db.query(_TR).filter(_TR.status.in_(("running", "dispatched"))).all()
+            for r in stale:
+                r.status = "failed"
+                r.dispatch_error = "服务重启，任务状态未知；请确认机器人是否仍在执行"
+            if stale:
+                _db.commit()
+                import logging as _lg
+                _lg.getLogger(__name__).warning("标记 %s 条重启前残留任务为 failed", len(stale))
+    except Exception:  # noqa: BLE001
+        pass
+
     robot_registry.attach_alarms(alarms)
     from app.services.alarms import bind_store
     bind_store(alarms)

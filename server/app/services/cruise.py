@@ -95,8 +95,10 @@ class CruiseRunner:
                 failed += 1
                 continue
 
+            radius = float(getattr(point, "arrive_radius_m", 1.0) or 1.0)
             arrived, reason = self._wait_arrival(adapter, stop,
-                                                 target=(point.x, point.y))
+                                                 target=(point.x, point.y),
+                                                 radius=radius)
             if stop.is_set():
                 self._mark(step.id, "skipped", error="人工取消")
                 break
@@ -170,7 +172,8 @@ class CruiseRunner:
         return {"skipped": action}, None
 
     def _wait_arrival(self, adapter, stop: threading.Event,
-                      target: tuple[float, float] | None = None) -> tuple[bool, str]:
+                      target: tuple[float, float] | None = None,
+                      radius: float = 1.0) -> tuple[bool, str]:
         deadline = time.time() + ARRIVE_TIMEOUT_S
         while time.time() < deadline:
             if stop.is_set():
@@ -194,8 +197,10 @@ class CruiseRunner:
                         if isinstance(pose, dict) and pose.get("x") is not None:
                             dx = float(pose["x"]) - float(target[0])
                             dy = float(pose["y"]) - float(target[1])
-                            if (dx * dx + dy * dy) ** 0.5 > 1.5:
-                                return False, f"机器人报完成但离目标 {((dx*dx+dy*dy)**0.5):.1f}m"
+                            dist = (dx * dx + dy * dy) ** 0.5
+                            if dist > radius:
+                                return False, (f"机器人报完成但离目标 {dist:.1f}m"
+                                               f"（该点位要求 {radius:.1f}m 内）")
                     except Exception:  # noqa: BLE001
                         pass
                 return True, ""
