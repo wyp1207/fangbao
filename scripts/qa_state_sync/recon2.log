@@ -1,0 +1,35 @@
+after login: http://127.0.0.1:5173/dashboard
+dashboard        btns= 18 err= 0 http4xx5xx= 0 2462ms
+robot-status     btns=  9 err= 0 http4xx5xx= 0 2315ms
+map              btns= 14 err= 0 http4xx5xx= 0 2326ms
+video            btns= 14 err= 0 http4xx5xx= 0 2425ms
+room             btns= 14 err= 0 http4xx5xx= 0 2296ms
+env              btns= 10 err= 0 http4xx5xx= 0 2332ms
+tasks            btns= 27 err= 0 http4xx5xx= 0 2338ms
+task-templates   btns= 34 err= 0 http4xx5xx= 0 2405ms
+task-runs        btns= 24 err= 0 http4xx5xx= 0 2324ms
+points           btns= 14 err= 0 http4xx5xx= 0 2384ms
+inspection       btns= 17 err= 0 http4xx5xx= 0 2364ms
+task-calendar    btns= 11 err= 0 http4xx5xx= 0 2386ms
+alarms           btns= 74 err= 0 http4xx5xx= 0 2426ms
+work-orders      btns=161 err= 0 http4xx5xx= 0 2366ms
+ai-results       btns= 11 err= 0 http4xx5xx= 0 2397ms
+alarm-rules      btns= 11 err= 0 http4xx5xx= 0 2295ms
+history-tasks    btns= 14 err= 0 http4xx5xx= 0 2369ms
+history-alarms   btns= 14 err= 0 http4xx5xx= 0 2479ms
+reports          btns= 13 err= 0 http4xx5xx= 0 2386ms
+run-data         btns= 11 err= 0 http4xx5xx= 0 2398ms
+robots           btns= 20 err= 0 http4xx5xx= 0 2305ms
+cameras          btns= 21 err= 0 http4xx5xx= 0 2313ms
+env-device       btns= 14 err= 0 http4xx5xx= 0 2360ms
+sensor-gateways  btns= 12 err= 0 http4xx5xx= 0 2390ms
+record-plan      btns= 13 err= 3 http4xx5xx= 0 2366ms
+record-playback  btns= 23 err= 0 http4xx5xx= 0 2371ms
+messages         btns=203 err= 0 http4xx5xx= 0 2393ms
+users            btns= 39 err= 0 http4xx5xx= 0 2395ms
+settings         btns= 17 err= 0 http4xx5xx= 0 2405ms
+notify           btns= 19 err= 0 http4xx5xx= 0 2371ms
+oplog            btns= 15 err= 0 http4xx5xx= 0 2392ms
+api-keys         btns= 13 err= 0 http4xx5xx= 0 2365ms
+m-task-1         btns=  5 err= 0 http4xx5xx= 0 2270ms
+m-wo-1           btns=  1 err= 0 http4xx5xx= 0 2224ms

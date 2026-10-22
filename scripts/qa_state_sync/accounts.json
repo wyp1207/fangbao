@@ -1,0 +1,17 @@
+{
+  "qa_viewer_2342": {
+    "id": 10,
+    "role": "viewer",
+    "create_status": 200
+  },
+  "qa_operator_2342": {
+    "id": 11,
+    "role": "operator",
+    "create_status": 200
+  },
+  "qa_auditor_2342": {
+    "id": 12,
+    "role": "auditor",
+    "create_status": 200
+  }
+}

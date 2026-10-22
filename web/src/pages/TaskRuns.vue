@@ -143,10 +143,33 @@ async function resume(r: RunRow) {
   }
 }
 
-async function cancel(r: RunRow) {
-  if (!window.confirm(`取消计划「${r.name}」？`)) return
+async function resumeFromFailed(r: RunRow) {
   try {
-    await api.cancelTaskRun(r.id)
+    const res = await api.startCruise(r.id, 0)
+    toast(`已重新巡航（${res.steps} 个点位）`, 'ok', 4000)
+    await load()
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : '启动失败', 'danger')
+  }
+}
+
+async function retry(s: Step) {
+  try {
+    if (!detail.value) return
+    await api.retryStep(detail.value.id, s.seq)
+    toast(`第 ${s.seq} 点动作重试成功`, 'ok')
+    await openDetail(detail.value!)
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : '重试失败', 'danger')
+  }
+}
+
+async function cancel(r: RunRow) {
+  const reason = window.prompt(`取消「${r.name}」的原因（会写进审计，必填）`, '')
+  if (reason === null) return
+  if (!reason.trim()) return toast('必须填取消原因', 'warn')
+  try {
+    await api.cancelTaskRunWithReason(r.id, reason.trim())
     toast('已取消', 'ok')
     await load()
   } catch (e) {
@@ -211,7 +234,9 @@ onMounted(async () => {
             <td class="num dim">{{ dur(r.started_at, r.finished_at) }}</td>
             <td class="dim small">
               {{ r.external_id ? '机器人回传' : '平台计划' }}
-              <span v-if="r.dispatch_error" class="tag danger" :title="r.dispatch_error">下发失败</span>
+              <span v-if="r.dispatch_error" class="tag danger" :title="r.dispatch_error">
+                {{ r.status === 'failed' ? '有失败点位' : '下发失败' }}
+              </span>
             </td>
             <td>
               <div class="row-actions">
@@ -220,6 +245,9 @@ onMounted(async () => {
                         :disabled="!auth.canWrite" @click="dispatch(r)">单点下发</button>
                 <button v-if="['planned','failed','cancelled'].includes(r.status)" class="btn btn-xs primary"
                         :disabled="!auth.canWrite" @click="cruise(r)">巡航</button>
+                <button v-if="['failed','cancelled'].includes(r.status)" class="btn btn-xs"
+                        title="从第一个失败的点继续，不重复已完成的点"
+                        :disabled="!auth.canWrite" @click="resumeFromFailed(r)">接着跑</button>
                 <template v-if="r.status === 'running'">
                   <button v-if="!r.paused" class="btn btn-xs" :disabled="!auth.canWrite" @click="pause(r)">暂停</button>
                   <button v-else class="btn btn-xs ok" :disabled="!auth.canWrite" @click="resume(r)">继续</button>
@@ -268,6 +296,8 @@ onMounted(async () => {
                 </span>
               </td>
               <td class="dim small">
+                <button v-if="s.status === 'failed'" class="btn btn-xs" :disabled="!auth.canWrite"
+                        @click="retry(s)">重试动作</button>
                 <span v-if="s.error">{{ s.error }}</span>
                 <span v-else-if="s.result">{{ JSON.stringify(s.result).slice(0, 80) }}</span>
                 <span v-else>—</span>

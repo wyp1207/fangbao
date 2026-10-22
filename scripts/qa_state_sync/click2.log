@@ -1,22 +1,62 @@
 
 == dashboard
-  [登 录] toast=[] modal=0 net=[('POST', 500, '/api/v1/auth/login')] dl=[] err=None
+  [默认场站 ▾] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] err=None
+  [JCROB-01 ▾] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] err=None
+  [锁定屏幕] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] err=None
+  [告警：0 条未确认] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status'), ('GET', 200, '/api/v1/alarms'), ('GET', 200, '/api/v1/alarms'), ('GET', 200, '/api/v1/settings'), ('GET', 200, '/api/v1/alarms')] dl=[] err=None
+  [100] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status'), ('GET', 200, '/api/v1/messages'), ('GET', 200, '/api/v1/alarms')] dl=[] err=None
+  [打开全屏页 ↗] toast=[] modal=0 net=[('GET', 200, '/api/v1/videos'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] err=None
 
 == robot-status
 
 == map
 
 == video
-  [登 录] toast=[] modal=0 net=[('POST', 500, '/api/v1/auth/login')] dl=[] err=None
+  [充电房-可见光 ▾] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] err=None
+  [刷新列表] toast=[] modal=0 net=[('GET', 200, '/api/v1/videos'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] err=None
+  [⚙ 摄像头配置] toast=[] modal=0 net=[('GET', 200, '/api/v1/videos'), ('GET', 200, '/api/v1/videos/go2rtc-streams'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] err=None
+  [去管理视频源] toast=[] modal=0 net=[('GET', 200, '/api/v1/videos'), ('GET', 200, '/api/v1/videos/go2rtc-streams'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] err=None
 
 == room
-  [登 录] toast=[] modal=0 net=[('POST', 500, '/api/v1/auth/login')] dl=[] err=None
+  [充电房-可见光 ▾] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] err=None
+  [刷新列表] toast=[] modal=0 net=[('GET', 200, '/api/v1/videos'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] err=None
+  [⚙ 摄像头配置] toast=[] modal=0 net=[('GET', 200, '/api/v1/videos'), ('GET', 200, '/api/v1/videos/go2rtc-streams'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] err=None
+  [去管理视频源] toast=[] modal=0 net=[('GET', 200, '/api/v1/videos'), ('GET', 200, '/api/v1/videos/go2rtc-streams'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] err=None
 
 == env
 
 == tasks
-  [登 录] toast=[] modal=0 net=[('POST', 500, '/api/v1/auth/login')] dl=[] err=None
+  [全部 ▾] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] err=None
+  [查询] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/tasks'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] err=None
+  [重置] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] err=None
+  [新建任务] toast=['下发/暂停/巡航在「任务执行」页；写开关在系统设置里'] modal=0 net=[('GET', 200, '/api/v1/task-templates'), ('GET', 200, '/api/v1/task-runs'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] err=None
+  [☰] toast=[] modal=1 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] err=None
+  [1] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] err=None
 
 == task-templates
+  [复制] toast=['已复制为「演练-172401 副本 副本 副本」'] modal=0 net=[('POST', 200, '/api/v1/task-templates/8/duplicate'), ('GET', 200, '/api/v1/task-templates'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] err=None
+  [✎] toast=[] modal=1 net=[('GET', 200, '/api/v1/maps/library/1/points'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] err=None
+  [🗑] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] err=None
 
 == task-runs
+  [从模板生成计划] toast=[] modal=1 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] err=None
+  [全部 ▾] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] err=None
+  [刷新] toast=[] modal=0 net=[('GET', 200, '/api/v1/task-runs'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] err=None
+  [详情] toast=[] modal=1 net=[('GET', 200, '/api/v1/task-runs/6'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] err=None
+
+== points
+  [去地图打点] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/maps'), ('GET', 200, '/api/v1/maps/library'), ('GET', 200, '/api/v1/maps/library/1/points'), ('GET', 200, '/api/v1/maps/library/1/image'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] err=None
+
+== inspection
+  [全部 ▾] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] err=None
+  [刷新] toast=[] modal=0 net=[('GET', 200, '/api/v1/inspection/plans'), ('GET', 200, '/api/v1/inspection/tasks'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] err=None
+  [详情] toast=[] modal=1 net=[('GET', 200, '/api/v1/inspection/tasks/2'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] err=None
+  [手机打卡] toast=[] modal=0 net=[('GET', 200, '/api/v1/inspection/tasks/2')] dl=[] err=None
+
+== task-calendar
+
+== alarms
+  [全部 ▾] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] err=None
+  [查询] toast=[] modal=0 net=[('GET', 200, '/api/v1/alarms'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] err=None
+  [重置] toast=[] modal=0 net=[('GET', 200, '/api/v1/robots/1/status')] dl=[] err=None
+  [刷新] toast=[] modal=0 net=[('GET', 200, '/api/v1/alarms'), ('GET', 200, '/api/v1/robots/1/status')] dl=[] err=None

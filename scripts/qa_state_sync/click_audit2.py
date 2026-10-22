@@ -9,6 +9,8 @@ import json
 import os
 import re
 import sys
+import time
+import urllib.request
 
 from playwright.sync_api import sync_playwright
 
@@ -91,8 +93,23 @@ TEXT_COLLECT = r"""
 """
 
 
+def wait_backend(timeout: int = 150) -> bool:
+    end = time.time() + timeout
+    while time.time() < end:
+        try:
+            with urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=2) as r:
+                if r.status == 200:
+                    return True
+        except Exception:
+            time.sleep(2)
+    return False
+
+
 def audit_page(ctx, name: str, path: str, out: dict, login_page=None) -> None:
     print(f"\n== {name}", flush=True)
+    if not wait_backend():
+        out[path] = {"name": name, "error": "backend down >150s", "clicks": [], "skipped": []}
+        return
     skips: list = []
     clicks: list = []
     skip_re = re.compile(SKIP.get(name, r"$^"))
@@ -191,7 +208,11 @@ def main() -> None:
         page.fill('input[autocomplete="username"]', "admin")
         page.fill('input[type="password"]', "admin123")
         page.click("button.submit")
-        page.wait_for_timeout(1500)
+        page.wait_for_timeout(2500)
+        if "/login" in page.url:
+            print("LOGIN FAILED at", page.url)
+            print(page.locator("body").inner_text()[:500])
+            page.close(); browser.close(); return
         login_page = page
         for name, path in PAGES:
             if only and name not in only:

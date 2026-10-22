@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Body, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -257,9 +257,50 @@ def dispatch_run(
     return _run_out(run, db.query(TaskRunStep).filter(TaskRunStep.run_id == run.id).all())
 
 
+@router.post("/{run_id}/steps/{seq}/retry", dependencies=[Depends(require_csrf)])
+def retry_step(
+    run_id: int, seq: int, db: Session = Depends(get_db),
+    me: User = Depends(require_roles("admin", "operator")),
+) -> dict:
+    """重试某个点位的动作（拍照失败最常见）。只重做动作，不重新导航。"""
+    from app.services.task_dispatch import _require_write
+
+    _require_write()
+    run = db.get(TaskRun, run_id)
+    if not run:
+        raise NotFound("执行记录不存在")
+    step = (db.query(TaskRunStep)
+            .filter(TaskRunStep.run_id == run_id, TaskRunStep.seq == seq).first())
+    if not step:
+        raise NotFound("点位不存在")
+
+    adapter = _adapter_for(db, run)
+    fn = getattr(adapter, "capture", None)
+    if fn is None:
+        raise BadRequest("适配器还没有取图接口，需真机确认抓拍 API", code="NO_CAPTURE")
+    import asyncio
+
+    try:
+        res = fn(step)
+        if hasattr(res, "__await__"):
+            res = asyncio.run(res)
+    except Exception as exc:  # noqa: BLE001
+        step.error = f"重试失败：{exc.__class__.__name__}: {exc}"[:200]
+        db.commit()
+        raise BadRequest("重试失败，原因已记录", code="RETRY_FAILED") from exc
+
+    step.status = "ok"
+    step.error = None
+    step.finished_at = datetime.now()
+    step.result_json = json.dumps({"capture": res, "retried": True}, ensure_ascii=False)
+    db.commit()
+    audit(db=db, action="task_run.retry_step", target=f"{run.name}#{seq}", user=me)
+    return {"ok": True, "seq": seq}
+
+
 @router.post("/{run_id}/cruise", dependencies=[Depends(require_csrf)])
 def start_cruise(
-    run_id: int, db: Session = Depends(get_db),
+    run_id: int, from_seq: int = Body(0, embed=True), db: Session = Depends(get_db),
     me: User = Depends(require_roles("admin", "operator")),
 ) -> dict:
     """巡航：按点位顺序逐点下发、等到达、再下一个（平台侧状态机）。"""
@@ -293,7 +334,7 @@ def start_cruise(
         s.result_json = None
     db.commit()
 
-    cruise_mod.runner.start(run.id, adapter)
+    cruise_mod.runner.start(run.id, adapter, from_seq=from_seq)
     audit(db=db, action="task_run.cruise", target=run.name, user=me,
           detail={"steps": len(steps)})
     return {"ok": True, "run_id": run.id, "steps": len(steps)}
@@ -352,6 +393,7 @@ def resume_run(run_id: int, db: Session = Depends(get_db),
 @router.post("/{run_id}/cancel", dependencies=[Depends(require_csrf)])
 def cancel_run(
     run_id: int,
+    reason: str = Body("", embed=True),
     db: Session = Depends(get_db),
     me: User = Depends(require_roles("admin", "operator")),
 ) -> dict:
@@ -366,7 +408,8 @@ def cancel_run(
         r.status = "cancelled"
         db.commit()
         db.refresh(r)
-        audit(db=db, action="task_run.cancel", target=r.name, user=me)
+        audit(db=db, action="task_run.cancel", target=r.name, user=me,
+          detail={"reason": (reason or "")[:200] or "未填原因"})
         return _run_out(r)
 
     if r.status != "running":
