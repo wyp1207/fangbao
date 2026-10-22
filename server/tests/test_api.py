@@ -453,3 +453,101 @@ def test_api_key_and_ai_ingest(auth_client):
     # 吊销后立刻失效
     auth_client.delete(f"/api/v1/api-clients/{made.json()['id']}")
     assert machine.post("/api/v1/ai/results", json=body, headers=headers).status_code == 401
+
+
+def test_webhook_signature_and_retry(monkeypatch):
+    """外发带 HMAC 签名；失败会落库并可重投。"""
+    import hashlib
+    import hmac
+    import json as _json
+    import types
+
+    from app.services import notify as notify_svc
+
+    captured = {}
+
+    class FakeResp:
+        status_code = 200
+        text = "ok"
+
+        def json(self):
+            return {"errcode": 0}
+
+    class FakeClient:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def post(self, url, content=None, headers=None):
+            captured["url"] = url
+            captured["content"] = content
+            captured["headers"] = headers
+            return FakeResp()
+
+    monkeypatch.setattr(notify_svc.httpx, "Client", FakeClient)
+
+    channel = types.SimpleNamespace(id=1, name="测试通道", type="generic",
+                                    config_json=_json.dumps({"url": "http://example/hook",
+                                                             "secret": "s3cret"}))
+    alarm = {"id": 9, "metric": "battery", "level": "warn", "message": "电量低"}
+    ok, status = notify_svc.send_once(channel, alarm)
+    assert ok
+
+    h = captured["headers"]
+    ts = h["X-Jcrob-Timestamp"]
+    expect = hmac.new(b"s3cret", ts.encode() + b"." + captured["content"],
+                      hashlib.sha256).hexdigest()
+    assert h["X-Jcrob-Signature"] == f"sha256={expect}"
+    assert _json.loads(captured["content"])["alarm"]["id"] == 9
+
+
+def test_retry_once_resends_failed(auth_client):
+    """失败的投递会被 retry_once 重新发出（模拟通道恢复）。"""
+    from datetime import datetime, timedelta
+
+    from app.db.session import SessionLocal
+    from app.models.notify import NotifyChannel, NotifyLog
+    from app.services.notify import NotifyDispatcher, send_once
+
+    with SessionLocal() as db:
+        ch = NotifyChannel(name="重试通道", type="generic",
+                           config_json='{"url": "http://127.0.0.1:9/none"}', min_level="warn")
+        db.add(ch)
+        db.commit()
+        db.refresh(ch)
+        row = NotifyLog(ts=datetime.now() - timedelta(minutes=5), channel_id=ch.id,
+                        channel_name=ch.name, alarm_id=None,
+                        payload="x", ok=False, status="fail", error="fail",
+                        payload_json='{"id": 1, "metric": "battery", "level": "warn", "message": "低电量"}',
+                        attempts=1, next_retry_at=datetime.now() - timedelta(minutes=1))
+        db.add(row)
+        db.commit()
+        cid, rid = ch.id, row.id
+
+    called = {"n": 0}
+
+    def fake_send(channel, alarm):
+        called["n"] += 1
+        return True, "ok"
+
+    import app.services.notify as ns
+    orig = ns.send_once
+    ns.send_once = fake_send
+    try:
+        d = NotifyDispatcher(SessionLocal)
+        n = d.retry_once()
+    finally:
+        ns.send_once = orig
+
+    assert n == 1 and called["n"] == 1
+    with SessionLocal() as db:
+        got = db.get(NotifyLog, rid)
+        assert got.ok is True and got.attempts == 2 and got.next_retry_at is None
+        db.query(NotifyChannel).filter(NotifyChannel.id == cid).delete()
+        db.query(NotifyLog).filter(NotifyLog.id == rid).delete()
+        db.commit()

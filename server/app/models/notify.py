@@ -49,3 +49,7 @@ class NotifyLog(Base):
     ok: Mapped[bool] = mapped_column(Boolean, default=False)
     status: Mapped[str | None] = mapped_column(String(64), nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 失败重试：存原始告警 JSON，恢复后按 next_retry_at 重投，最多 3 次
+    payload_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=1)
+    next_retry_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)

@@ -199,6 +199,7 @@ export interface AlarmItem {
   value: unknown
   started_at: string
   acked_at: string | null
+  camera_id?: number | null
   acked_by: string | null
 }
 

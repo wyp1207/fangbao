@@ -110,6 +110,19 @@ async function ack(id: number) {
   }
 }
 
+// ---- 看录像 ----
+function goPlayback(a: AlarmItem) {
+  const when = (a.started_at ?? '').replace('T', ' ')
+  void router.push({
+    name: 'record-playback',
+    query: {
+      video: String(a.camera_id ?? ''),
+      date: when.slice(0, 10),
+      t: when.slice(11, 19),
+    },
+  })
+}
+
 // ---- 转工单 ----
 async function asWorkOrder(a: AlarmItem) {
   try {
@@ -253,6 +266,8 @@ watch([levelFilter, ackFilter], async () => { page.value = 1; await reload() })
               <div class="row-actions">
                 <button class="act" title="确认告警" :disabled="!!a.acked_at || !auth.canWrite" @click="ack(a.id)">✓</button>
                 <button class="act" title="处置（写清做了什么）" :disabled="!auth.canWrite || !!a.closed_at" @click="openAct(a, 'handle')">✎</button>
+                <button v-if="a.camera_id" class="act" title="看当时的录像"
+                        @click="goPlayback(a)">▶</button>
                 <button class="act" title="转工单（派单闭环）" :disabled="!auth.canWrite || !!a.closed_at" @click="asWorkOrder(a)">→</button>
                 <button class="act danger" title="关闭（给结论）" :disabled="!auth.canWrite || !!a.closed_at" @click="openAct(a, 'close')">⏹</button>
                 <button class="act" title="回看这个时刻的录像" @click="router.push({ name: 'record-playback', query: { date: a.started_at.slice(0, 10), t: a.started_at.slice(11, 19) } })">⟲</button>

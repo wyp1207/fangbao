@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import logging
 import queue
@@ -18,6 +20,8 @@ import time
 from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 from typing import Any
+
+from app.core.config import get_settings
 
 import httpx
 
@@ -76,9 +80,17 @@ def _send_http(channel, alarm: dict, cfg: dict) -> tuple[bool, str]:
     headers = {"Content-Type": "application/json"}
     headers.update(cfg.get("headers") or {})
 
+    # 签名：接收方用同一 secret 校验，能判断"是不是我们发的、有没有被改"
+    secret = (cfg.get("secret") or "").strip() or get_settings().secret_key
+    raw = json.dumps(body, ensure_ascii=False, separators=(",", ":")).encode()
+    ts = str(int(time.time()))
+    sig = hmac.new(secret.encode(), ts.encode() + b"." + raw, hashlib.sha256).hexdigest()
+    headers["X-Jcrob-Timestamp"] = ts
+    headers["X-Jcrob-Signature"] = f"sha256={sig}"
+
     try:
         with httpx.Client(timeout=8.0) as client:
-            resp = client.post(url, json=body, headers=headers)
+            resp = client.post(url, content=raw, headers=headers)
         # 企业微信/钉钉都用 errcode=0 表示成功，HTTP 200 不代表业务成功
         try:
             data = resp.json()
@@ -175,13 +187,19 @@ class NotifyDispatcher:
                 except Exception:  # noqa: BLE001
                     log.exception("通知分发失败")
 
-            # 每分钟检查一次该升级的告警
+            # 每分钟：该升级的告警 + 失败的投递重试
             if time.time() - last_escalate > 60:
                 last_escalate = time.time()
                 try:
                     self.escalate_once()
                 except Exception:  # noqa: BLE001
                     log.exception("告警升级失败")
+                try:
+                    n = self.retry_once()
+                    if n:
+                        log.info("通知重试成功 %s 条", n)
+                except Exception:  # noqa: BLE001
+                    log.exception("通知重试失败")
 
     def _dispatch(self, alarm_id: int, alarm: dict) -> None:
         from app.models.notify import NotifyChannel, NotifyLog
@@ -213,6 +231,9 @@ class NotifyDispatcher:
                     ts=datetime.now(), channel_id=ch.id, channel_name=ch.name,
                     alarm_id=alarm_id, payload=_text(alarm)[:500],
                     ok=ok, status=status[:60], error=None if ok else status[:500],
+                    payload_json=None if ok else json.dumps(alarm, ensure_ascii=False)[:4000],
+                    attempts=1,
+                    next_retry_at=None if ok else datetime.now() + timedelta(seconds=60),
                 ))
                 db.commit()
 
@@ -272,6 +293,49 @@ class NotifyDispatcher:
                 escalated += 1
             db.commit()
         return {"escalated": escalated}
+
+    def retry_once(self) -> int:
+        """重投失败的投递（最多 3 次，间隔 2/4 分钟）。
+
+        为什么要落库重试：外发通道（企业微信/钉钉/邮件）抖动很常见，
+        只在内存里重试，进程一重启就丢了，接收方永远收不到那条告警。
+        """
+        from app.models.notify import NotifyChannel, NotifyLog
+
+        now = datetime.now()
+        done = 0
+        with self._session_factory() as db:  # type: ignore[misc]
+            rows = (
+                db.query(NotifyLog)
+                .filter(NotifyLog.ok.is_(False),
+                        NotifyLog.attempts < 3,
+                        NotifyLog.next_retry_at.isnot(None),
+                        NotifyLog.next_retry_at <= now,
+                        NotifyLog.payload_json.isnot(None))
+                .limit(20)
+                .all()
+            )
+            for row in rows:
+                ch = db.get(NotifyChannel, row.channel_id)
+                if ch is None or not ch.enabled:
+                    row.next_retry_at = None
+                    continue
+                try:
+                    alarm = json.loads(row.payload_json or "{}")
+                except Exception:  # noqa: BLE001
+                    row.next_retry_at = None
+                    continue
+                ok, status = send_once(ch, alarm)
+                row.attempts += 1
+                row.ts = now
+                row.ok = ok
+                row.status = ("重试: " + status)[:64]
+                row.error = None if ok else status[:500]
+                row.next_retry_at = None if ok else now + timedelta(minutes=2 * row.attempts)
+                if ok:
+                    done += 1
+            db.commit()
+        return done
 
     def _deliver_with_retry(self, channel, alarm: dict, attempts: int = 3):
         last = (False, "")
