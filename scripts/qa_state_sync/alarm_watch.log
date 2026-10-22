@@ -1,0 +1,72 @@
+{"t": "2026-10-23T00:19:37", "total": 164, "open": 161, "wo_total": 133, "top": [[[3, "battery"], 96], [[3, "offline"], 44], [[null, "env_gas_1_warn"], 18], [[1, "offline"], 2], [[null, "ai_meter"], 1]], "latest": [[165, 3, "offline", "2026-10-23T00:18:46", "机器人通信中断"], [164, 3, "offline", "2026-10-23T00:18:26", "机器人通信中断（5 分钟内第 99 次）"], [163, 3, "offline", "2026-10-23T00:17:25", "机器人通信中断（5 分钟内第 81 次）"]]}
+{"t": "2026-10-23T00:20:07", "total": 165, "open": 162, "wo_total": 134, "top": [[[3, "battery"], 96], [[3, "offline"], 45], [[null, "env_gas_1_warn"], 18], [[1, "offline"], 2], [[null, "ai_meter"], 1]], "latest": [[166, 3, "offline", "2026-10-23T00:19:47", "机器人通信中断（5 分钟内第 21 次）"], [165, 3, "offline", "2026-10-23T00:18:46", "机器人通信中断"], [164, 3, "offline", "2026-10-23T00:18:26", "机器人通信中断（5 分钟内第 99 次）"]]}
+{"t": "2026-10-23T00:20:37", "total": 165, "open": 162, "wo_total": 134, "top": [[[3, "battery"], 96], [[3, "offline"], 45], [[null, "env_gas_1_warn"], 18], [[1, "offline"], 2], [[null, "ai_meter"], 1]], "latest": [[166, 3, "offline", "2026-10-23T00:19:47", "机器人通信中断（5 分钟内第 21 次）"], [165, 3, "offline", "2026-10-23T00:18:46", "机器人通信中断"], [164, 3, "offline", "2026-10-23T00:18:26", "机器人通信中断（5 分钟内第 99 次）"]]}
+{"t": "2026-10-23T00:21:07", "total": 166, "open": 163, "wo_total": 135, "top": [[[3, "battery"], 96], [[3, "offline"], 46], [[null, "env_gas_1_warn"], 18], [[1, "offline"], 2], [[null, "ai_meter"], 1]], "latest": [[167, 3, "offline", "2026-10-23T00:20:48", "机器人通信中断（5 分钟内第 41 次）"], [166, 3, "offline", "2026-10-23T00:19:47", "机器人通信中断（5 分钟内第 21 次）"], [165, 3, "offline", "2026-10-23T00:18:46", "机器人通信中断"]]}
+Traceback (most recent call last):
+  File "D:\python\Lib\site-packages\urllib3\connectionpool.py", line 534, in _make_request
+    response = conn.getresponse()
+  File "D:\python\Lib\site-packages\urllib3\connection.py", line 571, in getresponse
+    httplib_response = super().getresponse()
+  File "D:\python\Lib\http\client.py", line 1450, in getresponse
+    response.begin()
+    ~~~~~~~~~~~~~~^^
+  File "D:\python\Lib\http\client.py", line 336, in begin
+    version, status, reason = self._read_status()
+                              ~~~~~~~~~~~~~~~~~^^
+  File "D:\python\Lib\http\client.py", line 297, in _read_status
+    line = str(self.fp.readline(_MAXLINE + 1), "iso-8859-1")
+               ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "D:\python\Lib\socket.py", line 725, in readinto
+    return self._sock.recv_into(b)
+           ~~~~~~~~~~~~~~~~~~~~^^^
+TimeoutError: timed out
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\python\Lib\site-packages\requests\adapters.py", line 645, in send
+    resp = conn.urlopen(
+        method=request.method,
+    ...<9 lines>...
+        chunked=chunked,
+    )
+  File "D:\python\Lib\site-packages\urllib3\connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+        method, url, error=new_e, _pool=self, _stacktrace=sys.exc_info()[2]
+    )
+  File "D:\python\Lib\site-packages\urllib3\util\retry.py", line 474, in increment
+    raise reraise(type(error), error, _stacktrace)
+          ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\python\Lib\site-packages\urllib3\util\util.py", line 39, in reraise
+    raise value
+  File "D:\python\Lib\site-packages\urllib3\connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+        conn,
+    ...<10 lines>...
+        **response_kw,
+    )
+  File "D:\python\Lib\site-packages\urllib3\connectionpool.py", line 536, in _make_request
+    self._raise_timeout(err=e, url=url, timeout_value=read_timeout)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\python\Lib\site-packages\urllib3\connectionpool.py", line 367, in _raise_timeout
+    raise ReadTimeoutError(
+        self, url, f"Read timed out. (read timeout={timeout_value})"
+    ) from err
+urllib3.exceptions.ReadTimeoutError: HTTPConnectionPool(host='127.0.0.1', port=8000): Read timed out. (read timeout=10)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\Desktop\防爆机器人\scripts\qa_state_sync\alarm_watch.py", line 7, in <module>
+    al=s.get(A+'/alarms?limit=200',timeout=10).json()
+       ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\python\Lib\site-packages\requests\sessions.py", line 605, in get
+    return self.request("GET", url, **kwargs)
+           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\python\Lib\site-packages\requests\sessions.py", line 592, in request
+    resp = self.send(prep, **send_kwargs)
+  File "D:\python\Lib\site-packages\requests\sessions.py", line 706, in send
+    r = adapter.send(request, **kwargs)
+  File "D:\python\Lib\site-packages\requests\adapters.py", line 691, in send
+    raise ReadTimeout(e, request=request)
+requests.exceptions.ReadTimeout: HTTPConnectionPool(host='127.0.0.1', port=8000): Read timed out. (read timeout=10)

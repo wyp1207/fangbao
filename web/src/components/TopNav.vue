@@ -21,10 +21,10 @@ function canSee(it: { roles?: string[] }): boolean {
 }
 
 const groups = computed(() =>
-  NAV.slice(props.start, props.end).map((g) => ({
-    ...g,
-    items: g.items?.filter(canSee),
-  })),
+  NAV.slice(props.start, props.end)
+    .map((g) => ({ ...g, items: g.items?.filter(canSee) }))
+    // 子项都被过滤掉就整组不显示，别留一个点开是空的 tab
+    .filter((g) => !g.items || g.items.length > 0),
 )
 
 const openKey = ref<string | null>(null)
