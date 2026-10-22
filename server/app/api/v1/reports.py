@@ -18,6 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_csrf, require_roles
+from app.core.errors import PlatformError
 from app.db.session import get_db
 from app.models.alarm import AlarmRecord
 from app.models.sensor import Sensor, SensorReading
@@ -56,6 +57,16 @@ def _avg_seconds(values: list[float]) -> float | None:
 # 报表汇总一次要扫告警/工单/遥测，实测 p95 3.1s（并发 10）。
 # 报表不是实时数据，15 秒缓存换来页面秒开；跨天/换范围自然换 key。
 _SUMMARY_CACHE: dict[tuple, tuple[float, dict]] = {}
+# 单飞锁：20 个并发同时冷启动会把 SQLite/MySQL 拖死（实测 /health 也超时），
+# 只让一个线程算，其余等它算完直接吃缓存。
+_SUMMARY_LOCK = __import__("threading").Lock()
+# 测试环境不缓存，否则用例之间会读到上一条用例的旧汇总
+try:
+    from app.core.config import get_settings as _gs
+
+    _SUMMARY_TTL = 0.0 if _gs().env == "test" else 15.0
+except Exception:  # noqa: BLE001
+    _SUMMARY_TTL = 15.0
 
 
 @router.get("/summary")
@@ -65,18 +76,35 @@ def summary(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> dict:
-    """报表汇总一次要扫告警/工单/遥测（实测 p95 3.1s）。
-    报表不是实时数据，15 秒缓存换页面秒开；换日期范围自然换 key。
+    """报表汇总：一次要扫告警/工单/遥测（冷查询 ~2.4s）。
+
+    并发策略（实测过：20 个并发同时冷算会把进程拖死、/health 也超时）：
+    - 命中缓存直接返回；
+    - 抢不到锁就返回旧缓存；连旧缓存都没有就 429，让客户端稍后再试；
+    - 测试环境 TTL=0，不缓存。
     """
     import time as _time
 
     key = (date_from, date_to)
     hit = _SUMMARY_CACHE.get(key)
-    if hit and _time.time() - hit[0] < 15:
+    if _SUMMARY_TTL > 0 and hit and _time.time() - hit[0] < _SUMMARY_TTL:
         return hit[1]
-    out = _summary_impl(date_from=date_from, date_to=date_to, db=db, user=user)
-    _SUMMARY_CACHE[key] = (_time.time(), out)
-    return out
+
+    if not _SUMMARY_LOCK.acquire(timeout=1.0):
+        if hit:
+            return hit[1]
+        raise PlatformError("报表正在生成，请稍后重试", code="REPORT_BUSY", status_code=429)
+    try:
+        if _SUMMARY_TTL > 0:
+            hit = _SUMMARY_CACHE.get(key)
+            if hit and _time.time() - hit[0] < _SUMMARY_TTL:
+                return hit[1]
+        out = _summary_impl(date_from=date_from, date_to=date_to, db=db, user=user)
+        if _SUMMARY_TTL > 0:
+            _SUMMARY_CACHE[key] = (_time.time(), out)
+        return out
+    finally:
+        _SUMMARY_LOCK.release()
 
 
 def _summary_impl(

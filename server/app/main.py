@@ -84,6 +84,26 @@ async def lifespan(app: FastAPI):
     except Exception:  # noqa: BLE001
         pass
 
+    # 预热报表缓存：避免首个打开报表的人触发 2.4s 冷查询
+    def warm_summary() -> None:
+        import time as _t
+
+        if settings.env == "test":
+            return
+        _t.sleep(5)
+        try:
+            from app.api.v1 import reports as _reports
+
+            with _SL() as _db:
+                _reports._summary_impl(date_from=None, date_to=None, db=_db, user=None)  # noqa: SLF001
+            _reports._SUMMARY_CACHE[(None, None)] = (_t.time(), _reports._summary_impl(
+                date_from=None, date_to=None, db=_SL(), user=None))  # noqa: SLF001
+        except Exception:  # noqa: BLE001
+            pass
+
+    import threading as _th
+    _th.Thread(target=warm_summary, daemon=True, name="warm-summary").start()
+
     robot_registry.attach_alarms(alarms)
     from app.services.alarms import bind_store
     bind_store(alarms)

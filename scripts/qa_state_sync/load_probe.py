@@ -15,15 +15,23 @@ API = "http://127.0.0.1:8000/api/v1"
 ENDPOINTS = [
     "/robots/1/status",
     "/alarms",
-    "/reports/summary",
     "/telemetry?hours=1",
+    "/reports/summary",
 ]
 
 
 def login() -> requests.Session:
     s = requests.Session()
-    r = s.post(API + "/auth/login", json={"username": "admin", "password": "admin123"}, timeout=10)
-    r.raise_for_status()
+    last = None
+    for _ in range(3):
+        try:
+            r = s.post(API + "/auth/login", json={"username": "admin", "password": "admin123"}, timeout=25)
+            r.raise_for_status()
+            return s
+        except Exception as e:  # noqa: BLE001
+            last = e
+            time.sleep(3)
+    raise last
     return s
 
 
@@ -32,7 +40,7 @@ def pct(vals: list[float], p: float) -> float:
         return float("nan")
     vals = sorted(vals)
     k = min(len(vals) - 1, max(0, int(round((p / 100) * len(vals) - 0.5))))
-    return round(vals[k] * 1000, 1)
+    return round(vals[k], 1)
 
 
 def main() -> None:
@@ -43,7 +51,7 @@ def main() -> None:
     def one(ep: str) -> dict:
         t0 = time.perf_counter()
         try:
-            r = requests.get(API + ep, cookies=cookie, timeout=30)
+            r = requests.get(API + ep, cookies=cookie, timeout=25)
             return {"ep": ep, "ms": (time.perf_counter() - t0) * 1000,
                     "status": r.status_code, "len": len(r.content)}
         except Exception as e:  # noqa: BLE001
@@ -61,7 +69,8 @@ def main() -> None:
         row = {"n": 20, "p50_ms": pct(lat, 50), "p95_ms": pct(lat, 95),
                "max_ms": round(max(lat), 1), "min_ms": round(min(lat), 1),
                "codes": {str(k): v for k, v in codes.items()},
-               "bytes_avg": int(statistics.mean(r["len"] for r in res if r.get("len") is not None))}
+               "bytes_avg": int(statistics.mean([r["len"] for r in res if r.get("len") is not None])) if any(r.get("len") is not None for r in res) else 0,
+               "errs": [r.get("err") for r in res if r.get("err")][:3]}
         out[ep] = row
         print(ep, json.dumps(row, ensure_ascii=False))
 
