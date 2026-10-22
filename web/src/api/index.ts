@@ -333,8 +333,13 @@ export const api = {
     request<Record<string, unknown>>('/task-runs', { method: 'POST', body }),
   dispatchTaskRun: (id: number) =>
     request<Record<string, unknown>>(`/task-runs/${id}/dispatch`, { method: 'POST' }),
-  startCruise: (id: number) =>
-    request<{ ok: boolean; run_id: number; steps: number }>(`/task-runs/${id}/cruise`, { method: 'POST' }),
+  cancelTaskRunWithReason: (id: number, reason: string) =>
+    request<{ ok: boolean }>(`/task-runs/${id}/cancel`, { method: 'POST', body: { reason } }),
+  retryStep: (id: number, seq: number) =>
+    request<{ ok: boolean; seq: number }>(`/task-runs/${id}/steps/${seq}/retry`, { method: 'POST' }),
+  startCruise: (id: number, fromSeq = 0) =>
+    request<{ ok: boolean; run_id: number; steps: number }>(`/task-runs/${id}/cruise`,
+      { method: 'POST', body: fromSeq ? { from_seq: fromSeq } : {} }),
   cancelCruise: (id: number) =>
     request<{ ok: boolean }>(`/task-runs/${id}/cruise/cancel`, { method: 'POST' }),
   cruiseStatus: () => request<{ running: number[] }>('/task-runs/cruise/status'),

@@ -38,12 +38,12 @@ class CruiseRunner:
     def running(self) -> list[int]:
         return [rid for rid, t in self._threads.items() if t.is_alive()]
 
-    def start(self, run_id: int, adapter) -> bool:
+    def start(self, run_id: int, adapter, from_seq: int = 0) -> bool:
         if run_id in self._threads and self._threads[run_id].is_alive():
             return False
         ev = threading.Event()
         self._cancel[run_id] = ev
-        t = threading.Thread(target=self._run, args=(run_id, adapter, ev),
+        t = threading.Thread(target=self._run, args=(run_id, adapter, ev, from_seq),
                              daemon=True, name=f"cruise-{run_id}")
         self._threads[run_id] = t
         t.start()
@@ -65,13 +65,15 @@ class CruiseRunner:
         return True
 
     # ---- 执行 ----
-    def _run(self, run_id: int, adapter, stop: threading.Event) -> None:
+    def _run(self, run_id: int, adapter, stop: threading.Event, from_seq: int = 0) -> None:
         with self._sf() as db:
             run = db.get(TaskRun, run_id)
             if run is None:
                 return
-            steps = (db.query(TaskRunStep).filter(TaskRunStep.run_id == run_id)
-                     .order_by(TaskRunStep.seq).all())
+            q = db.query(TaskRunStep).filter(TaskRunStep.run_id == run_id)
+            if from_seq:
+                q = q.filter(TaskRunStep.seq >= from_seq)
+            steps = q.order_by(TaskRunStep.seq).all()
             points = {p.id: p for p in db.query(PointDraft).all()}
             run.status = "running"
             run.started_at = run.started_at or datetime.now()
@@ -133,6 +135,8 @@ class CruiseRunner:
                 run.status = "cancelled"
             else:
                 run.status = "done" if failed == 0 else "failed"
+            if failed:
+                run.dispatch_error = f"{failed} 个点位失败，详见各点结果"
             run.finished_at = datetime.now()
             db.commit()
         self._cancel.pop(run_id, None)
@@ -184,7 +188,8 @@ class CruiseRunner:
                     import asyncio
                     order = asyncio.run(order)
             except Exception as exc:  # noqa: BLE001
-                return False, f"查询任务状态失败：{exc}"
+                # 查询失败多半是机器人失联/网络断：这是"待人工确认位置"，不是普通超时
+                return False, f"机器人失联（查询失败：{exc.__class__.__name__}），需人工确认位置"
             state = (order or {}).get("state")
             if state == "FINISHED":
                 # 有目标坐标就再核对一次位姿：误差 > 1.5m 不算到点（防止空任务被当完成）

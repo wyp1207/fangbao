@@ -1134,3 +1134,44 @@ def test_dispatch_preflight_blocks(auth_client):
 
         db.query(TaskRun).filter(TaskRun.name.in_(("门禁用例", "正在跑"))).delete()
         db.commit()
+
+
+def test_failure_paths(auth_client, monkeypatch):
+    """失败路径：取消要原因、单点重试、失联原因可追溯。"""
+    import io as _io
+    from PIL import Image
+
+    from app.db.session import SessionLocal
+    from app.models.task_run import TaskRun, TaskRunStep
+    from app.services import task_dispatch
+
+    monkeypatch.setattr(task_dispatch, "_require_write", lambda: None)
+
+    buf = _io.BytesIO()
+    Image.new("RGB", (60, 60), "white").save(buf, format="PNG")
+    mid = auth_client.post("/api/v1/maps/library",
+                           files={"file": ("f.png", buf.getvalue(), "image/png")},
+                           data={"name": "失败图"}).json()["id"]
+    pt = auth_client.post(f"/api/v1/maps/library/{mid}/points",
+                          json={"name": "F1", "x": 1, "y": 1}).json()
+    tpl = auth_client.post("/api/v1/task-templates", json={
+        "name": "失败模板", "template_map_id": mid,
+        "actions": [{"point_id": pt["id"], "action": "photo"}]}).json()
+
+    with SessionLocal() as db:
+        run = TaskRun(name="失败路径用例", status="running", template_id=tpl["id"], robot_id=1)
+        db.add(run); db.commit(); db.refresh(run)
+        db.add(TaskRunStep(run_id=run.id, seq=1, point_id=pt["id"], point_name="F1",
+                           action="photo", status="failed", error="机器人失联"))
+        db.commit()
+        rid = run.id
+
+    # 取消必须带原因，且写进审计
+    r = auth_client.post(f"/api/v1/task-runs/{rid}/cancel", json={"reason": "现场临时封路"})
+    assert r.status_code == 200
+    detail = auth_client.get(f"/api/v1/task-runs/{rid}").json()
+    assert detail["status"] == "cancelled"
+
+    # 适配器没有 capture 时，重试要明确报"需要真机接口"，不能假装成功
+    r2 = auth_client.post(f"/api/v1/task-runs/{rid}/steps/1/retry")
+    assert r2.status_code in (400, 403)

@@ -3,21 +3,208 @@
     "name": "dashboard",
     "clicks": [
       {
-        "button": "登 录",
+        "button": "默认场站 ▾",
         "title": "",
-        "cls": "btn primary submit",
+        "cls": "trigger",
         "url_changed": false,
         "new_url": null,
         "new_text": [
-          "请求失败（500）"
+          "实验室",
+          "23:42:56",
+          "数据更新于 23:42:56（0.1s 前）"
         ],
         "toast": [],
         "modal": [],
         "net": [
           {
-            "m": "POST",
-            "u": "/api/v1/auth/login",
-            "s": 500
+            "m": "GET",
+            "u": "/api/v1/robots/1/status",
+            "s": 200
+          }
+        ],
+        "dialog": [],
+        "downloads": [],
+        "error": null,
+        "popups": []
+      },
+      {
+        "button": "JCROB-01 ▾",
+        "title": "",
+        "cls": "trigger",
+        "url_changed": false,
+        "new_url": null,
+        "new_text": [
+          "23:42:59",
+          "数据更新于 23:42:58（0.8s 前）"
+        ],
+        "toast": [],
+        "modal": [],
+        "net": [
+          {
+            "m": "GET",
+            "u": "/api/v1/robots/1/status",
+            "s": 200
+          }
+        ],
+        "dialog": [],
+        "downloads": [],
+        "error": null,
+        "popups": []
+      },
+      {
+        "button": "锁定屏幕",
+        "title": "锁定屏幕",
+        "cls": "ti",
+        "url_changed": false,
+        "new_url": null,
+        "new_text": [
+          "23:43:01",
+          "数据更新于 23:43:01（0.4s 前）",
+          "🔒",
+          "屏幕已锁定",
+          "输入当前账号密码解锁",
+          "退出登录",
+          "解锁",
+          "锁定期间无法操作大屏；忘记密码请让管理员在「用户管理」里重置"
+        ],
+        "toast": [],
+        "modal": [],
+        "net": [
+          {
+            "m": "GET",
+            "u": "/api/v1/robots/1/status",
+            "s": 200
+          }
+        ],
+        "dialog": [],
+        "downloads": [],
+        "error": null,
+        "popups": []
+      },
+      {
+        "button": "告警：0 条未确认",
+        "title": "告警：0 条未确认",
+        "cls": "ti",
+        "url_changed": true,
+        "new_url": "/alarms?status=unacked",
+        "new_text": [
+          "告警列表",
+          "确认不等于恢复，恢复由数据判断",
+          "关键词",
+          "级别",
+          "全部",
+          "状态",
+          "待确认",
+          "查询",
+          "重置",
+          "刷新"
+        ],
+        "toast": [],
+        "modal": [],
+        "net": [
+          {
+            "m": "GET",
+            "u": "/api/v1/robots/1/status",
+            "s": 200
+          },
+          {
+            "m": "GET",
+            "u": "/api/v1/alarms",
+            "s": 200
+          },
+          {
+            "m": "GET",
+            "u": "/api/v1/alarms",
+            "s": 200
+          },
+          {
+            "m": "GET",
+            "u": "/api/v1/settings",
+            "s": 200
+          },
+          {
+            "m": "GET",
+            "u": "/api/v1/alarms",
+            "s": 200
+          }
+        ],
+        "dialog": [],
+        "downloads": [],
+        "error": null,
+        "popups": []
+      },
+      {
+        "button": "100",
+        "title": "消息中心",
+        "cls": "ti",
+        "url_changed": true,
+        "new_url": "/messages",
+        "new_text": [
+          "消息中心",
+          "234 条未读",
+          "告警 + 视频 + 账号等系统事件，重启后系统消息清空",
+          "类型",
+          "全部",
+          "刷新",
+          "全部标为已读",
+          "共 234 条",
+          "时间\t类型\t级别\t内容\t操作",
+          "10-22 23:42:58\t账号\t提示\t密码已修改：qa_auditor_2342"
+        ],
+        "toast": [],
+        "modal": [],
+        "net": [
+          {
+            "m": "GET",
+            "u": "/api/v1/robots/1/status",
+            "s": 200
+          },
+          {
+            "m": "GET",
+            "u": "/api/v1/messages",
+            "s": 200
+          },
+          {
+            "m": "GET",
+            "u": "/api/v1/alarms",
+            "s": 200
+          }
+        ],
+        "dialog": [],
+        "downloads": [],
+        "error": null,
+        "popups": []
+      },
+      {
+        "button": "打开全屏页 ↗",
+        "title": "打开视频监控",
+        "cls": "embed-expand",
+        "url_changed": true,
+        "new_url": "/video?source=1",
+        "new_text": [
+          "视频监控",
+          "go2rtc MSE ~0.5s",
+          "视频源",
+          "充电房-可见光",
+          "测试连通",
+          "刷新列表",
+          "⚙ 摄像头配置",
+          "去管理视频源",
+          "ID：1",
+          "分组：充电房"
+        ],
+        "toast": [],
+        "modal": [],
+        "net": [
+          {
+            "m": "GET",
+            "u": "/api/v1/videos",
+            "s": 200
+          },
+          {
+            "m": "GET",
+            "u": "/api/v1/robots/1/status",
+            "s": 200
           }
         ],
         "dialog": [],
@@ -26,22 +213,30 @@
         "popups": []
       }
     ],
-    "skipped": [],
+    "skipped": [
+      {
+        "idx": "6",
+        "text": "云台控制",
+        "key": "云台控制",
+        "title": "",
+        "cls": "on",
+        "tag": "button"
+      },
+      {
+        "idx": "7",
+        "text": "车体控制",
+        "key": "车体控制",
+        "title": "",
+        "cls": "",
+        "tag": "button"
+      }
+    ],
     "loading_snapshot": ""
   },
   "/robot-status": {
     "name": "robot-status",
     "clicks": [],
-    "skipped": [
-      {
-        "idx": "0",
-        "text": "登 录",
-        "key": "登 录",
-        "title": "",
-        "cls": "btn primary submit",
-        "tag": "button"
-      }
-    ],
+    "skipped": [],
     "loading_snapshot": ""
   },
   "/map": {
@@ -50,10 +245,26 @@
     "skipped": [
       {
         "idx": "0",
-        "text": "登 录",
-        "key": "登 录",
+        "text": "map1 camera · 0.050 m/px",
+        "key": "map1 camera · 0.050 m/px",
         "title": "",
-        "cls": "btn primary submit",
+        "cls": "map-item active",
+        "tag": "button"
+      },
+      {
+        "idx": "1",
+        "text": "导入",
+        "key": "导入",
+        "title": "",
+        "cls": "btn btn-xs",
+        "tag": "button"
+      },
+      {
+        "idx": "2",
+        "text": "泰安厂区-1F 1F · 6 草稿",
+        "key": "泰安厂区-1F 1F · 6 草稿",
+        "title": "",
+        "cls": "map-item",
         "tag": "button"
       }
     ],
@@ -63,21 +274,129 @@
     "name": "video",
     "clicks": [
       {
-        "button": "登 录",
+        "button": "充电房-可见光 ▾",
         "title": "",
-        "cls": "btn primary submit",
+        "cls": "trigger",
         "url_changed": false,
         "new_url": null,
+        "new_text": [],
+        "toast": [],
+        "modal": [],
+        "net": [
+          {
+            "m": "GET",
+            "u": "/api/v1/robots/1/status",
+            "s": 200
+          }
+        ],
+        "dialog": [],
+        "downloads": [],
+        "error": null,
+        "popups": []
+      },
+      {
+        "button": "刷新列表",
+        "title": "",
+        "cls": "btn btn-sm",
+        "url_changed": false,
+        "new_url": null,
+        "new_text": [],
+        "toast": [],
+        "modal": [],
+        "net": [
+          {
+            "m": "GET",
+            "u": "/api/v1/videos",
+            "s": 200
+          },
+          {
+            "m": "GET",
+            "u": "/api/v1/robots/1/status",
+            "s": 200
+          }
+        ],
+        "dialog": [],
+        "downloads": [],
+        "error": null,
+        "popups": []
+      },
+      {
+        "button": "⚙ 摄像头配置",
+        "title": "去设备管理改这一路",
+        "cls": "btn btn-sm",
+        "url_changed": true,
+        "new_url": "/cameras?v=1",
         "new_text": [
-          "请求失败（500）"
+          "摄像头 / 视频流",
+          "地址里的密码只存在服务端，列表里一律打码",
+          "分组",
+          "全部",
+          "名称",
+          "查询",
+          "重置",
+          "刷新",
+          "新增视频源",
+          "ID\t名称\t分组\t厂商\tgo2rtc 流名\t视频流地址\t状态\t首页显示\t操作"
         ],
         "toast": [],
         "modal": [],
         "net": [
           {
-            "m": "POST",
-            "u": "/api/v1/auth/login",
-            "s": 500
+            "m": "GET",
+            "u": "/api/v1/videos",
+            "s": 200
+          },
+          {
+            "m": "GET",
+            "u": "/api/v1/videos/go2rtc-streams",
+            "s": 200
+          },
+          {
+            "m": "GET",
+            "u": "/api/v1/robots/1/status",
+            "s": 200
+          }
+        ],
+        "dialog": [],
+        "downloads": [],
+        "error": null,
+        "popups": []
+      },
+      {
+        "button": "去管理视频源",
+        "title": "",
+        "cls": "btn btn-sm",
+        "url_changed": true,
+        "new_url": "/cameras",
+        "new_text": [
+          "摄像头 / 视频流",
+          "地址里的密码只存在服务端，列表里一律打码",
+          "分组",
+          "全部",
+          "名称",
+          "查询",
+          "重置",
+          "刷新",
+          "新增视频源",
+          "ID\t名称\t分组\t厂商\tgo2rtc 流名\t视频流地址\t状态\t首页显示\t操作"
+        ],
+        "toast": [],
+        "modal": [],
+        "net": [
+          {
+            "m": "GET",
+            "u": "/api/v1/videos",
+            "s": 200
+          },
+          {
+            "m": "GET",
+            "u": "/api/v1/videos/go2rtc-streams",
+            "s": 200
+          },
+          {
+            "m": "GET",
+            "u": "/api/v1/robots/1/status",
+            "s": 200
           }
         ],
         "dialog": [],
@@ -86,28 +405,145 @@
         "popups": []
       }
     ],
-    "skipped": [],
+    "skipped": [
+      {
+        "idx": "1",
+        "text": "测试连通",
+        "key": "测试连通",
+        "title": "",
+        "cls": "btn btn-sm",
+        "tag": "button"
+      }
+    ],
     "loading_snapshot": ""
   },
   "/room": {
     "name": "room",
     "clicks": [
       {
-        "button": "登 录",
+        "button": "充电房-可见光 ▾",
         "title": "",
-        "cls": "btn primary submit",
+        "cls": "trigger",
         "url_changed": false,
         "new_url": null,
+        "new_text": [],
+        "toast": [],
+        "modal": [],
+        "net": [
+          {
+            "m": "GET",
+            "u": "/api/v1/robots/1/status",
+            "s": 200
+          }
+        ],
+        "dialog": [],
+        "downloads": [],
+        "error": null,
+        "popups": []
+      },
+      {
+        "button": "刷新列表",
+        "title": "",
+        "cls": "btn btn-sm",
+        "url_changed": false,
+        "new_url": null,
+        "new_text": [],
+        "toast": [],
+        "modal": [],
+        "net": [
+          {
+            "m": "GET",
+            "u": "/api/v1/videos",
+            "s": 200
+          },
+          {
+            "m": "GET",
+            "u": "/api/v1/robots/1/status",
+            "s": 200
+          }
+        ],
+        "dialog": [],
+        "downloads": [],
+        "error": null,
+        "popups": []
+      },
+      {
+        "button": "⚙ 摄像头配置",
+        "title": "去设备管理改这一路",
+        "cls": "btn btn-sm",
+        "url_changed": true,
+        "new_url": "/cameras?v=1",
         "new_text": [
-          "请求失败（500）"
+          "摄像头 / 视频流",
+          "地址里的密码只存在服务端，列表里一律打码",
+          "分组",
+          "全部",
+          "名称",
+          "查询",
+          "重置",
+          "刷新",
+          "新增视频源",
+          "ID\t名称\t分组\t厂商\tgo2rtc 流名\t视频流地址\t状态\t首页显示\t操作"
         ],
         "toast": [],
         "modal": [],
         "net": [
           {
-            "m": "POST",
-            "u": "/api/v1/auth/login",
-            "s": 500
+            "m": "GET",
+            "u": "/api/v1/videos",
+            "s": 200
+          },
+          {
+            "m": "GET",
+            "u": "/api/v1/videos/go2rtc-streams",
+            "s": 200
+          },
+          {
+            "m": "GET",
+            "u": "/api/v1/robots/1/status",
+            "s": 200
+          }
+        ],
+        "dialog": [],
+        "downloads": [],
+        "error": null,
+        "popups": []
+      },
+      {
+        "button": "去管理视频源",
+        "title": "",
+        "cls": "btn btn-sm",
+        "url_changed": true,
+        "new_url": "/cameras",
+        "new_text": [
+          "摄像头 / 视频流",
+          "地址里的密码只存在服务端，列表里一律打码",
+          "分组",
+          "全部",
+          "名称",
+          "查询",
+          "重置",
+          "刷新",
+          "新增视频源",
+          "ID\t名称\t分组\t厂商\tgo2rtc 流名\t视频流地址\t状态\t首页显示\t操作"
+        ],
+        "toast": [],
+        "modal": [],
+        "net": [
+          {
+            "m": "GET",
+            "u": "/api/v1/videos",
+            "s": 200
+          },
+          {
+            "m": "GET",
+            "u": "/api/v1/videos/go2rtc-streams",
+            "s": 200
+          },
+          {
+            "m": "GET",
+            "u": "/api/v1/robots/1/status",
+            "s": 200
           }
         ],
         "dialog": [],
@@ -116,7 +552,16 @@
         "popups": []
       }
     ],
-    "skipped": [],
+    "skipped": [
+      {
+        "idx": "1",
+        "text": "测试连通",
+        "key": "测试连通",
+        "title": "",
+        "cls": "btn btn-sm",
+        "tag": "button"
+      }
+    ],
     "loading_snapshot": ""
   },
   "/env": {
@@ -125,11 +570,11 @@
     "skipped": [
       {
         "idx": "0",
-        "text": "登 录",
-        "key": "登 录",
+        "text": "去标定传感器",
+        "key": "去标定传感器",
         "title": "",
-        "cls": "btn primary submit",
-        "tag": "button"
+        "cls": "btn btn-sm",
+        "tag": "a"
       }
     ],
     "loading_snapshot": ""
@@ -138,21 +583,183 @@
     "name": "tasks",
     "clicks": [
       {
-        "button": "登 录",
+        "button": "全部 ▾",
         "title": "",
-        "cls": "btn primary submit",
+        "cls": "trigger",
         "url_changed": false,
         "new_url": null,
         "new_text": [
-          "请求失败（500）"
+          "等待执行",
+          "执行中",
+          "已暂停",
+          "已取消",
+          "错误",
+          "已完成",
+          "1\t夜巡路线A\t已完成\t3\t未标定（原值 0）\t否\t47a97e4e…",
+          "2\t充电任务\t等待执行\t1\t未标定（原值 0）\t否\t8bc1e6dd…"
         ],
         "toast": [],
         "modal": [],
         "net": [
           {
-            "m": "POST",
-            "u": "/api/v1/auth/login",
-            "s": 500
+            "m": "GET",
+            "u": "/api/v1/robots/1/status",
+            "s": 200
+          }
+        ],
+        "dialog": [],
+        "downloads": [],
+        "error": null,
+        "popups": []
+      },
+      {
+        "button": "查询",
+        "title": "",
+        "cls": "btn btn-sm ok",
+        "url_changed": false,
+        "new_url": null,
+        "new_text": [
+          "1\t夜巡路线A\t已完成\t3\t未标定（原值 0）\t否\t47a97e4e…",
+          "2\t充电任务\t等待执行\t1\t未标定（原值 0）\t否\t8bc1e6dd…"
+        ],
+        "toast": [],
+        "modal": [],
+        "net": [
+          {
+            "m": "GET",
+            "u": "/api/v1/robots/1/tasks",
+            "s": 200
+          },
+          {
+            "m": "GET",
+            "u": "/api/v1/robots/1/status",
+            "s": 200
+          }
+        ],
+        "dialog": [],
+        "downloads": [],
+        "error": null,
+        "popups": []
+      },
+      {
+        "button": "重置",
+        "title": "",
+        "cls": "btn btn-sm warn",
+        "url_changed": false,
+        "new_url": null,
+        "new_text": [
+          "1\t夜巡路线A\t已完成\t3\t未标定（原值 0）\t否\t47a97e4e…",
+          "2\t充电任务\t等待执行\t1\t未标定（原值 0）\t否\t8bc1e6dd…"
+        ],
+        "toast": [],
+        "modal": [],
+        "net": [
+          {
+            "m": "GET",
+            "u": "/api/v1/robots/1/status",
+            "s": 200
+          }
+        ],
+        "dialog": [],
+        "downloads": [],
+        "error": null,
+        "popups": []
+      },
+      {
+        "button": "新建任务",
+        "title": "",
+        "cls": "btn btn-sm",
+        "url_changed": true,
+        "new_url": "/task-runs",
+        "new_text": [
+          "任务执行",
+          "平台只生成「计划」；执行结果由机器人回传（真机接了才有数据）",
+          "从模板生成计划",
+          "刷新",
+          "共 6 条",
+          "ID\t名称\t状态\t点数\t开始\t耗时\t来源\t操作",
+          "6\tQA验收-计划\t已取消\t5\t2026-10-22 19:42:58\t—\t平台计划 下发失败",
+          "详情",
+          "巡航",
+          "5\t演练-172401\t已取消\t5\t2026-10-22 17:24:01\t—\t机器人回传"
+        ],
+        "toast": [
+          "下发/暂停/巡航在「任务执行」页；写开关在系统设置里"
+        ],
+        "modal": [],
+        "net": [
+          {
+            "m": "GET",
+            "u": "/api/v1/task-templates",
+            "s": 200
+          },
+          {
+            "m": "GET",
+            "u": "/api/v1/task-runs",
+            "s": 200
+          },
+          {
+            "m": "GET",
+            "u": "/api/v1/robots/1/status",
+            "s": 200
+          }
+        ],
+        "dialog": [],
+        "downloads": [],
+        "error": null,
+        "popups": []
+      },
+      {
+        "button": "☰",
+        "title": "查看详情",
+        "cls": "act",
+        "url_changed": false,
+        "new_url": null,
+        "new_text": [
+          "1\t夜巡路线A\t已完成\t3\t未标定（原值 0）\t否\t47a97e4e…",
+          "2\t充电任务\t等待执行\t1\t未标定（原值 0）\t否\t8bc1e6dd…",
+          "任务详情",
+          "任务名\t夜巡路线A",
+          "状态\t已完成",
+          "任务 ID\t47a97e4e-9327-4214-a780-fd5a2ae39ee3",
+          "循环\t否",
+          "进度\t未标定（原值 0）",
+          "动作序列",
+          "["
+        ],
+        "toast": [],
+        "modal": [
+          "任务详情\n任务名\t夜巡路线A\n状态\t已完成\n任务 ID\t47a97e4e-9327-4214-a780-fd5a2ae39ee3\n循环\t否\n进度\t未标定（原值 0）\n动作序列\n[\n  {\n    \"type\": \"nav_action\",\n    \"x\": -4,\n    \"y\": 0,\n    \"theta\": 1.570796\n  },\n  {\n    \"type\": \"sleep_action\",\n    \"wait_time\": 5\n  },\n  {\n    \"type\": \"image_action\",\n    \"topic\": \"/camera_node/image_raw\"\n  }\n]\n下发\n关闭"
+        ],
+        "net": [
+          {
+            "m": "GET",
+            "u": "/api/v1/robots/1/status",
+            "s": 200
+          }
+        ],
+        "dialog": [],
+        "downloads": [],
+        "error": null,
+        "popups": []
+      },
+      {
+        "button": "1",
+        "title": "",
+        "cls": "on",
+        "url_changed": false,
+        "new_url": null,
+        "new_text": [
+          "1\t夜巡路线A\t已完成\t3\t未标定（原值 0）\t否\t47a97e4e…",
+          "2\t充电任务\t等待执行\t1\t未标定（原值 0）\t否\t8bc1e6dd…"
+        ],
+        "toast": [],
+        "modal": [],
+        "net": [
+          {
+            "m": "GET",
+            "u": "/api/v1/robots/1/status",
+            "s": 200
           }
         ],
         "dialog": [],
@@ -161,19 +768,609 @@
         "popups": []
       }
     ],
-    "skipped": [],
+    "skipped": [
+      {
+        "idx": "6",
+        "text": "▶",
+        "key": "下发任务（未开放）",
+        "title": "下发任务（未开放）",
+        "cls": "act",
+        "tag": "button"
+      },
+      {
+        "idx": "7",
+        "text": "■",
+        "key": "取消任务（未开放）",
+        "title": "取消任务（未开放）",
+        "cls": "act danger",
+        "tag": "button"
+      },
+      {
+        "idx": "12",
+        "text": "下发",
+        "key": "下发",
+        "title": "",
+        "cls": "btn btn-sm",
+        "tag": "button"
+      },
+      {
+        "idx": "13",
+        "text": "暂停",
+        "key": "暂停",
+        "title": "",
+        "cls": "btn btn-sm",
+        "tag": "button"
+      },
+      {
+        "idx": "14",
+        "text": "继续",
+        "key": "继续",
+        "title": "",
+        "cls": "btn btn-sm",
+        "tag": "button"
+      },
+      {
+        "idx": "15",
+        "text": "取消当前任务",
+        "key": "取消当前任务",
+        "title": "",
+        "cls": "btn btn-sm",
+        "tag": "button"
+      }
+    ],
     "loading_snapshot": ""
   },
   "/task-templates": {
     "name": "task-templates",
+    "clicks": [
+      {
+        "button": "复制",
+        "title": "复制一份，改两个点就是新路线",
+        "cls": "btn btn-xs",
+        "url_changed": false,
+        "new_url": null,
+        "new_text": [
+          "9\t演练-172401 副本 副本 副本\t配电柜A(拍照) → 泵房B(拍照) → 点位 3(拍照) → 罐区C(拍照) → 风机D(拍照)\t5\t单次",
+          "8\t演练-172401 副本 副本\t配电柜A(拍照) → 泵房B(拍照) → 点位 3(拍照) → 罐区C(拍照) → 风机D(拍照)\t5\t单次",
+          "7\t演练-172401 副本\t配电柜A(拍照) → 泵房B(拍照) → 点位 3(拍照) → 罐区C(拍照) → 风机D(拍照)\t5\t单次",
+          "6\t演练-172401\t配电柜A(拍照) → 泵房B(拍照) → 点位 3(拍照) → 罐区C(拍照) → 风机D(拍照)\t5\t单次",
+          "5\t演练-172401\t配电柜A(拍照) → 泵房B(拍照) → 点位 3(拍照) → 罐区C(拍照) → 风机D(拍照)\t5\t单次",
+          "4\t演练-172401\t配电柜A(拍照) → 泵房B(拍照) → 点位 3(拍照) → 罐区C(拍照) → 风机D(拍照)\t5\t单次",
+          "3\t演练-172400\t配电柜A(拍照)\t1\t单次",
+          "2\t下发验证\t配电柜A(拍照)\t1\t单次",
+          "1\tacceptance test\t配电柜A(拍照)\t1\t单次",
+          "已复制为「演练-172401 副本 副本 副本」"
+        ],
+        "toast": [
+          "已复制为「演练-172401 副本 副本 副本」"
+        ],
+        "modal": [],
+        "net": [
+          {
+            "m": "POST",
+            "u": "/api/v1/task-templates/8/duplicate",
+            "s": 200
+          },
+          {
+            "m": "GET",
+            "u": "/api/v1/task-templates",
+            "s": 200
+          },
+          {
+            "m": "GET",
+            "u": "/api/v1/robots/1/status",
+            "s": 200
+          }
+        ],
+        "dialog": [],
+        "downloads": [],
+        "error": null,
+        "popups": []
+      },
+      {
+        "button": "✎",
+        "title": "编辑",
+        "cls": "act",
+        "url_changed": false,
+        "new_url": null,
+        "new_text": [
+          "9\t演练-172401 副本 副本 副本\t配电柜A(拍照) → 泵房B(拍照) → 点位 3(拍照) → 罐区C(拍照) → 风机D(拍照)\t5\t单次",
+          "8\t演练-172401 副本 副本\t配电柜A(拍照) → 泵房B(拍照) → 点位 3(拍照) → 罐区C(拍照) → 风机D(拍照)\t5\t单次",
+          "7\t演练-172401 副本\t配电柜A(拍照) → 泵房B(拍照) → 点位 3(拍照) → 罐区C(拍照) → 风机D(拍照)\t5\t单次",
+          "6\t演练-172401\t配电柜A(拍照) → 泵房B(拍照) → 点位 3(拍照) → 罐区C(拍照) → 风机D(拍照)\t5\t单次",
+          "5\t演练-172401\t配电柜A(拍照) → 泵房B(拍照) → 点位 3(拍照) → 罐区C(拍照) → 风机D(拍照)\t5\t单次",
+          "4\t演练-172401\t配电柜A(拍照) → 泵房B(拍照) → 点位 3(拍照) → 罐区C(拍照) → 风机D(拍照)\t5\t单次",
+          "3\t演练-172400\t配电柜A(拍照)\t1\t单次",
+          "2\t下发验证\t配电柜A(拍照)\t1\t单次",
+          "1\tacceptance test\t配电柜A(拍照)\t1\t单次",
+          "编辑模板 · 演练-172401 副本 副本 副本"
+        ],
+        "toast": [],
+        "modal": [
+          "编辑模板 · 演练-172401 副本 副本 副本\n模板名称*\n地图\n泰安厂区-1F（1F）\n▾\n点位与动作（勾选即加入）*\n配电柜A\n默认分组 · 3.5,2.0\n拍照\n▾\n泵房B\n默认分组 · 12.0,6.5\n拍照\n▾\n点位 3\n默认分组 · 7.7,7.0\n拍照\n▾\n罐区C\n默认分组 · 15.2,8.1\n拍照\n▾\n风机D\n默认分组 · 18.0,2.4\n拍照\n▾\n模板测试点\n泵房 · 2.0,2.0\n循环执行\n备注\n\n已选 5 个点位。模板只存在平台侧，不会下发到机器人—— 下发要等真机联调 + 现场授权。\n\n取消\n保存"
+        ],
+        "net": [
+          {
+            "m": "GET",
+            "u": "/api/v1/maps/library/1/points",
+            "s": 200
+          },
+          {
+            "m": "GET",
+            "u": "/api/v1/robots/1/status",
+            "s": 200
+          }
+        ],
+        "dialog": [],
+        "downloads": [],
+        "error": null,
+        "popups": []
+      },
+      {
+        "button": "🗑",
+        "title": "删除",
+        "cls": "act danger",
+        "url_changed": false,
+        "new_url": null,
+        "new_text": [
+          "9\t演练-172401 副本 副本 副本\t配电柜A(拍照) → 泵房B(拍照) → 点位 3(拍照) → 罐区C(拍照) → 风机D(拍照)\t5\t单次",
+          "8\t演练-172401 副本 副本\t配电柜A(拍照) → 泵房B(拍照) → 点位 3(拍照) → 罐区C(拍照) → 风机D(拍照)\t5\t单次",
+          "7\t演练-172401 副本\t配电柜A(拍照) → 泵房B(拍照) → 点位 3(拍照) → 罐区C(拍照) → 风机D(拍照)\t5\t单次",
+          "6\t演练-172401\t配电柜A(拍照) → 泵房B(拍照) → 点位 3(拍照) → 罐区C(拍照) → 风机D(拍照)\t5\t单次",
+          "5\t演练-172401\t配电柜A(拍照) → 泵房B(拍照) → 点位 3(拍照) → 罐区C(拍照) → 风机D(拍照)\t5\t单次",
+          "4\t演练-172401\t配电柜A(拍照) → 泵房B(拍照) → 点位 3(拍照) → 罐区C(拍照) → 风机D(拍照)\t5\t单次",
+          "3\t演练-172400\t配电柜A(拍照)\t1\t单次",
+          "2\t下发验证\t配电柜A(拍照)\t1\t单次",
+          "1\tacceptance test\t配电柜A(拍照)\t1\t单次"
+        ],
+        "toast": [],
+        "modal": [],
+        "net": [
+          {
+            "m": "GET",
+            "u": "/api/v1/robots/1/status",
+            "s": 200
+          }
+        ],
+        "dialog": [
+          {
+            "type": "confirm",
+            "msg": "删除模板「演练-172401 副本 副本 副本」？"
+          }
+        ],
+        "downloads": [],
+        "error": null,
+        "popups": []
+      }
+    ],
+    "skipped": [
+      {
+        "idx": "0",
+        "text": "新建模板",
+        "key": "新建模板",
+        "title": "",
+        "cls": "btn btn-sm primary",
+        "tag": "button"
+      }
+    ],
+    "loading_snapshot": ""
+  },
+  "/task-runs": {
+    "name": "task-runs",
+    "clicks": [
+      {
+        "button": "从模板生成计划",
+        "title": "",
+        "cls": "btn btn-sm primary",
+        "url_changed": false,
+        "new_url": null,
+        "new_text": [
+          "6\tQA验收-计划\t已取消\t5\t2026-10-22 19:42:58\t—\t平台计划 下发失败",
+          "5\t演练-172401\t已取消\t5\t2026-10-22 17:24:01\t—\t机器人回传",
+          "4\t演练-172401\t已取消\t5\t2026-10-22 17:24:01\t—\t机器人回传",
+          "3\t演练-172401\t已取消\t5\t2026-10-22 17:24:01\t—\t机器人回传",
+          "2\t演练-172400\t已取消\t1\t2026-10-22 17:24:00\t—\t机器人回传",
+          "1\t下发验证\t已取消\t1\t2026-10-22 16:14:04\t—\t机器人回传",
+          "带 * 为必填",
+          "模板*",
+          "演练-172401 副本 副本 副本",
+          "名称（留空用模板名）"
+        ],
+        "toast": [],
+        "modal": [
+          "从模板生成计划\n带 * 为必填\n模板*\n演练-172401 副本 副本 副本\n▾\n名称（留空用模板名）\n备注\n\n生成的是计划，不会下发到机器人——写操作要等真机联调 + 现场授权。\n\n取消\n生成"
+        ],
+        "net": [
+          {
+            "m": "GET",
+            "u": "/api/v1/robots/1/status",
+            "s": 200
+          }
+        ],
+        "dialog": [],
+        "downloads": [],
+        "error": null,
+        "popups": []
+      },
+      {
+        "button": "全部 ▾",
+        "title": "",
+        "cls": "trigger",
+        "url_changed": false,
+        "new_url": null,
+        "new_text": [
+          "计划中",
+          "执行中",
+          "已完成",
+          "失败",
+          "已取消",
+          "6\tQA验收-计划\t已取消\t5\t2026-10-22 19:42:58\t—\t平台计划 下发失败",
+          "5\t演练-172401\t已取消\t5\t2026-10-22 17:24:01\t—\t机器人回传",
+          "4\t演练-172401\t已取消\t5\t2026-10-22 17:24:01\t—\t机器人回传",
+          "3\t演练-172401\t已取消\t5\t2026-10-22 17:24:01\t—\t机器人回传",
+          "2\t演练-172400\t已取消\t1\t2026-10-22 17:24:00\t—\t机器人回传"
+        ],
+        "toast": [],
+        "modal": [],
+        "net": [
+          {
+            "m": "GET",
+            "u": "/api/v1/robots/1/status",
+            "s": 200
+          }
+        ],
+        "dialog": [],
+        "downloads": [],
+        "error": null,
+        "popups": []
+      },
+      {
+        "button": "刷新",
+        "title": "",
+        "cls": "btn btn-sm ok",
+        "url_changed": false,
+        "new_url": null,
+        "new_text": [
+          "6\tQA验收-计划\t已取消\t5\t2026-10-22 19:42:58\t—\t平台计划 下发失败",
+          "5\t演练-172401\t已取消\t5\t2026-10-22 17:24:01\t—\t机器人回传",
+          "4\t演练-172401\t已取消\t5\t2026-10-22 17:24:01\t—\t机器人回传",
+          "3\t演练-172401\t已取消\t5\t2026-10-22 17:24:01\t—\t机器人回传",
+          "2\t演练-172400\t已取消\t1\t2026-10-22 17:24:00\t—\t机器人回传",
+          "1\t下发验证\t已取消\t1\t2026-10-22 16:14:04\t—\t机器人回传"
+        ],
+        "toast": [],
+        "modal": [],
+        "net": [
+          {
+            "m": "GET",
+            "u": "/api/v1/task-runs",
+            "s": 200
+          },
+          {
+            "m": "GET",
+            "u": "/api/v1/robots/1/status",
+            "s": 200
+          }
+        ],
+        "dialog": [],
+        "downloads": [],
+        "error": null,
+        "popups": []
+      },
+      {
+        "button": "详情",
+        "title": "",
+        "cls": "btn btn-xs",
+        "url_changed": false,
+        "new_url": null,
+        "new_text": [
+          "6\tQA验收-计划\t已取消\t5\t2026-10-22 19:42:58\t—\t平台计划 下发失败",
+          "5\t演练-172401\t已取消\t5\t2026-10-22 17:24:01\t—\t机器人回传",
+          "4\t演练-172401\t已取消\t5\t2026-10-22 17:24:01\t—\t机器人回传",
+          "3\t演练-172401\t已取消\t5\t2026-10-22 17:24:01\t—\t机器人回传",
+          "2\t演练-172400\t已取消\t1\t2026-10-22 17:24:00\t—\t机器人回传",
+          "1\t下发验证\t已取消\t1\t2026-10-22 16:14:04\t—\t机器人回传",
+          "QA验收-计划",
+          "已取消",
+          "开始 — · 结束 — · 点位 0/5 成功",
+          "序\t点位\t动作\t结果\t说明"
+        ],
+        "toast": [],
+        "modal": [
+          "QA验收-计划\n已取消\n\n开始 — · 结束 — · 点位 0/5 成功\n\n序\t点位\t动作\t结果\t说明\n1\t配电柜A\tphoto\tpending\t—\n2\t泵房B\tphoto\tpending\t—\n3\t点位 3\tphoto\tpending\t—\n4\t罐区C\tphoto\tpending\t—\n5\t风机D\tphoto\tpending\t—\n关闭"
+        ],
+        "net": [
+          {
+            "m": "GET",
+            "u": "/api/v1/task-runs/6",
+            "s": 200
+          },
+          {
+            "m": "GET",
+            "u": "/api/v1/robots/1/status",
+            "s": 200
+          }
+        ],
+        "dialog": [],
+        "downloads": [],
+        "error": null,
+        "popups": []
+      }
+    ],
+    "skipped": [
+      {
+        "idx": "4",
+        "text": "巡航",
+        "key": "巡航",
+        "title": "",
+        "cls": "btn btn-xs primary",
+        "tag": "button"
+      }
+    ],
+    "loading_snapshot": ""
+  },
+  "/points": {
+    "name": "points",
+    "clicks": [
+      {
+        "button": "去地图打点",
+        "title": "到地图页在图上打点（存平台草稿）",
+        "cls": "btn btn-sm",
+        "url_changed": true,
+        "new_url": "/map?lib=1",
+        "new_text": [
+          "机器人地图",
+          "1",
+          "camera · 0.050 m/px",
+          "平台地图库",
+          "导入",
+          "泰安厂区-1F",
+          "1F · 6 草稿",
+          "换场地怎么用？（点开看）",
+          "点位（6）",
+          "全选草稿"
+        ],
+        "toast": [],
+        "modal": [],
+        "net": [
+          {
+            "m": "GET",
+            "u": "/api/v1/robots/1/maps",
+            "s": 200
+          },
+          {
+            "m": "GET",
+            "u": "/api/v1/maps/library",
+            "s": 200
+          },
+          {
+            "m": "GET",
+            "u": "/api/v1/maps/library/1/points",
+            "s": 200
+          },
+          {
+            "m": "GET",
+            "u": "/api/v1/maps/library/1/image",
+            "s": 200
+          },
+          {
+            "m": "GET",
+            "u": "/api/v1/robots/1/status",
+            "s": 200
+          }
+        ],
+        "dialog": [],
+        "downloads": [],
+        "error": null,
+        "popups": []
+      }
+    ],
+    "skipped": [
+      {
+        "idx": "0",
+        "text": "map1 ▾",
+        "key": "map1 ▾",
+        "title": "",
+        "cls": "trigger",
+        "tag": "button"
+      },
+      {
+        "idx": "1",
+        "text": "查询",
+        "key": "查询",
+        "title": "",
+        "cls": "btn btn-sm ok",
+        "tag": "button"
+      },
+      {
+        "idx": "2",
+        "text": "重置",
+        "key": "重置",
+        "title": "",
+        "cls": "btn btn-sm warn",
+        "tag": "button"
+      }
+    ],
+    "loading_snapshot": ""
+  },
+  "/inspection": {
+    "name": "inspection",
+    "clicks": [
+      {
+        "button": "全部 ▾",
+        "title": "",
+        "cls": "trigger",
+        "url_changed": false,
+        "new_url": null,
+        "new_text": [
+          "待执行",
+          "执行中",
+          "已完成",
+          "2\t泵房日常巡检 · 10-22 早班\t待执行",
+          "0/2\t2026-10-23 03:43",
+          "1\t泵房日常巡检 · 10-22 早班\t已完成",
+          "2/2\t2026-10-22 22:31"
+        ],
+        "toast": [],
+        "modal": [],
+        "net": [
+          {
+            "m": "GET",
+            "u": "/api/v1/robots/1/status",
+            "s": 200
+          }
+        ],
+        "dialog": [],
+        "downloads": [],
+        "error": null,
+        "popups": []
+      },
+      {
+        "button": "刷新",
+        "title": "",
+        "cls": "btn btn-sm ok",
+        "url_changed": false,
+        "new_url": null,
+        "new_text": [
+          "2\t泵房日常巡检 · 10-22 早班\t待执行",
+          "0/2\t2026-10-23 03:43",
+          "1\t泵房日常巡检 · 10-22 早班\t已完成",
+          "2/2\t2026-10-22 22:31"
+        ],
+        "toast": [],
+        "modal": [],
+        "net": [
+          {
+            "m": "GET",
+            "u": "/api/v1/inspection/plans",
+            "s": 200
+          },
+          {
+            "m": "GET",
+            "u": "/api/v1/inspection/tasks",
+            "s": 200
+          },
+          {
+            "m": "GET",
+            "u": "/api/v1/robots/1/status",
+            "s": 200
+          }
+        ],
+        "dialog": [],
+        "downloads": [],
+        "error": null,
+        "popups": []
+      },
+      {
+        "button": "详情",
+        "title": "",
+        "cls": "btn btn-xs",
+        "url_changed": false,
+        "new_url": null,
+        "new_text": [
+          "2\t泵房日常巡检 · 10-22 早班\t待执行",
+          "0/2\t2026-10-23 03:43",
+          "1\t泵房日常巡检 · 10-22 早班\t已完成",
+          "2/2\t2026-10-22 22:31",
+          "泵房日常巡检 · 10-22 早班",
+          "待执行",
+          "进度 0/2",
+          "序\t点位\t扫码\t结论\t备注",
+          "1\t泵房A\t未扫\t未做\t—",
+          "2\t配电柜B\t未扫\t未做\t—"
+        ],
+        "toast": [],
+        "modal": [
+          "泵房日常巡检 · 10-22 早班\n待执行\n\n进度 0/2\n\n序\t点位\t扫码\t结论\t备注\n1\t泵房A\t未扫\t未做\t—\n2\t配电柜B\t未扫\t未做\t—\n关闭"
+        ],
+        "net": [
+          {
+            "m": "GET",
+            "u": "/api/v1/inspection/tasks/2",
+            "s": 200
+          },
+          {
+            "m": "GET",
+            "u": "/api/v1/robots/1/status",
+            "s": 200
+          }
+        ],
+        "dialog": [],
+        "downloads": [],
+        "error": null,
+        "popups": []
+      },
+      {
+        "button": "手机打卡",
+        "title": "",
+        "cls": "btn btn-xs",
+        "url_changed": true,
+        "new_url": "/m/task/2",
+        "new_text": [
+          "泵房日常巡检 · 10-22 早班",
+          "0/2 已打点 · 待执行",
+          "1",
+          "泵房A",
+          "未做",
+          "2",
+          "配电柜B",
+          "未做",
+          "泵房A",
+          "检查项：外观 / 渗漏 / 温度"
+        ],
+        "toast": [],
+        "modal": [],
+        "net": [
+          {
+            "m": "GET",
+            "u": "/api/v1/inspection/tasks/2",
+            "s": 200
+          }
+        ],
+        "dialog": [],
+        "downloads": [],
+        "error": null,
+        "popups": []
+      }
+    ],
+    "skipped": [
+      {
+        "idx": "0",
+        "text": "生成任务",
+        "key": "生成任务",
+        "title": "",
+        "cls": "btn btn-xs primary",
+        "tag": "button"
+      },
+      {
+        "idx": "5",
+        "text": "完成",
+        "key": "完成",
+        "title": "",
+        "cls": "btn btn-xs primary",
+        "tag": "button"
+      }
+    ],
+    "loading_snapshot": ""
+  },
+  "/task-calendar": {
+    "name": "task-calendar",
     "clicks": [],
     "skipped": [
       {
         "idx": "0",
-        "text": "登 录",
-        "key": "登 录",
+        "text": "返回上一页",
+        "key": "返回上一页",
         "title": "",
-        "cls": "btn primary submit",
+        "cls": "btn btn-sm",
+        "tag": "button"
+      },
+      {
+        "idx": "1",
+        "text": "回到驾驶舱",
+        "key": "回到驾驶舱",
+        "title": "",
+        "cls": "btn btn-sm primary",
         "tag": "button"
       }
     ],
