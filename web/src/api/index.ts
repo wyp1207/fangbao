@@ -306,6 +306,12 @@ export const api = {
     return request<{ ok: boolean; url: string; count: number }>(
       `/inspection/tasks/${taskId}/items/${itemId}/photo`, { method: 'POST', raw: fd })
   },
+  workOrder: (id: number) => request<Record<string, unknown>>(`/work-orders/${id}`),
+  uploadWorkOrderPhoto: (id: number, file: File) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return request<{ ok: boolean; url: string; count: number }>(`/work-orders/${id}/photo`, { method: 'POST', raw: fd })
+  },
   workOrders: (params: { status?: string } = {}) => {
     const qs = params.status ? `?status=${params.status}` : ''
     return request<{ total: number; items: Record<string, unknown>[] }>(`/work-orders${qs}`)

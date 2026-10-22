@@ -164,9 +164,9 @@ def main() -> int:
     STATE["stuck"] = args.stuck
 
     srv = ThreadingHTTPServer((args.host, args.port), Handler)
-    print(f"JCROB 模拟器已启动 http://{args.host}:{args.port}"
-          f"{'（卡住模式）' if args.stuck else ''}")
-    try:
+
+    def _tick() -> None:
+        # 状态演进放在后台线程：主线程必须 serve_forever，否则只监听不响应
         while True:
             if args.battery is None and not args.stuck:
                 STATE["battery"] = max(5.0, STATE["battery"] - 0.02)
@@ -175,6 +175,13 @@ def main() -> int:
                 if STATE["task"]["progress"] >= 100:
                     STATE["task"]["state"] = "COMPLETE"
             time.sleep(3)
+
+    import threading
+    threading.Thread(target=_tick, daemon=True).start()
+    print(f"JCROB 模拟器已启动 http://{args.host}:{args.port}"
+          f"{'（卡住模式）' if args.stuck else ''}", flush=True)
+    try:
+        srv.serve_forever()
     except KeyboardInterrupt:
         print("已停止")
 

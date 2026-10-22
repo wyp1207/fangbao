@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     # 生产建议关掉 /docs 与 /openapi.json（信息泄露面）
     docs_enabled: bool = True
 
+    # 对外访问地址（手机端链接/推送里用），例如 http://192.168.8.40:8099
+    public_base_url: str = ""
     log_level: str = "INFO"
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 

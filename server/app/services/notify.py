@@ -361,3 +361,26 @@ def init(session_factory) -> NotifyDispatcher:
 def on_alarm(alarm: dict) -> None:
     if _dispatcher is not None:
         _dispatcher.on_alarm(alarm)
+
+
+def push_text(text: str, *, level: str = "warn") -> int:
+    """推一条普通文本到所有启用的 tier=1 通道（派单、提醒用）。
+
+    和告警共用通道配置，不再单独维护一套推送设置。
+    """
+    from app.models.notify import NotifyChannel
+
+    dispatcher = _dispatcher
+    if dispatcher is None:
+        return 0
+    sent = 0
+    with dispatcher._session_factory() as db:  # noqa: SLF001 - 同模块内部使用
+        channels = db.query(NotifyChannel).filter(
+            NotifyChannel.enabled.is_(True), NotifyChannel.tier == 1).all()
+        for ch in channels:
+            alarm = {"id": None, "metric": "work_order", "level": level,
+                     "message": text, "value": None, "text": text}
+            ok, _status = send_once(ch, alarm)
+            if ok:
+                sent += 1
+    return sent
