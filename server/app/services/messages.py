@@ -101,7 +101,7 @@ store = MessageStore()
 def _canonical(row) -> str:
     """定长、可复算的字符串。字段顺序固定，避免"改一行但哈希不变"。"""
     return "|".join([
-        str(row.ts.isoformat(timespec="microseconds") if row.ts else ""),
+        str(row.ts.isoformat(timespec="seconds") if row.ts else ""),
         str(row.user_id or ""), str(row.username or ""), str(row.client_ip or ""),
         str(row.action or ""), str(row.target or ""),
         str(row.params_json or ""), "1" if row.success else "0",
@@ -124,7 +124,9 @@ def audit(db: Session, *, action: str, target: str | None = None,
 
     try:
         row = OperationLog(
-            ts=datetime.now(),
+            # 截到秒：MySQL DATETIME 默认不带微秒，存进去会丢，
+            # 校验时复算就对不上（线上曾因此误报"内容被改"）
+            ts=datetime.now().replace(microsecond=0),
             user_id=getattr(user, "id", None),
             username=getattr(user, "username", None),
             client_ip=client_ip,
