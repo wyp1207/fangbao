@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { ApiError } from '@/api/client'
 
 const auth = useAuthStore()
 const router = useRouter()
+const route = useRoute()
 const username = ref('admin')
 const password = ref('')
 const error = ref('')
@@ -16,7 +17,8 @@ async function submit() {
   error.value = ''
   try {
     await auth.login(username.value, password.value, needTotp.value ? totp.value : undefined)
-    await router.push({ name: 'dashboard' })
+    const back = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+    await router.push(back || { name: 'dashboard' })
   } catch (e) {
     if (e instanceof ApiError) {
       // 开了双因子：服务端会先要动态码，这时才把输入框亮出来

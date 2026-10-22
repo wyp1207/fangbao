@@ -67,7 +67,8 @@ async function reload() {
   total.value = res.total
 }
 
-const paged = computed(() => filtered.value.slice((page.value - 1) * pageSize, page.value * pageSize))
+// 服务端已按 limit/offset 分页，这里不能再切一次（否则第 2 页起永远是空的）
+const paged = computed(() => filtered.value)
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / pageSize)))
 
 async function goto(p: number) {

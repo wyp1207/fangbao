@@ -117,12 +117,15 @@ const deviceOptions = computed(() =>
 
 function onSite(v: string) {
   site.value = v
-  const first = deviceOptions.value[0]
-  if (first) {
-    deviceId.value = first.value
-    toast(`已切到场站 ${v}｜设备 ${first.label}`, 'ok')
+  const hit = devices.value.find((d) => d.station === v)
+  if (hit) {
+    deviceId.value = String(hit.id)
+    robot.setDevice(hit.id)          // 真切数据源，别只改个名字
+    void api.videos().then((rows) => { videoRows.value = rows as never }).catch(() => undefined)
+    void loadMap()
+    toast('已切换到场站 ' + v + '（设备 ' + hit.name + '）', 'ok')
   } else {
-    toast('该场站暂无可控设备', 'warn')
+    toast('该场站暂无设备', 'warn')
   }
 }
 function onDevice(v: string) {
@@ -135,6 +138,9 @@ function onDevice(v: string) {
   void loadEnv()
   void loadTrend()
   void loadDeviceStats()
+  // 切设备时重建定时器：先清掉旧的，否则每切一次就多 3 个轮询
+  timers.forEach((t) => window.clearInterval(t))
+  timers = []
   timers.push(window.setInterval(loadDeviceStats, 5000))
   timers.push(window.setInterval(loadEnv, 15000))
   timers.push(window.setInterval(loadTrend, 60000))
@@ -252,6 +258,9 @@ onMounted(async () => {
   void loadEnv()
   void loadTrend()
   void loadDeviceStats()
+  // 切设备时重建定时器：先清掉旧的，否则每切一次就多 3 个轮询
+  timers.forEach((t) => window.clearInterval(t))
+  timers = []
   timers.push(window.setInterval(loadDeviceStats, 5000))
   timers.push(window.setInterval(loadEnv, 15000))
   timers.push(window.setInterval(loadTrend, 60000))
@@ -386,7 +395,8 @@ async function logout() {
               <b>视频通道未接入</b>
               <span>热像仪接上后，勾选「首页显示」即自动呈现</span>
             </div>
-            <button class="embed-expand" title="打开视频监控" @click="goVideo(thermalVideo)">打开全屏页 ↗</button>
+            <button class="embed-expand" title="打开视频监控" :disabled="!thermalVideo"
+                    @click="goVideo(thermalVideo)">打开全屏页 ↗</button>
           </div>
         </ScadaPanel>
 
