@@ -21,6 +21,7 @@ interface Order {
   escalated_at: string | null
   created_at: string | null
   closed_at: string | null
+  mobile_url?: string | null
 }
 
 const auth = useAuthStore()
@@ -75,6 +76,16 @@ async function move(o: Order, target: string) {
     await load()
   } catch (e) {
     toast(e instanceof ApiError ? e.message : '操作失败', 'danger')
+  }
+}
+
+async function copyLink(o: Order) {
+  const url = new URL(o.mobile_url!, window.location.origin).toString()
+  try {
+    await navigator.clipboard.writeText(url)
+    toast('手机处理链接已复制：' + url, 'ok', 5000)
+  } catch {
+    window.prompt('复制这个链接给现场人员', url)
   }
 }
 
@@ -138,7 +149,11 @@ onMounted(async () => {
             </td>
             <td><span class="tag" :class="LEVEL_TONE[o.level]">{{ LEVEL[o.level] ?? o.level }}</span></td>
             <td><span class="tag" :class="o.status === 'closed' ? 'ok' : o.status === 'review' ? '' : 'warn'">{{ o.status_label }}</span></td>
-            <td class="dim">{{ o.assignee_id ? '#' + o.assignee_id : '未派' }}</td>
+            <td class="dim">
+              {{ o.assignee_id ? '#' + o.assignee_id : '未派' }}
+              <button v-if="o.mobile_url" class="link" title="复制手机处理链接"
+                      @click="copyLink(o)">📱</button>
+            </td>
             <td class="num dim">{{ (o.due_at ?? '—').replace('T', ' ') }}</td>
             <td>
               <div class="row-actions">
@@ -192,6 +207,7 @@ onMounted(async () => {
 .small { font-size: 12px; }
 .num { font-variant-numeric: tabular-nums; }
 .btn-xs { padding: 2px 8px; font-size: 12px; }
+.link { background: none; border: none; cursor: pointer; font-size: 12px; padding: 0 2px; }
 .modal-mask { position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; background: rgba(2, 14, 30, 0.66); }
 .modal { width: 520px; padding: 14px 16px;
   background: linear-gradient(180deg, rgba(0, 112, 200, 0.97), rgba(0, 60, 118, 0.98));

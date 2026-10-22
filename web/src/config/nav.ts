@@ -37,7 +37,10 @@ export const NAV: NavGroup[] = [
     key: 'patrol', label: '巡检管理',
     items: [
       { name: 'tasks', label: '任务管理', real: true },
+          { name: 'task-templates', label: '任务模板' },
+          { name: 'task-runs', label: '任务执行' },
       { name: 'points', label: '巡检点位', real: true },
+          { name: 'inspection', label: '人工巡检' },
       { name: 'task-calendar', label: '任务日历' },
     ],
   },
@@ -45,7 +48,9 @@ export const NAV: NavGroup[] = [
     key: 'alarm', label: '告警中心',
     items: [
       { name: 'alarms', label: '告警记录', real: true },
-      { name: 'alarm-rules', label: '告警规则', real: true },
+      { name: 'work-orders', label: '工单', real: true },
+      { name: 'ai-results', label: 'AI 识别结果' },
+          { name: 'alarm-rules', label: '告警规则', real: true },
     ],
   },
   {

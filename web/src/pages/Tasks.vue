@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { api, type TaskItem } from '@/api'
 import DarkSelect from '@/components/DarkSelect.vue'
 import { toast } from '@/composables/useToast'
@@ -70,6 +71,13 @@ async function reload() {
 
 const detail = ref<TaskItem | null>(null)
 const locked = ref('')
+const router = useRouter()
+
+/** 真能干活的页面是「任务执行」（下发/暂停/巡航，受写开关控制），这里只做跳转指引 */
+function goTaskRuns() {
+  toast('下发/暂停/巡航在「任务执行」页；写开关在系统设置里', 'ok', 4000)
+  void router.push({ name: 'task-runs' })
+}
 const page = ref(1)
 const pageSize = 10
 
@@ -105,7 +113,7 @@ onMounted(reload)
         <button class="btn btn-sm ok" :disabled="loading" @click="reload">查询</button>
         <button class="btn btn-sm warn" @click="reset">重置</button>
         <span class="grow" />
-        <button class="btn btn-sm" @click="locked = '新建任务'">新建任务</button>
+        <button class="btn btn-sm" @click="goTaskRuns()">新建任务</button>
       </div>
 
       <table class="grid">
@@ -133,8 +141,8 @@ onMounted(reload)
             <td>
               <div class="row-actions">
                 <button class="act" title="查看详情" @click="detail = t">☰</button>
-                <button class="act" title="下发任务（未开放）" @click="locked = '下发任务'">▶</button>
-                <button class="act danger" title="取消任务（未开放）" @click="locked = '取消任务'">■</button>
+                <button class="act" title="下发任务（未开放）" @click="goTaskRuns()">▶</button>
+                <button class="act danger" title="取消任务（未开放）" @click="goTaskRuns()">■</button>
               </div>
             </td>
           </tr>
@@ -182,10 +190,10 @@ onMounted(reload)
     <section class="panel">
       <div class="panel-title"><span>下发与执行</span></div>
       <div class="toolbar" style="margin-bottom: 8px">
-        <button class="btn btn-sm" @click="locked = '下发任务'">下发</button>
-        <button class="btn btn-sm" @click="locked = '暂停任务'">暂停</button>
-        <button class="btn btn-sm" @click="locked = '继续任务'">继续</button>
-        <button class="btn btn-sm" @click="locked = '取消当前任务'">取消当前任务</button>
+        <button class="btn btn-sm" @click="goTaskRuns()">下发</button>
+        <button class="btn btn-sm" @click="goTaskRuns()">暂停</button>
+        <button class="btn btn-sm" @click="goTaskRuns()">继续</button>
+        <button class="btn btn-sm" @click="goTaskRuns()">取消当前任务</button>
         <span class="grow" />
         <span class="tag warn">写操作未开放</span>
       </div>
