@@ -8,9 +8,10 @@ from app.models.record_plan import RecordPlan
 from app.models.robot import Robot
 from app.models.sensor import Sensor, SensorReading
 from app.models.setting import Setting
+from app.models.task_run import TaskRun, TaskRunStep
 from app.models.task_template import TaskTemplate
 from app.models.telemetry import TelemetrySample
 from app.models.user import User
 from app.models.video_source import VideoSource
 
-__all__ = ["Base", "AlarmRecord", "PlatformMap", "PointDraft", "MessageRecord", "NotifyChannel", "NotifyLog", "OperationLog", "RecordPlan", "Robot", "Sensor", "SensorReading", "Setting", "TaskTemplate", "TelemetrySample", "User", "VideoSource"]
+__all__ = ["Base", "AlarmRecord", "PlatformMap", "PointDraft", "MessageRecord", "NotifyChannel", "NotifyLog", "OperationLog", "RecordPlan", "Robot", "Sensor", "SensorReading", "Setting", "TaskRun", "TaskRunStep", "TaskTemplate", "TelemetrySample", "User", "VideoSource"]

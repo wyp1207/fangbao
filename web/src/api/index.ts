@@ -270,6 +270,15 @@ export const api = {
     if (dateTo) q.push(`date_to=${dateTo}`)
     return request<Record<string, unknown>>(`/reports/summary${q.length ? '?' + q.join('&') : ''}`)
   },
+  taskRuns: (params: { status?: string; limit?: number } = {}) => {
+    const qs = Object.entries(params).filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&')
+    return request<{ total: number; items: Record<string, unknown>[] }>(`/task-runs${qs ? '?' + qs : ''}`)
+  },
+  taskRun: (id: number) => request<Record<string, unknown>>(`/task-runs/${id}`),
+  createTaskRun: (body: Record<string, unknown>) =>
+    request<Record<string, unknown>>('/task-runs', { method: 'POST', body }),
+  cancelTaskRun: (id: number) =>
+    request<Record<string, unknown>>(`/task-runs/${id}/cancel`, { method: 'POST' }),
   taskTemplates: () => request<Record<string, unknown>[]>('/task-templates'),
   taskTemplateMeta: () => request<{ actions: { value: string; label: string }[] }>('/task-templates/meta'),
   createTaskTemplate: (body: Record<string, unknown>) =>

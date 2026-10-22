@@ -247,3 +247,61 @@ def test_safety_role_scope(auth_client):
 
     # 还原
     auth_client.put("/api/v1/settings", json={"values": {"alarm.battery_warn": 20}})
+
+
+def test_task_run_flow(auth_client):
+    """模板 → 计划 → 机器人回传（幂等）→ 取消规则。"""
+    import io as _io
+    from PIL import Image
+
+    buf = _io.BytesIO()
+    Image.new("RGB", (120, 120), "white").save(buf, format="PNG")
+
+    m = auth_client.post(
+        "/api/v1/maps/library",
+        files={"file": ("t.png", buf.getvalue(), "image/png")},
+        data={"name": "执行记录图", "resolution": "0.05"},
+    )
+    assert m.status_code == 200
+    mid = m.json()["id"]
+
+    p1 = auth_client.post(f"/api/v1/maps/library/{mid}/points", json={"name": "P1", "x": 1.0, "y": 1.0})
+    p2 = auth_client.post(f"/api/v1/maps/library/{mid}/points", json={"name": "P2", "x": 2.0, "y": 2.0})
+    assert p1.status_code == 200 and p2.status_code == 200
+
+    tpl = auth_client.post("/api/v1/task-templates", json={
+        "name": "测试模板", "map_id": mid,
+        "actions": [{"point_id": p1.json()["id"], "action": "photo"},
+                    {"point_id": p2.json()["id"], "action": "photo"}],
+    })
+    assert tpl.status_code == 200
+
+    run = auth_client.post("/api/v1/task-runs", json={"template_id": tpl.json()["id"]})
+    assert run.status_code == 200
+    body = run.json()
+    assert body["status"] == "planned"
+    assert body["progress"]["total"] == 2
+
+    payload = {
+        "external_id": "EXT-T-1", "name": "机器人任务", "status": "done",
+        "steps": [
+            {"seq": 1, "point_id": p1.json()["id"], "point_name": "P1", "action": "photo",
+             "status": "ok", "result": {"photo": "/x.jpg"}},
+            {"seq": 2, "point_id": p2.json()["id"], "point_name": "P2", "action": "photo",
+             "status": "failed", "error": "云台超时"},
+        ],
+    }
+    first = auth_client.post("/api/v1/task-runs/ingest", json=payload)
+    assert first.status_code == 200
+    assert first.json()["created"] is True
+    assert first.json()["progress"] == {"total": 2, "ok": 1, "failed": 1}
+
+    again = auth_client.post("/api/v1/task-runs/ingest", json=payload)
+    assert again.json()["created"] is False
+    listed = auth_client.get("/api/v1/task-runs").json()
+    ids = [i["external_id"] for i in listed["items"] if i["external_id"] == "EXT-T-1"]
+    assert len(ids) == 1                                # 幂等
+
+    # 计划可以取消；已完成的不能
+    assert auth_client.post(f"/api/v1/task-runs/{body['id']}/cancel").status_code == 200
+    assert auth_client.post(f"/api/v1/task-runs/{first.json()['id']}/cancel").status_code == 400
