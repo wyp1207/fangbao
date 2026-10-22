@@ -1,0 +1,177 @@
+[
+  {
+    "path": "/notify",
+    "button": "新增通道",
+    "error": "TimeoutError('Timeout 10000ms exceeded.\\n=========================== logs ===========================\\nwaiting for navigation to \"**/dashboard\" until \\'load\\'\\n========================================"
+  },
+  {
+    "path": "/notify",
+    "button": "✎",
+    "error": "TimeoutError('Page.fill: Timeout 30000ms exceeded.\\nCall log:\\n  - waiting for locator(\"input[autocomplete=\\\\\"username\\\\\"]\")\\n')"
+  },
+  {
+    "path": "/keys",
+    "button": "新建密钥",
+    "error": "TimeoutError('Page.fill: Timeout 30000ms exceeded.\\nCall log:\\n  - waiting for locator(\"input[autocomplete=\\\\\"username\\\\\"]\")\\n')"
+  },
+  {
+    "path": "/settings",
+    "button": "重新探测",
+    "error": "TimeoutError('Page.fill: Timeout 30000ms exceeded.\\nCall log:\\n  - waiting for locator(\"input[autocomplete=\\\\\"username\\\\\"]\")\\n')"
+  },
+  {
+    "path": "/reports",
+    "button": "统计",
+    "disabled": false,
+    "url": "/reports",
+    "toast": [],
+    "modal": [],
+    "net": [
+      [
+        "GET",
+        "/api/v1/reports/summary",
+        200
+      ],
+      [
+        "GET",
+        "/api/v1/robots/1/status",
+        200
+      ],
+      [
+        "GET",
+        "/api/v1/robots/1/status",
+        200
+      ]
+    ],
+    "downloads": [],
+    "dialogs": [],
+    "files": []
+  },
+  {
+    "path": "/reports",
+    "button": "导出 Excel",
+    "disabled": false,
+    "url": "/reports",
+    "toast": [],
+    "modal": [],
+    "net": [
+      [
+        "GET",
+        "/api/v1/robots/1/status",
+        200
+      ],
+      [
+        "GET",
+        "/api/v1/robots/1/status",
+        200
+      ]
+    ],
+    "downloads": [],
+    "dialogs": [],
+    "files": []
+  },
+  {
+    "path": "/work-orders",
+    "button": "派给",
+    "disabled": false,
+    "url": "/work-orders",
+    "toast": [],
+    "modal": [],
+    "net": [
+      [
+        "GET",
+        "/api/v1/robots/1/status",
+        200
+      ],
+      [
+        "GET",
+        "/api/v1/robots/1/status",
+        200
+      ]
+    ],
+    "downloads": [],
+    "dialogs": [],
+    "files": []
+  },
+  {
+    "path": "/alarms",
+    "button": "✎",
+    "disabled": false,
+    "url": "/alarms",
+    "toast": [],
+    "modal": [
+      "处置告警\n\n机器人通信中断（5 分钟内第 4 次）\n\n处置说明（必填）\n取消\n提交处置"
+    ],
+    "net": [
+      [
+        "GET",
+        "/api/v1/robots/1/status",
+        200
+      ],
+      [
+        "GET",
+        "/api/v1/robots/1/status",
+        200
+      ]
+    ],
+    "downloads": [],
+    "dialogs": [],
+    "files": []
+  },
+  {
+    "path": "/alarms",
+    "button": "⏹",
+    "disabled": false,
+    "url": "/alarms",
+    "toast": [],
+    "modal": [
+      "关闭告警\n\n机器人通信中断（5 分钟内第 4 次）\n\n结论\n已处理（恢复/人工解决）\n▾\n备注\n取消\n确认关闭"
+    ],
+    "net": [
+      [
+        "GET",
+        "/api/v1/robots/1/status",
+        200
+      ],
+      [
+        "GET",
+        "/api/v1/robots/1/status",
+        200
+      ]
+    ],
+    "downloads": [],
+    "dialogs": [],
+    "files": []
+  },
+  {
+    "path": "/points",
+    "button": "同步到机器人",
+    "disabled": true,
+    "note": "disabled; not clicked"
+  },
+  {
+    "path": "/map",
+    "button": "导入",
+    "disabled": false,
+    "url": "/map",
+    "toast": [],
+    "modal": [
+      "导入地图\nPNG/JPG 图纸或截图，人工标定比例尺与原点\n地图文件（PNG/JPG，≤20MB）*\n名称*\n楼层\n场站\n对应机器人地图名\n分辨率 m/px*\n原点 X (m)\n原点 Y (m)\n备注\n\n比例尺怎么来：图纸上找一段已知长度（如 10 米），量出像素长度，用「米 ÷ 像素」填进分辨率。 原点填机器人建图时的 map 原点；不知道就填 0，等真机联调再校。\n\n取消\n导入并查看"
+    ],
+    "net": [
+      [
+        "GET",
+        "/api/v1/robots/1/status",
+        200
+      ],
+      [
+        "GET",
+        "/api/v1/robots/1/status",
+        200
+      ]
+    ],
+    "downloads": [],
+    "dialogs": [],
+    "files": []
+  }
+]

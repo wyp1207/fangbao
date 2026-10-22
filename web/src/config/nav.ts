@@ -81,9 +81,9 @@ export const NAV: NavGroup[] = [
   {
     key: 'system', label: '系统管理',
     items: [
-      { name: 'users', label: '用户管理', real: true },
-      { name: 'settings', label: '系统设置', real: true },
-      { name: 'notify', label: '告警通知' },
+      { name: 'users', label: '用户管理', real: true, roles: ['admin', 'sysadmin'] },
+      { name: 'settings', label: '系统设置', real: true, roles: ['admin', 'sysadmin', 'secadmin'] },
+      { name: 'notify', label: '告警通知', roles: ['admin', 'sysadmin', 'secadmin'] },
           { name: 'oplog', label: '系统日志', roles: ['admin', 'auditor'] },
           { name: 'api-keys', label: '接口密钥', roles: ['admin', 'sysadmin'] },
     ],

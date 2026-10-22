@@ -1,0 +1,38 @@
+{
+  "dashboard": {
+    "dom_total": "160",
+    "api": [
+      160,
+      156,
+      4
+    ]
+  },
+  "/alarms": {
+    "dom": "160",
+    "api": 160
+  },
+  "/work-orders": {
+    "dom": "130",
+    "api": 130
+  },
+  "/reports": {
+    "dom": "150",
+    "api": null
+  },
+  "/users": {
+    "dom": "rows",
+    "api": 7
+  },
+  "/points": {
+    "dom": "rows",
+    "api": 6
+  },
+  "/record/playback": {
+    "dom": "rows",
+    "api": 5
+  },
+  "/task-templates": {
+    "dom": "rows",
+    "api": 6
+  }
+}

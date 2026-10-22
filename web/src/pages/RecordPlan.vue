@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import DarkSelect from '@/components/DarkSelect.vue'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { api, type VideoRow } from '@/api'
 import { ApiError } from '@/api/client'

@@ -12,7 +12,7 @@ if str(ROOT) not in sys.path:
 
 _TMP = ROOT / "data"
 _TMP.mkdir(parents=True, exist_ok=True)
-os.environ.setdefault("JC_ENV", "test")
+os.environ["JC_ENV"] = "test"   # 强制：外部 shell 的 JC_ENV=dev 不能影响测试
 os.environ["JC_DB_URL"] = f"sqlite:///{(_TMP / f'test-{os.getpid()}.db').as_posix()}"
 os.environ["JC_ROBOT_MODE"] = "mock"
 os.environ["JC_BOOTSTRAP_ADMIN"] = "admin"

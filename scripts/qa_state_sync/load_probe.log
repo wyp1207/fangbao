@@ -1,0 +1,9 @@
+== 20 concurrent per endpoint
+/robots/1/status {"n": 20, "p50_ms": 36.5, "p95_ms": 46.9, "max_ms": 51.8, "min_ms": 18.2, "codes": {"200": 20}, "bytes_avg": 1156, "errs": []}
+/alarms {"n": 20, "p50_ms": 141.4, "p95_ms": 160.0, "max_ms": 167.6, "min_ms": 53.8, "codes": {"200": 20}, "bytes_avg": 59353, "errs": []}
+/telemetry?hours=1 {"n": 20, "p50_ms": 25014.5, "p95_ms": 25019.8, "max_ms": 25021.0, "min_ms": 25004.3, "codes": {"-1": 20}, "bytes_avg": 0, "errs": ["HTTPConnectionPool(host='127.0.0.1', port=8000): Read timed out. (read timeout=25)", "HTTPConnectionPool(host='127.0.0.1', port=8000): Read timed out. (read timeout=25)", "HTTPConnectionPool(host='127.0.0.1', port=8000): Read timed out. (read timeout=25)"]}
+/reports/summary {"n": 20, "p50_ms": 25013.7, "p95_ms": 25021.9, "max_ms": 25024.8, "min_ms": 25004.5, "codes": {"-1": 20}, "bytes_avg": 0, "errs": ["HTTPConnectionPool(host='127.0.0.1', port=8000): Read timed out. (read timeout=25)", "HTTPConnectionPool(host='127.0.0.1', port=8000): Read timed out. (read timeout=25)", "HTTPConnectionPool(host='127.0.0.1', port=8000): Read timed out. (read timeout=25)"]}
+== 100 sequential polls (/robots/1/status, 200ms apart)
+{"n": 100, "p50_ms": 18.1, "p95_ms": 34.8, "max_ms": 25022.5, "codes": {"-1": 2, "200": 98}, "spikes_gt_2xp95": [{"i": 0, "ms": 25022.5, "status": -1}, {"i": 1, "ms": 25018.9, "status": -1}, {"i": 2, "ms": 20714.9, "status": 200}], "spike_count": 3}
+== 100 sequential polls (/alarms, 200ms apart)
+{"n": 100, "p50_ms": 27.3, "p95_ms": 40.5, "max_ms": 51.1, "codes": {"200": 100}, "spike_count": 0}

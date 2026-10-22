@@ -143,6 +143,11 @@ class AlarmStore:
                 last = self._last_raised.get(dkey)
                 if last is not None and now - last < cfg["dedupe"]:
                     continue
+                # 同一指标已有未解除的告警 → 更新它（计数/最近时间），不新增。
+                # 否则一台设备离线 10 小时就是 600 条告警、600 张工单。
+                if self._session_factory is not None and self._touch_open(robot_id, metric, message, value):
+                    self._last_raised[dkey] = now
+                    continue
                 self._last_raised[dkey] = now
                 alarm = Alarm(id=0, metric=metric, level=level, message=message, value=value)
                 alarm.camera_id = camera_id  # type: ignore[attr-defined]
@@ -161,6 +166,36 @@ class AlarmStore:
             except Exception:  # noqa: BLE001
                 pass
         return new
+
+    def _touch_open(self, robot_id: int | None, metric: str, message: str, value) -> bool:
+        """已有未解除的同指标告警就更新它并返回 True；没有返回 False。
+
+        为什么需要：一台设备离线 10 小时，按分钟去重就是 600 条告警、600 张工单。
+        行业做法是一条告警持续存在，直到条件消失或人工关闭。
+        """
+        try:
+            from app.models.alarm import AlarmRecord
+
+            with self._session_factory() as db:  # type: ignore[misc]
+                q = db.query(AlarmRecord).filter(
+                    AlarmRecord.metric == metric,
+                    AlarmRecord.status != "resolved",
+                )
+                if robot_id is not None:
+                    q = q.filter(AlarmRecord.robot_id == robot_id)
+                else:
+                    q = q.filter(AlarmRecord.robot_id.is_(None))  # 没指定设备就别跨设备匹配
+                row = q.order_by(AlarmRecord.id.desc()).first()
+                if row is None:
+                    return False
+                row.message = message[:255]
+                row.value_json = json.dumps(
+                    {"value": value, "at": datetime.now().isoformat(timespec="seconds")},
+                    ensure_ascii=False)
+                db.commit()
+                return True
+        except Exception:  # noqa: BLE001
+            return False
 
     def _resolve_gone(self, robot_id: int | None, active: set[str]) -> None:
         """条件消失的告警自动恢复（active → resolved）。
