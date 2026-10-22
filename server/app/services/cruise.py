@@ -95,7 +95,8 @@ class CruiseRunner:
                 failed += 1
                 continue
 
-            arrived, reason = self._wait_arrival(adapter, stop)
+            arrived, reason = self._wait_arrival(adapter, stop,
+                                                 target=(point.x, point.y))
             if stop.is_set():
                 self._mark(step.id, "skipped", error="人工取消")
                 break
@@ -104,7 +105,18 @@ class CruiseRunner:
                 failed += 1
                 continue
 
-            self._mark(step.id, "ok", result={"point": point.name, "x": point.x, "y": point.y})
+            # 到点后执行这个点位配的动作（拍照/测温/停留），不是只记坐标
+            action_result, action_err = self._do_action(adapter, step)
+            if action_err:
+                self._mark(step.id, "failed",
+                           error=f"到点但动作失败：{action_err}",
+                           result={"point": point.name, "x": point.x, "y": point.y,
+                                   "action": step.action})
+                failed += 1
+                continue
+            self._mark(step.id, "ok",
+                       result={"point": point.name, "x": point.x, "y": point.y,
+                               "action": step.action, **(action_result or {})})
             with self._sf() as db:
                 r = db.get(TaskRun, run_id)
                 if r:
@@ -124,17 +136,41 @@ class CruiseRunner:
         self._cancel.pop(run_id, None)
 
     def _goto(self, adapter, x: float, y: float, yaw: float) -> None:
-        fn = getattr(adapter, "goto", None) or getattr(adapter, "dispatch")
-        arg = (x, y, yaw) if getattr(adapter, "goto", None) else (
-            {"actions": [{"actionParameters": [
-                {"key": "x", "value": x}, {"key": "y", "value": y},
-                {"key": "yaw", "value": yaw}]}]})
-        res = fn(*arg) if getattr(adapter, "goto", None) else fn(arg)
+        if getattr(adapter, "goto", None):
+            res = adapter.goto(x, y, yaw)
+        else:
+            # 回退到 dispatch 时必须带 actionType，否则 JCROB 会按默认 photo 处理
+            res = adapter.dispatch({"actions": [{
+                "actionType": "nav",
+                "actionParameters": [
+                    {"key": "x", "value": x},
+                    {"key": "y", "value": y},
+                    {"key": "yaw", "value": yaw},
+                ],
+            }]})
         if hasattr(res, "__await__"):
             import asyncio
             asyncio.run(res)
 
-    def _wait_arrival(self, adapter, stop: threading.Event) -> tuple[bool, str]:
+    def _do_action(self, adapter, step) -> tuple[dict | None, str | None]:
+        """到点动作：能做的做，做不了的明确报"需要什么"，不假装成功。"""
+        action = (step.action or "photo").lower()
+        fn = getattr(adapter, "capture", None)
+        if action in ("photo", "video", "thermal"):
+            if fn is None:
+                return None, f"适配器还没有取图接口（{action} 需要真机确认抓拍 API）"
+            res = fn(step)
+            if hasattr(res, "__await__"):
+                import asyncio
+                res = asyncio.run(res)
+            return {"capture": res}, None
+        if action == "wait":
+            time.sleep(3)
+            return {"waited": 3}, None
+        return {"skipped": action}, None
+
+    def _wait_arrival(self, adapter, stop: threading.Event,
+                      target: tuple[float, float] | None = None) -> tuple[bool, str]:
         deadline = time.time() + ARRIVE_TIMEOUT_S
         while time.time() < deadline:
             if stop.is_set():
@@ -148,6 +184,20 @@ class CruiseRunner:
                 return False, f"查询任务状态失败：{exc}"
             state = (order or {}).get("state")
             if state == "FINISHED":
+                # 有目标坐标就再核对一次位姿：误差 > 1.5m 不算到点（防止空任务被当完成）
+                if target is not None and hasattr(adapter, "get_pose"):
+                    try:
+                        pose = adapter.get_pose()
+                        if hasattr(pose, "__await__"):
+                            import asyncio
+                            pose = asyncio.run(pose)
+                        if isinstance(pose, dict) and pose.get("x") is not None:
+                            dx = float(pose["x"]) - float(target[0])
+                            dy = float(pose["y"]) - float(target[1])
+                            if (dx * dx + dy * dy) ** 0.5 > 1.5:
+                                return False, f"机器人报完成但离目标 {((dx*dx+dy*dy)**0.5):.1f}m"
+                    except Exception:  # noqa: BLE001
+                        pass
                 return True, ""
             if state == "FAILED":
                 return False, "机器人报告无法到达"

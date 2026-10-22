@@ -986,6 +986,10 @@ def test_cruise_runner_state_machine(auth_client, monkeypatch):
         def cancel(self):
             self.cancelled = True
 
+        def capture(self, step):
+            # 到点动作：真实适配器会调机器人抓拍接口，这里返回假 URL
+            return {"url": f"/fake/{step.seq}.jpg", "action": step.action}
+
     # 造地图 + 点位 + 模板 + 计划
     import io as _io
     from PIL import Image
@@ -1027,6 +1031,9 @@ def test_cruise_runner_state_machine(auth_client, monkeypatch):
         assert len(adapter.calls) == 2                     # 两个点各下发一次
         assert [s.status for s in steps] == ["ok", "ok"]    # 每点都有结果
         assert all(s.result_json for s in steps)            # 带坐标留痕
+        # 到点动作要真的执行（不是只记坐标）
+        for s in steps:
+            assert "capture" in (s.result_json or "")
 
 
 def test_mobile_work_order_flow(auth_client, monkeypatch):

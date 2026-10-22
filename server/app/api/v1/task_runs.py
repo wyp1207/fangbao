@@ -366,6 +366,11 @@ def cancel_run(
     if r.status != "running":
         raise BadRequest(f"当前状态 {r.status} 不能取消", code="BAD_STATUS")
 
+    # 巡航是平台线程在逐点下发：必须先停线程，再让机器人取消当前目标
+    from app.services import cruise as cruise_mod
+
+    if cruise_mod.runner is not None:
+        cruise_mod.runner.cancel(r.id, _adapter_for(db, r))
     r = task_dispatch.cancel(db, r, _adapter_for(db, r))
     audit(db=db, action="task_run.cancel", target=r.name, user=me, detail={"mode": "robot"})
     return _run_out(r)
