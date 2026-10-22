@@ -131,6 +131,9 @@ async def lifespan(app: FastAPI):
     telemetry_janitor = _th.Thread(target=_telemetry_janitor, daemon=True)
     telemetry_janitor.start()
 
+    from app.services import cruise as cruise_module
+    cruise_module.runner = cruise_module.CruiseRunner(_SL)
+
     from app.services import sensor_gateway as sg_module
     sg_module.runner = sg_module.SensorGatewayRunner(_SL)
     try:

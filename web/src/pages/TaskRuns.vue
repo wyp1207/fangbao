@@ -112,6 +112,17 @@ async function dispatch(r: RunRow) {
   }
 }
 
+async function cruise(r: RunRow) {
+  try {
+    const res = await api.startCruise(r.id)
+    toast(`巡航已启动（${res.steps} 个点位），到点自动进行下一个`, 'ok', 5000)
+    await load()
+  } catch (e) {
+    const msg = e instanceof ApiError ? e.message : '启动失败'
+    toast(msg, e instanceof ApiError && e.code === 'WRITE_LOCKED' ? 'warn' : 'danger', 6000)
+  }
+}
+
 async function pause(r: RunRow) {
   try {
     await api.pauseTaskRun(r.id)
@@ -205,8 +216,10 @@ onMounted(async () => {
             <td>
               <div class="row-actions">
                 <button class="btn btn-xs" @click="openDetail(r)">详情</button>
-                <button v-if="r.status === 'planned'" class="btn btn-xs primary"
-                        :disabled="!auth.canWrite" @click="dispatch(r)">下发</button>
+                <button v-if="r.status === 'planned'" class="btn btn-xs"
+                        :disabled="!auth.canWrite" @click="dispatch(r)">单点下发</button>
+                <button v-if="['planned','failed','cancelled'].includes(r.status)" class="btn btn-xs primary"
+                        :disabled="!auth.canWrite" @click="cruise(r)">巡航</button>
                 <template v-if="r.status === 'running'">
                   <button v-if="!r.paused" class="btn btn-xs" :disabled="!auth.canWrite" @click="pause(r)">暂停</button>
                   <button v-else class="btn btn-xs ok" :disabled="!auth.canWrite" @click="resume(r)">继续</button>

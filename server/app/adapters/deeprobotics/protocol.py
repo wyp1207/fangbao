@@ -1,10 +1,13 @@
-"""云深处 X30 本体监控协议（TCP 30000）的帧编解码。
+"""云深处 X30 本体监控协议（TCP 30000）编解码。
 
-协议依据官方文档《本体监控协议（TCP）》：
-- 16 字节头：EB 91 EB 90 + 长度(u16 LE) + 报文ID(u16 LE) + 8 字节 0
-- ASDU 是 XML：<PatrolDevice><Type/><Command/><Time/><Items/></PatrolDevice>
+依据两处来源：
+1. 官方文档《本体监控协议（TCP）》：头 16 字节、XML ASDU、Type 1002/1003/1004/1007/2001/2101；
+2. 现场已在跑的桥接实现（8.40 上 robot-flask 的 dispatch.py）：实测头是 EB 90 EB 90，
+   字段名为 MotionState / Electricity / PosX / PosY / Yaw / Speed / BatteryLevel / Voltage。
 
-只做"读写一帧"这一件事，业务映射放在 adapter 里。
+**两处对不上**：官方写 EB 91 EB 90，现场代码用 EB 90 EB 90 且能跑。
+所以这里两种都认（读取时校验），发送默认用现场验证过的 EB 90 EB 90，
+并提供 magic 参数；真机第一次连上后由探针确认到底哪个生效。
 """
 
 from __future__ import annotations
@@ -13,29 +16,58 @@ import socket
 import struct
 import time
 from datetime import datetime
+from xml.etree import ElementTree as ET
 
-MAGIC = b"\xeb\x91\xeb\x90"
+MAGIC_DOC = b"\xeb\x91\xeb\x90"    # 官方文档
+MAGIC_FIELD = b"\xeb\x90\xeb\x90"  # 现场实现（默认）
+MAGICS = (MAGIC_FIELD, MAGIC_DOC)
 HEADER_LEN = 16
 
-# 官方消息类型
-TYPE_STATUS = 1002       # 实时基础状态
-TYPE_NAV_TASK = 1003     # 下发导航任务
-TYPE_NAV_CANCEL = 1004   # 取消导航任务
-TYPE_NAV_QUERY = 1007    # 导航任务状态
-TYPE_BATTERY = 2001      # 电池信息
-TYPE_INIT_LOC = 2101     # 初始化定位
+TYPE_STATUS = 1002
+TYPE_NAV_TASK = 1003
+TYPE_NAV_CANCEL = 1004
+TYPE_NAV_QUERY = 1007
+TYPE_BATTERY = 2001
+TYPE_INIT_LOC = 2101
+
+# 运动状态码（现场代码里的映射）
+MOTION_STATES = {
+    "0": "趴下", "1": "起立中", "2": "初始站立", "3": "力控站立",
+    "4": "踏步", "5": "趴下中", "6": "软急停", "7": "摔倒",
+}
+NAV_STATES = {"0": "完成", "1": "执行中", "-1": "无法执行"}
+
+MOTION_STAND = 18
+MOTION_LIE = 15
 
 
-def build_asdu(msg_type: int, command: int = 1, items: str = "") -> bytes:
+def build_asdu(msg_type: int, items: dict | None = None, command: str = "1") -> bytes:
+    inner = "".join(f"<{k}>{v}</{k}>" for k, v in (items or {}).items())
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     xml = (f'<?xml version="1.0" encoding="UTF-8"?><PatrolDevice>'
            f'<Type>{msg_type}</Type><Command>{command}</Command>'
-           f'<Time>{ts}</Time><Items>{items}</Items></PatrolDevice>')
+           f'<Time>{ts}</Time><Items>{inner}</Items></PatrolDevice>')
     return xml.encode("utf-8")
 
 
-def frame(asdu: bytes, msg_id: int) -> bytes:
-    return MAGIC + struct.pack("<HH", len(asdu), msg_id & 0xFFFF) + b"\x00" * 8 + asdu
+def frame(asdu: bytes, msg_id: int, magic: bytes = MAGIC_FIELD) -> bytes:
+    return magic + struct.pack("<HH", len(asdu), msg_id & 0xFFFF) + b"\x00" * 8 + asdu
+
+
+def parse_asdu(xml_bytes: bytes) -> dict:
+    """XML → 扁平 dict（Items 下的键提到顶层，重复键保留第一个）。"""
+    out: dict[str, str] = {}
+    try:
+        root = ET.fromstring(xml_bytes)
+    except ET.ParseError:
+        return out
+    for child in root:
+        if child.tag == "Items":
+            for item in child:
+                out.setdefault(item.tag, (item.text or "").strip())
+        else:
+            out.setdefault(child.tag, (child.text or "").strip())
+    return out
 
 
 def _recv_exact(sock: socket.socket, n: int) -> bytes:
@@ -48,39 +80,64 @@ def _recv_exact(sock: socket.socket, n: int) -> bytes:
     return buf
 
 
-def read_frame(sock: socket.socket) -> bytes:
-    """读一帧，返回 ASDU 原始字节（XML）。"""
+def read_frame(sock: socket.socket) -> tuple[bytes, bytes]:
+    """返回 (magic, asdu)。"""
     head = _recv_exact(sock, HEADER_LEN)
-    if head[:4] != MAGIC:
-        raise ValueError(f"协议头不对: {head[:4].hex()}")
-    length, _msg_id = struct.unpack("<HH", head[4:8])
+    magic = head[:4]
+    if magic not in MAGICS:
+        raise ValueError(f"协议头未知: {magic.hex()}（文档 EB91EB90 / 现场 EB90EB90）")
+    length, _mid = struct.unpack("<HH", head[4:8])
     if length <= 0 or length > 65535:
         raise ValueError(f"长度异常: {length}")
-    return _recv_exact(sock, length)
+    return magic, _recv_exact(sock, length)
 
 
 class X30Client:
-    """一次请求一个响应。短连接更稳：机器人掉线时不至于卡住一个长连接。"""
+    def __init__(self, host: str, port: int = 30000, timeout: float = 5.0,
+                 magic: bytes = MAGIC_FIELD) -> None:
+        self.host, self.port, self.timeout = host, port, timeout
+        self.magic = magic
+        self._mid = 0
+        self.last_magic: bytes | None = None
 
-    def __init__(self, host: str, port: int = 30000, timeout: float = 5.0) -> None:
-        self.host = host
-        self.port = port
-        self.timeout = timeout
-        self._msg_id = 0
+    def request(self, msg_type: int, items: dict | None = None,
+                command: str = "1", timeout: float | None = None) -> dict:
+        asdu = build_asdu(msg_type, items, command)
+        self._mid = (self._mid + 1) & 0xFFFF
+        t = timeout or self.timeout
+        with socket.create_connection((self.host, self.port), timeout=t) as sock:
+            sock.settimeout(t)
+            sock.sendall(frame(asdu, self._mid, self.magic))
+            magic, body = read_frame(sock)
+            self.last_magic = magic
+        return parse_asdu(body)
 
-    def request(self, msg_type: int, command: int = 1, items: str = "") -> bytes:
-        asdu = build_asdu(msg_type, command, items)
-        self._msg_id = (self._msg_id + 1) & 0xFFFF
-        with socket.create_connection((self.host, self.port), timeout=self.timeout) as sock:
-            sock.settimeout(self.timeout)
-            sock.sendall(frame(asdu, self._msg_id))
-            return read_frame(sock)
+    # ---- 只读 ----
+    def status(self) -> dict:
+        return self.request(TYPE_STATUS)
 
-    def query_status(self) -> str:
-        return self.request(TYPE_STATUS).decode("utf-8", "replace")
+    def battery(self) -> dict:
+        return self.request(TYPE_BATTERY)
 
-    def query_battery(self) -> str:
-        return self.request(TYPE_BATTERY).decode("utf-8", "replace")
+    def nav_status(self) -> dict:
+        return self.request(TYPE_NAV_QUERY)
 
-    def query_task(self) -> str:
-        return self.request(TYPE_NAV_QUERY).decode("utf-8", "replace")
+    # ---- 控制（受写开关保护，由上层调用） ----
+    def nav_goal(self, x: float, y: float, yaw: float = 0.0, map_id: int = 1,
+                 speed: int = 1, gait: int = 0, timeout: float = 30) -> dict:
+        return self.request(TYPE_NAV_TASK, {
+            "Value": "1", "MapID": str(map_id), "PosX": str(x), "PosY": str(y),
+            "PosZ": "0", "AngleYaw": str(yaw), "PointInfo": "1", "Gait": str(gait),
+            "Speed": str(speed), "Manner": "0", "ObsMode": "0", "NavMode": "1",
+            "Terrain": "0", "Posture": "0",
+        }, timeout=timeout)
+
+    def cancel(self) -> dict:
+        return self.request(TYPE_NAV_CANCEL)
+
+    def motion(self, cmd: int, value: int = -1, timeout: float = 5) -> dict:
+        return self.request(2, {"Value": str(value)}, command=str(cmd), timeout=timeout)
+
+    def init_loc(self, x: float, y: float, yaw: float = 0.0) -> dict:
+        return self.request(TYPE_INIT_LOC, {
+            "PosX": str(x), "PosY": str(y), "PosZ": "0", "Yaw": str(yaw)})

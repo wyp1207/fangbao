@@ -327,6 +327,11 @@ export const api = {
     request<Record<string, unknown>>('/task-runs', { method: 'POST', body }),
   dispatchTaskRun: (id: number) =>
     request<Record<string, unknown>>(`/task-runs/${id}/dispatch`, { method: 'POST' }),
+  startCruise: (id: number) =>
+    request<{ ok: boolean; run_id: number; steps: number }>(`/task-runs/${id}/cruise`, { method: 'POST' }),
+  cancelCruise: (id: number) =>
+    request<{ ok: boolean }>(`/task-runs/${id}/cruise/cancel`, { method: 'POST' }),
+  cruiseStatus: () => request<{ running: number[] }>('/task-runs/cruise/status'),
   pauseTaskRun: (id: number) =>
     request<Record<string, unknown>>(`/task-runs/${id}/pause`, { method: 'POST' }),
   resumeTaskRun: (id: number) =>
