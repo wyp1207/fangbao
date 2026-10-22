@@ -41,6 +41,7 @@ def _out(ch: NotifyChannel) -> dict:
         "type_label": notify_svc.TYPE_LABELS.get(ch.type, ch.type),
         "config": _mask(cfg),
         "min_level": ch.min_level, "min_interval_min": ch.min_interval_min,
+        "tier": ch.tier,
         "enabled": ch.enabled, "note": ch.note,
         "created_at": ch.created_at.isoformat(timespec="seconds") if ch.created_at else None,
     }
@@ -51,6 +52,7 @@ class ChannelIn(BaseModel):
     type: str
     config: dict = Field(default_factory=dict)
     min_level: str = "critical"
+    tier: int = 1
     min_interval_min: int = 10
     enabled: bool = True
     note: str | None = None
@@ -87,7 +89,8 @@ def create_channel(
     ch = NotifyChannel(
         name=body.name, type=body.type,
         config_json=json.dumps(body.config, ensure_ascii=False),
-        min_level=body.min_level, min_interval_min=max(0, body.min_interval_min),
+        min_level=body.min_level, tier=2 if body.tier == 2 else 1,
+        min_interval_min=max(0, body.min_interval_min),
         enabled=body.enabled, note=body.note,
     )
     db.add(ch)
@@ -117,7 +120,7 @@ def update_channel(
             if isinstance(v, str) and "***" in v:
                 new[k] = old.get(k, "")
         ch.config_json = json.dumps(new, ensure_ascii=False)
-    for k in ("name", "min_level", "min_interval_min", "enabled", "note"):
+    for k in ("name", "min_level", "min_interval_min", "enabled", "note", "tier"):
         if k in body and body[k] is not None:
             setattr(ch, k, body[k])
     db.commit()

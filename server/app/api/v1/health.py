@@ -8,6 +8,14 @@ from app.api.deps import get_cache, get_current_user, get_services
 from app.core.config import get_settings
 
 router = APIRouter(tags=["health"])
+
+
+def _disk_snapshot() -> dict:
+    try:
+        from app.services.disk_monitor import snapshot
+        return snapshot()
+    except Exception:  # noqa: BLE001
+        return {}
 _started = time.monotonic()
 
 
@@ -42,4 +50,5 @@ def health_deep(cache=Depends(get_cache), services=Depends(get_services),
         },
         "services": [svc.health() for svc in services.services],
         "loop_lag_ms": services.lag.lag_ms,
+        "disks": _disk_snapshot(),
     }

@@ -11,6 +11,7 @@ export const useRobotStore = defineStore('robot', {
     currentMap: '' as string,
     alarms: [] as AlarmItem[],
     lastError: '' as string,
+    deviceId: 1 as number,
     timer: 0 as number,
     ticks: 0 as number,
   }),
@@ -26,12 +27,18 @@ export const useRobotStore = defineStore('robot', {
   actions: {
     async refresh() {
       try {
-        this.snapshot = await api.status()
+        this.snapshot = await api.status(this.deviceId)
         this.lastError = ''
       } catch (e) {
         this.lastError = e instanceof Error ? e.message : String(e)
       }
       if (++this.ticks % ALARM_EVERY === 0) await this.refreshAlarms()
+    },
+    setDevice(id: number) {
+      if (this.deviceId === id) return
+      this.deviceId = id
+      this.snapshot = null
+      void this.refresh()
     },
     async refreshAlarms() {
       try {

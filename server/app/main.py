@@ -51,7 +51,9 @@ async def lifespan(app: FastAPI):
         from app.db.init import ensure_bootstrap
         ensure_bootstrap()
 
-    adapter = build_adapter(settings)
+    from app.services.robot_runtime import registry as robot_registry
+
+    adapter = build_adapter(settings)      # 默认适配器：地图/任务等只读接口仍用它
     cache = StateCache()
     alarms = AlarmStore()
     # 告警与消息落库：重启不丢（W5 之前的最小持久化）
@@ -63,14 +65,29 @@ async def lifespan(app: FastAPI):
     from app.services import notify as notify_svc
     notify_svc.init(_SessionLocal)
     message_store.attach_db(_SessionLocal)
-    poller = StatusPoller(adapter, cache, settings.jcrob_poll_interval, alarms=alarms)
-    poller_service = Service("status_poller", poller)
+    robot_registry.attach_alarms(alarms)
     lag = LoopLagMonitor()
 
     app.state.adapter = adapter
     app.state.cache = cache
     app.state.alarms = alarms
-    app.state.services = Services([poller_service], lag)
+    class _RegistryService:
+        """把多设备轮询暴露成 health 里的一个服务条目（名字保持 status_poller）。"""
+
+        name = "status_poller"
+
+        def health(self) -> dict:
+            rts = list(robot_registry.runtimes.values())
+            online = sum(1 for r in rts if r.cache.as_dict()["online"])
+            return {
+                "name": self.name,
+                "running": any(r.task is not None for r in rts),
+                "robots": len(rts),
+                "online": online,
+                "details": [r.status() for r in rts],
+            }
+
+    app.state.services = Services([_RegistryService()], lag)
 
     from app.services.recorder import janitor as record_janitor
 
@@ -79,7 +96,10 @@ async def lifespan(app: FastAPI):
     from app.db.session import SessionLocal as _SL
     from app.api.v1.telemetry import TelemetryCollector, purge as telemetry_purge
 
-    collector = TelemetryCollector(lambda: app.state.cache.snapshot, _SL)
+    collector = TelemetryCollector(
+        lambda: [(rt.robot_id, rt.cache.snapshot) for rt in robot_registry.runtimes.values()],
+        _SL,
+    )
     collector.start()
 
     from app.api.v1.record_plans import scheduler as plan_scheduler
@@ -87,7 +107,17 @@ async def lifespan(app: FastAPI):
     plan_scheduler.start()
     app.state.telemetry = collector
 
-    poller_service.start()
+    from app.services.disk_monitor import monitor as disk_monitor
+    disk_monitor.attach(alarms)
+    disk_monitor.start()
+
+    # 多设备：按台账给每台启用的设备起一个轮询任务
+    from app.db.session import SessionLocal as _SL2
+    from app.models.robot import Robot as _Robot
+
+    with _SL2() as _db:
+        _robots = _db.query(_Robot).filter(_Robot.is_active.is_(True)).all()
+    await robot_registry.start(_robots)
     lag.start()
     try:
         yield
@@ -95,6 +125,11 @@ async def lifespan(app: FastAPI):
         # 录像进程是外部 ffmpeg，必须显式收掉，否则会变成孤儿进程
         from app.services.recorder import registry as recorder_registry
         recorder_registry.stop_all()
+        try:
+            from app.services.disk_monitor import monitor as disk_monitor
+            disk_monitor.stop()
+        except Exception:  # noqa: BLE001
+            pass
         record_janitor.stop()
         try:
             plan_scheduler.stop()
@@ -104,7 +139,7 @@ async def lifespan(app: FastAPI):
             app.state.telemetry.stop()
         except Exception:  # noqa: BLE001
             pass
-        await poller_service.stop()
+        await robot_registry.stop()
         await lag.stop()
         await adapter.aclose()
         log.info("已停止")

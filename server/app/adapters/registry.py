@@ -76,6 +76,11 @@ def build_for(robot, *, settings, cache=None):
 
     返回 (adapter, error)：error 非空表示这台设备暂时不能通信。
     """
+    # 设备台账的 mode=mock 优先：开发/演示环境不连真机，
+    # 即使 adapter 写的是 jcrob_http 也不该去打 192.168.1.100
+    if (getattr(robot, "mode", "") or "") == "mock":
+        return MockJcrobAdapter(settings.jcrob_fixtures), None
+
     adapter_key = (robot.adapter or "").strip() or "jcrob_http"
     meta = ADAPTERS.get(adapter_key)
 

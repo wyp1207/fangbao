@@ -33,6 +33,26 @@ SCHEMA: dict[str, dict[str, Any]] = {
         "group": "告警", "effect": "条件持续这么久才报，0=立即报（防抖）",
     },
 
+    # ---- 告警外发 ----
+    "notify.escalate_enabled": {
+        "label": "严重告警超时升级", "type": "bool", "default": True,
+        "group": "告警", "effect": "critical 未确认超时后转给值班长（tier=2 通道）",
+    },
+    "notify.escalate_after_min": {
+        "label": "升级等待（分钟）", "type": "int", "default": 5, "min": 1, "max": 120,
+        "group": "告警", "effect": "严重告警未确认超过这个时间就升级",
+    },
+
+    # ---- 磁盘 ----
+    "disk.warn_free_gb": {
+        "label": "磁盘提醒（GB）", "type": "int", "default": 20, "min": 1, "max": 500,
+        "group": "平台", "effect": "数据盘可用低于此值时提醒，不影响录像",
+    },
+    "disk.crit_free_gb": {
+        "label": "磁盘严重（GB）", "type": "int", "default": 8, "min": 1, "max": 200,
+        "group": "平台", "effect": "低于此值时告警；录像另有 5GB 硬停阈值",
+    },
+
     # ---- 录像 ----
     "record.enabled": {
         "label": "启用录像", "type": "bool", "default": True,

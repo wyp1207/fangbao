@@ -162,22 +162,37 @@ class NotifyDispatcher:
             log.warning("通知队列已满，丢弃告警 #%s", alarm.get("id"))
 
     def _loop(self) -> None:
+        last_escalate = 0.0
         while not self._stop.is_set():
             try:
                 alarm_id, alarm = self._q.get(timeout=1.0)
             except queue.Empty:
-                continue
-            try:
-                self._dispatch(alarm_id, alarm)
-            except Exception:  # noqa: BLE001
-                log.exception("通知分发失败")
+                alarm_id, alarm = None, None
+
+            if alarm is not None:
+                try:
+                    self._dispatch(alarm_id, alarm)
+                except Exception:  # noqa: BLE001
+                    log.exception("通知分发失败")
+
+            # 每分钟检查一次该升级的告警
+            if time.time() - last_escalate > 60:
+                last_escalate = time.time()
+                try:
+                    self.escalate_once()
+                except Exception:  # noqa: BLE001
+                    log.exception("告警升级失败")
 
     def _dispatch(self, alarm_id: int, alarm: dict) -> None:
         from app.models.notify import NotifyChannel, NotifyLog
 
         level = LEVEL_ORDER.get(alarm.get("level", "warn"), 1)
         with self._session_factory() as db:  # type: ignore[misc]
-            channels = db.query(NotifyChannel).filter(NotifyChannel.enabled.is_(True)).all()
+            channels = (
+                db.query(NotifyChannel)
+                .filter(NotifyChannel.enabled.is_(True), NotifyChannel.tier == 1)
+                .all()
+            )
             for ch in channels:
                 if level < LEVEL_ORDER.get(ch.min_level, 2):
                     continue
@@ -200,6 +215,63 @@ class NotifyDispatcher:
                     ok=ok, status=status[:60], error=None if ok else status[:500],
                 ))
                 db.commit()
+
+    def escalate_once(self) -> dict:
+        """critical 未确认超过 N 分钟 → 发给值班长（tier=2），并标记已升级。
+
+        只升级一次：不能每轮都发，否则值班长同样会免打扰。
+        """
+        from app.models.alarm import AlarmRecord
+        from app.models.notify import NotifyChannel, NotifyLog
+
+        try:
+            from app.api.v1.settings import load_all
+            cfg = load_all()
+        except Exception:  # noqa: BLE001
+            cfg = {}
+        if not bool(cfg.get("notify.escalate_enabled", True)):
+            return {"escalated": 0}
+        after_min = int(cfg.get("notify.escalate_after_min", 5))
+        cutoff = datetime.now() - timedelta(minutes=after_min)
+
+        escalated = 0
+        with self._session_factory() as db:  # type: ignore[misc]
+            pending = (
+                db.query(AlarmRecord)
+                .filter(
+                    AlarmRecord.level == "critical",
+                    AlarmRecord.acked_at.is_(None),
+                    AlarmRecord.closed_at.is_(None),
+                    AlarmRecord.escalated_at.is_(None),
+                    AlarmRecord.started_at <= cutoff,
+                )
+                .all()
+            )
+            if not pending:
+                return {"escalated": 0}
+
+            chiefs = (
+                db.query(NotifyChannel)
+                .filter(NotifyChannel.enabled.is_(True), NotifyChannel.tier == 2)
+                .all()
+            )
+
+            for alarm in pending:
+                alarm.escalated_at = datetime.now()
+                if not chiefs:
+                    continue
+                payload = alarm.to_dict()
+                for ch in chiefs:
+                    ok, status = self._deliver_with_retry(ch, payload)
+                    db.add(NotifyLog(
+                        ts=datetime.now(), channel_id=ch.id, channel_name=ch.name,
+                        alarm_id=alarm.id, payload=_text(payload)[:500],
+                        ok=ok, status=("升级: " + status)[:60],
+                        error=None if ok else status[:500],
+                    ))
+                escalated += 1
+            db.commit()
+        return {"escalated": escalated}
 
     def _deliver_with_retry(self, channel, alarm: dict, attempts: int = 3):
         last = (False, "")

@@ -107,6 +107,7 @@ function onSite(v: string) {
 function onDevice(v: string) {
   deviceId.value = v
   const hit = devices.value.find((d) => String(d.id) === v)
+  robot.setDevice(Number(v))
   toast('已切换到 ' + (hit?.name ?? v), 'ok')
   // 换设备就刷新视频与地图，避免还显示上一台的画面
   void api.videos().then((rows) => { videoRows.value = rows as never }).catch(() => undefined)

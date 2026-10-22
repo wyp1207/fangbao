@@ -125,13 +125,15 @@ class AlarmStore:
         new: list[Alarm] = []
         with self._lock:
             # 本轮没出现的条件，把"首次出现时间"清掉，下次重新计时
-            active = {m for m, _, _, _ in found}
+            prefix = f"{robot_id}:" if robot_id is not None else ""
+            active = {f"{prefix}{m}" for m, _, _, _ in found}
             for k in list(self._first_seen):
-                if k not in active:
+                if k.startswith(prefix) and k not in active:
                     self._first_seen.pop(k, None)
 
             for metric, level, message, value in found:
-                first = self._first_seen.setdefault(metric, now)
+                dkey = f"{robot_id}:{metric}" if robot_id is not None else metric
+                first = self._first_seen.setdefault(dkey, now)
                 if cfg["sustain"] > 0 and now - first < cfg["sustain"]:
                     continue  # 还没持续够久，先不报（防抖）
                 last = self._last_raised.get(metric)

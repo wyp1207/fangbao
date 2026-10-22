@@ -79,6 +79,14 @@ class DevicePatch(BaseModel):
     is_active: bool | None = None
 
 
+async def _reload_polling(db: Session) -> None:
+    """设备台账变了就重建轮询任务（新增设备不用重启服务）。"""
+    from app.services.robot_runtime import registry as robot_registry
+
+    await robot_registry.stop()
+    await robot_registry.start(db.query(Robot).filter(Robot.is_active.is_(True)).all())
+
+
 def _out(r: Robot) -> DeviceOut:
     meta = ADAPTERS.get(r.adapter or "", {})
     return DeviceOut(
@@ -90,6 +98,19 @@ def _out(r: Robot) -> DeviceOut:
         last_seen=r.last_seen.isoformat(timespec="seconds") if r.last_seen else None,
         note=r.note, needs=meta.get("needs", []),
     )
+
+
+@router.post("/reload", dependencies=[Depends(require_csrf)])
+async def reload_polling(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles("admin")),
+) -> dict:
+    """设备台账变了，重建轮询任务（新增设备不用重启服务）。"""
+    from app.services.robot_runtime import registry as robot_registry
+
+    await robot_registry.stop()
+    await robot_registry.start(db.query(Robot).filter(Robot.is_active.is_(True)).all())
+    return {"ok": True, "robots": [rt.status() for rt in robot_registry.runtimes.values()]}
 
 
 @router.get("/meta")
@@ -107,7 +128,7 @@ def list_devices(
 
 
 @router.post("", dependencies=[Depends(require_csrf)])
-def create_device(
+async def create_device(
     body: DeviceIn,
     db: Session = Depends(get_db),
     me: User = Depends(require_roles("admin")),
@@ -130,6 +151,7 @@ def create_device(
 
     audit(db=db, action="device.create", target=r.name, user=me,
           detail={"adapter": r.adapter, "ip": r.ip, "port": r.port})
+    await _reload_polling(db)
     msg_store.add("info", "system", f"新增设备：{r.name}",
                   f"{ADAPTERS[r.adapter]['label']} · {r.ip}:{r.port}",
                   {"to": "robots"})
@@ -162,7 +184,7 @@ def update_device(
 
 
 @router.delete("/{device_id}", dependencies=[Depends(require_csrf)])
-def delete_device(
+async def delete_device(
     device_id: int,
     db: Session = Depends(get_db),
     me: User = Depends(require_roles("admin")),
@@ -175,6 +197,7 @@ def delete_device(
     db.delete(r)
     db.commit()
     audit(db=db, action="device.delete", target=r.name, user=me)
+    await _reload_polling(db)
     return {"ok": True}
 
 

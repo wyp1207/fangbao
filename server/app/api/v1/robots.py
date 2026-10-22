@@ -34,8 +34,27 @@ def list_robots(db: Session = Depends(get_db), _user: User = Depends(get_current
 @router.get("/{robot_id}/status")
 def robot_status(robot_id: int, cache=Depends(get_cache),
                  _user: User = Depends(get_current_user)) -> dict:
-    """聚合状态：直接读 1s 轮询缓存，不在这里同步调机器人。"""
-    return cache.as_dict()
+    """聚合状态：按设备 id 读各自的轮询缓存，不在这里同步调机器人。"""
+    from app.services.robot_runtime import registry as robot_registry
+
+    rt = robot_registry.get(robot_id)
+    if rt is None:
+        # 未注册的设备（未启用/不存在）回落到默认缓存，前端不至于白屏
+        return cache.as_dict()
+    data = rt.cache.as_dict()
+    data["robot_id"] = rt.robot_id
+    data["robot_name"] = rt.name
+    if rt.error:
+        data["runtime_error"] = rt.error
+    return data
+
+
+@router.get("/runtime")
+def runtime_list(_user: User = Depends(get_current_user)) -> list[dict]:
+    """所有设备的运行时状态（哪台在轮询、哪台适配器没实现）。"""
+    from app.services.robot_runtime import registry as robot_registry
+
+    return [rt.status() for rt in robot_registry.runtimes.values()]
 
 
 @router.get("/{robot_id}/pose")

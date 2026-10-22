@@ -58,9 +58,16 @@ class TelemetryCollector:
                 log.exception("运行数据采样失败")
 
     def _sample_once(self) -> None:
-        snap = self._cache()
-        if snap is None:
+        raw = self._cache()
+        if raw is None:
             return
+        # 支持单台（snapshot）和多台（[(robot_id, snapshot)]）两种取数方式
+        pairs = raw if isinstance(raw, list) else [(1, raw)]
+        for robot_id, snap in pairs:
+            if snap is not None:
+                self._sample_one(robot_id, snap)
+
+    def _sample_one(self, robot_id: int, snap) -> None:
         info = getattr(snap, "info", {}) or {}
         pose = getattr(snap, "pose", {}) or {}
         status = getattr(snap, "status", {}) or {}
@@ -69,7 +76,7 @@ class TelemetryCollector:
 
         # 字段来源各型号不一样，按优先级兜底（JCROB：电量在 info，电压/速度在 galileo）
         row = TelemetrySample(
-            robot_id=1,
+            robot_id=robot_id,
             battery=_num(info.get("battery")),
             voltage=_num(galileo.get("power")) or _num(info.get("voltage")) or _num(status.get("voltage")),
             speed=_num(galileo.get("currentSpeedX")) or _num(status.get("speed_x")) or _num(info.get("speed")),

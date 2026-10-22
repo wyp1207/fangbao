@@ -33,6 +33,7 @@ class AlarmRecord(Base):
     handled_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
     handle_note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    escalated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     closed_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
     resolution: Mapped[str | None] = mapped_column(String(32), nullable=True)  # handled/misreport/ignored
@@ -57,6 +58,7 @@ class AlarmRecord(Base):
             "handled_at": self.handled_at.isoformat(timespec="seconds") if self.handled_at else None,
             "handled_by": self.handled_by,
             "handle_note": self.handle_note,
+            "escalated_at": self.escalated_at.isoformat(timespec="seconds") if self.escalated_at else None,
             "closed_at": self.closed_at.isoformat(timespec="seconds") if self.closed_at else None,
             "closed_by": self.closed_by,
             "resolution": self.resolution,

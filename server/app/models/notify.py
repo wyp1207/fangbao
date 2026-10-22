@@ -26,6 +26,8 @@ class NotifyChannel(Base):
     type: Mapped[str] = mapped_column(String(24))          # wecom/dingtalk/generic/email
     config_json: Mapped[str] = mapped_column(Text, default="{}")
     min_level: Mapped[str] = mapped_column(String(16), default="critical")  # warn|critical
+    # 1=一线（首次就发），2=值班长（超时未确认才发）
+    tier: Mapped[int] = mapped_column(Integer, default=1)
     # 同一通道对同一指标的静默期（分钟），防止刷屏
     min_interval_min: Mapped[int] = mapped_column(Integer, default=10)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
