@@ -1027,3 +1027,47 @@ def test_cruise_runner_state_machine(auth_client, monkeypatch):
         assert len(adapter.calls) == 2                     # 两个点各下发一次
         assert [s.status for s in steps] == ["ok", "ok"]    # 每点都有结果
         assert all(s.result_json for s in steps)            # 带坐标留痕
+
+
+def test_mobile_work_order_flow(auth_client, monkeypatch):
+    """手机闭环：派单 → 手机接单 → 拍照 → 填结论 → 完成（不用回电脑）。"""
+    import io as _io
+    from PIL import Image
+
+    from app.services import notify as notify_svc
+
+    pushed: list[str] = []
+    monkeypatch.setattr(notify_svc, "push_text",
+                        lambda text, **kw: (pushed.append(text), 1)[1])
+
+    made = auth_client.post("/api/v1/work-orders", json={
+        "title": "泵房气体超标", "source": "alarm", "level": "critical",
+        "assignee_id": 1, "due_hours": 4})
+    assert made.status_code == 200
+    o = made.json()
+    oid = o["id"]
+    assert o["mobile_url"].endswith(f"/m/wo/{oid}")
+    assert pushed and "手机处理" in pushed[0]          # 推送里带手机链接
+
+    # 手机打开详情
+    detail = auth_client.get(f"/api/v1/work-orders/{oid}")
+    assert detail.status_code == 200 and detail.json()["title"] == "泵房气体超标"
+
+    # 接单
+    assert auth_client.post(f"/api/v1/work-orders/{oid}/transition",
+                            json={"status": "processing"}).status_code == 200
+
+    # 拍照
+    buf = _io.BytesIO()
+    Image.new("RGB", (60, 60), "green").save(buf, format="JPEG")
+    up = auth_client.post(f"/api/v1/work-orders/{oid}/photo",
+                          files={"file": ("a.jpg", buf.getvalue(), "image/jpeg")})
+    assert up.status_code == 200 and up.json()["count"] == 1
+
+    # 结论 + 销号
+    assert auth_client.post(f"/api/v1/work-orders/{oid}/transition",
+                            json={"status": "review"}).status_code == 200
+    closed = auth_client.post(f"/api/v1/work-orders/{oid}/transition",
+                              json={"status": "closed", "resolution": "已更换密封圈，现场恢复"})
+    assert closed.status_code == 200 and closed.json()["status"] == "closed"
+    assert closed.json()["photos"]

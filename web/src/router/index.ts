@@ -6,6 +6,7 @@ const router = createRouter({
   routes: [
     { path: '/login', name: 'login', component: () => import('@/pages/Login.vue') },
   { path: '/m/task/:id', name: 'mobile-check', component: () => import('@/pages/MobileCheck.vue') },
+  { path: '/m/wo/:id', name: 'mobile-wo', component: () => import('@/pages/MobileWorkOrder.vue') },
     // 驾驶舱是整屏大屏，独立于后台布局，避免叠两层顶栏
     { path: '/dashboard', name: 'dashboard', component: () => import('@/pages/Dashboard.vue') },
     {

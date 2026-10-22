@@ -397,6 +397,32 @@ class OrderUpdate(BaseModel):
     due_hours: int | None = None
 
 
+def _mobile_url(o: WorkOrder) -> str:
+    from app.core.config import get_settings
+
+    base = (get_settings().public_base_url or "").rstrip("/")
+    return f"{base}/m/wo/{o.id}" if base else f"/m/wo/{o.id}"
+
+
+def _push_to_assignee(db: Session, o: WorkOrder) -> None:
+    """有责任人就推一条到通知通道（企业微信/钉钉/Webhook），带手机链接。"""
+    from app.models.user import User as _User
+    from app.services.notify import push_text
+
+    uid = o.assignee_id
+    if not uid:
+        return
+    user = db.get(_User, uid)
+    if user is None:
+        return
+    push_text(
+        f"工单 {o.code or ''}：{o.title}\n"
+        f"责任人：{user.username}\n限时：{o.due_at.strftime('%m-%d %H:%M') if o.due_at else '未设'}\n"
+        f"手机处理：{_mobile_url(o)}",
+        level=o.level,
+    )
+
+
 def _order_out(o: WorkOrder) -> dict:
     return {
         "id": o.id, "code": o.code, "title": o.title, "source": o.source,
@@ -409,6 +435,7 @@ def _order_out(o: WorkOrder) -> dict:
         "escalated_at": o.escalated_at.isoformat(timespec="minutes") if o.escalated_at else None,
         "created_at": o.created_at.isoformat(timespec="minutes") if o.created_at else None,
         "closed_at": o.closed_at.isoformat(timespec="minutes") if o.closed_at else None,
+        "mobile_url": _mobile_url(o),
     }
 
 
@@ -430,6 +457,15 @@ def list_orders(
         cq = cq.where(WorkOrder.assignee_id == assignee_id)
     rows = db.scalars(q).all()
     return {"total": db.scalar(cq) or 0, "items": [_order_out(o) for o in rows]}
+
+
+@router.get("/work-orders/{order_id}")
+def get_order(order_id: int, db: Session = Depends(get_db),
+              _: User = Depends(get_current_user)) -> dict:
+    o = db.get(WorkOrder, order_id)
+    if not o:
+        raise NotFound("工单不存在")
+    return _order_out(o)
 
 
 @router.post("/work-orders", dependencies=[Depends(require_csrf)])
@@ -454,6 +490,8 @@ def create_order(
     db.refresh(o)
     audit(db=db, action="work_order.create", target=o.code or str(o.id), user=me,
           detail={"level": o.level, "assignee": o.assignee_id})
+    if o.assignee_id:
+        _push_to_assignee(db, o)
     return _order_out(o)
 
 
@@ -478,6 +516,7 @@ def assign_order(
     db.refresh(o)
     audit(db=db, action="work_order.assign", target=o.code or str(o.id), user=me,
           detail={"assignee": body.assignee_id})
+    _push_to_assignee(db, o)
     return _order_out(o)
 
 
@@ -520,6 +559,38 @@ def transition_order(
     db.refresh(o)
     audit(db=db, action=f"work_order.{target}", target=o.code or str(o.id), user=me)
     return _order_out(o)
+
+
+@router.post("/work-orders/{order_id}/photo", dependencies=[Depends(require_csrf)])
+def upload_order_photo(
+    order_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    me: User = Depends(require_roles("admin", "safety", "operator")),
+) -> dict:
+    """现场核实拍照：手机上拍完直接传，作为处置证据。"""
+    o = db.get(WorkOrder, order_id)
+    if not o:
+        raise NotFound("工单不存在")
+    ext = ALLOWED_TYPES.get(file.content_type or "")
+    if ext is None:
+        raise BadRequest("只支持 JPG/PNG/WebP", code="BAD_IMAGE_TYPE")
+    data = file.file.read(MAX_PHOTO + 1)
+    if len(data) > MAX_PHOTO:
+        raise BadRequest("图片超过 6MB，请压缩后再传", code="IMAGE_TOO_LARGE")
+
+    day = datetime.now().strftime("%Y%m%d")
+    name = f"wo-{day}/{uuid4().hex}{ext}"
+    (PHOTO_ROOT / f"wo-{day}").mkdir(parents=True, exist_ok=True)
+    (PHOTO_ROOT / name).write_bytes(data)
+
+    photos = _items(o.photos_json)
+    photos.append(f"inspection_photos/{name}")
+    o.photos_json = json.dumps(photos, ensure_ascii=False)
+    db.commit()
+    audit(db=db, action="work_order.photo", target=o.code or str(o.id), user=me,
+          detail={"count": len(photos), "size": len(data)})
+    return {"ok": True, "url": f"/api/v1/inspection/photos/{name}", "count": len(photos)}
 
 
 @router.post("/work-orders/{order_id}/escalate", dependencies=[Depends(require_csrf)])
