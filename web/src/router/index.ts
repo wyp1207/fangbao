@@ -46,6 +46,8 @@ const router = createRouter({
 
         // 设备管理
         { path: 'robots', name: 'robots', component: () => import('@/pages/RobotProfile.vue') },
+        { path: 'peripherals', name: 'peripherals', component: () => import('@/pages/Peripherals.vue'), meta: { roles: ['admin', 'sysadmin', 'operator'] } },
+        { path: 'peripherals', name: 'peripherals', component: () => import('@/pages/Peripherals.vue'), meta: { roles: ['admin', 'sysadmin', 'operator'] } },
         { path: 'cameras', name: 'cameras', component: () => import('@/pages/Cameras.vue') },
         { path: 'sensor-gateways', name: 'sensor-gateways', component: () => import('@/pages/SensorGateways.vue') },
         { path: 'env-device', name: 'env-device', component: () => import('@/pages/EnvDevices.vue') },

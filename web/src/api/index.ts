@@ -232,6 +232,14 @@ export const api = {
   testDevice: (id: number) =>
     request<{ tcp: boolean; http: boolean; detail: string }>(`/devices/${id}/test`, { method: 'POST' }),
 
+  peripherals: (robotId?: number) =>
+    request<Record<string, unknown>[]>(robotId ? `/peripherals?robot_id=${robotId}` : '/peripherals'),
+  createPeripheral: (body: Record<string, unknown>) =>
+    request<Record<string, unknown>>('/peripherals', { method: 'POST', body }),
+  updatePeripheral: (id: number, body: Record<string, unknown>) =>
+    request<Record<string, unknown>>(`/peripherals/${id}`, { method: 'PATCH', body }),
+  deletePeripheral: (id: number) =>
+    request<{ ok: boolean }>(`/peripherals/${id}`, { method: 'DELETE' }),
   dashboardFeed: (kind: 'patrol' | 'alarm' | 'control', limit = 20) =>
     request<{ kind: string; items: { id: number; ts: string; text: string; level: string; badge: string; link: string }[] }>(
       `/dashboard/feed?kind=${kind}&limit=${limit}`),
