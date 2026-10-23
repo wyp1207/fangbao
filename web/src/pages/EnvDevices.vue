@@ -13,6 +13,9 @@ const loading = ref(false)
 
 const editing = ref<SensorItem | null>(null)
 const creating = ref(false)
+// 实际生效的阈值来源（外设规则优先）
+const effective = ref<{ source: string; enabled: boolean; warn_high: number | null; crit_high: number | null } | null>(null)
+
 const form = ref({
   name: '', kind: 'gas', station: '默认场站', location: '', serial: '',
   warn_high: '' as string | number, crit_high: '' as string | number,
@@ -51,6 +54,10 @@ function openEdit(s: SensorItem) {
     warn_low: s.warn_low ?? '', crit_low: s.crit_low ?? '', note: s.note ?? '',
   }
   editing.value = s
+  effective.value = null
+  api.sensorRule(s.id)
+    .then((r) => { effective.value = r as never })
+    .catch(() => { effective.value = null })
 }
 
 function payload() {
@@ -209,6 +216,11 @@ onBeforeUnmount(() => window.clearInterval(timer))
         </div>
         <div class="four">
           <label class="fld"><span>提醒下限</span><input class="input" v-model="form.warn_low" /></label>
+          <p v-if="effective" class="hint">
+            实际生效来源：<b>{{ effective.source === 'peripheral' ? '外设规则（优先）' : '传感器自身' }}</b>
+            <template v-if="!effective.enabled"> · 当前已关闭告警</template>
+            <template v-else> · 提醒上限 {{ effective.warn_high ?? '—' }}，严重上限 {{ effective.crit_high ?? '—' }}</template>
+          </p>
           <label class="fld"><span>提醒上限</span><input class="input" v-model="form.warn_high" /></label>
           <label class="fld"><span>严重下限</span><input class="input" v-model="form.crit_low" /></label>
           <label class="fld"><span>严重上限</span><input class="input" v-model="form.crit_high" /></label>
@@ -266,4 +278,7 @@ onBeforeUnmount(() => window.clearInterval(timer))
   font-size: 12px; color: #ffe08a; margin: 4px 0 8px;
 }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+
+.hint { margin: 0 0 8px; font-size: 12px; color: #9fd2ff; }
+.hint b { color: #ffd040; }
 </style>

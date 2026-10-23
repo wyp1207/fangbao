@@ -222,6 +222,47 @@ def _judge(s: Sensor, value: float) -> tuple[str | None, str]:
     return None, ""
 
 
+@router.get("/{sensor_id}/rule")
+def effective_rule(sensor_id: int, db: Session = Depends(get_db),
+                   _: User = Depends(get_current_user)) -> dict:
+    """这条传感器"实际生效"的阈值：外设规则优先，其次传感器自身，最后全局默认。"""
+    import json
+
+    from app.models.peripheral import Peripheral
+
+    s = db.get(Sensor, sensor_id)
+    if s is None:
+        raise NotFound("传感器不存在")
+
+    p = (db.query(Peripheral)
+         .filter(Peripheral.sensor_id == s.id, Peripheral.enabled.is_(True))
+         .first())
+    rule = {}
+    source = "sensor"
+    if p is not None and p.config_json:
+        try:
+            rule = (json.loads(p.config_json) or {}).get("rule") or {}
+        except Exception:  # noqa: BLE001
+            rule = {}
+        if rule:
+            source = "peripheral"
+
+    return {
+        "sensor_id": s.id,
+        "source": source,
+        "peripheral_id": p.id if p else None,
+        "enabled": rule.get("enabled", True),
+        "warn_high": rule.get("warn_high", s.warn_high),
+        "crit_high": rule.get("crit_high", s.crit_high),
+        "warn_low": rule.get("warn_low", s.warn_low),
+        "crit_low": rule.get("crit_low", s.crit_low),
+        "sensor_defaults": {
+            "warn_high": s.warn_high, "crit_high": s.crit_high,
+            "warn_low": s.warn_low, "crit_low": s.crit_low,
+        },
+    }
+
+
 @router.get("/{sensor_id}/history")
 def history(
     sensor_id: int,

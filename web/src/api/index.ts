@@ -488,6 +488,7 @@ export const api = {
   testSensorGateway: (id: number) =>
     request<{ ok: boolean; raw?: number; value?: number; error?: string }>(`/sensor-gateways/${id}/test`, { method: 'POST' }),
   sensorGatewayRuntime: () => request<Record<string, unknown>[]>('/sensor-gateways/runtime'),
+  sensorRule: (id: number) => request<Record<string, unknown>>(`/sensors/${id}/rule`),
   sensors: (robotId?: number) =>
     request<SensorItem[]>(robotId ? `/sensors?robot_id=${robotId}` : '/sensors'),
   sensorMeta: () => request<{ kinds: SensorKind[] }>('/sensors/meta'),
