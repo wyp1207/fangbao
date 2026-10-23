@@ -1,0 +1,53 @@
+"""到点抓拍：从 go2rtc 取一帧存成证据图。
+
+为什么用 go2rtc 抓帧而不是等机器人厂商的抓拍 API：
+现场相机已经接进 go2rtc 了（实时预览在用），抓帧是同一路流；
+厂商抓拍接口还没确认，先用这条把"到点有照片"的证据链补上，
+将来接上厂商接口只是换实现，调用方不动。
+"""
+
+from __future__ import annotations
+
+import time
+import urllib.parse
+import urllib.request
+from datetime import datetime
+from pathlib import Path
+from uuid import uuid4
+
+PHOTO_ROOT = Path(__file__).resolve().parents[3] / "data" / "inspection_photos"
+
+
+def capture_frame(stream: str, base: str, timeout: float = 6.0) -> dict:
+    """抓一帧并落盘，返回 {path, url, bytes}。失败抛 RuntimeError。"""
+    if not stream:
+        raise RuntimeError("没有可用的视频流")
+    q = urllib.parse.urlencode({"src": stream})
+    url = f"{base.rstrip('/')}/api/frame.jpeg?{q}"
+    data = b""
+    last = ""
+    # 流没消费者时 go2rtc 可能还没出帧：重试几次，第一次往往拿到空
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(url, timeout=timeout) as resp:
+                data = resp.read()
+        except Exception as exc:  # noqa: BLE001
+            last = f"{exc.__class__.__name__}"
+            data = b""
+        if len(data) >= 1024:
+            break
+        last = f"{len(data)}B"
+        time.sleep(0.6)
+    if len(data) < 1024:
+        raise RuntimeError(f"抓帧失败（{stream}）：{last}，可能是黑帧或流未就绪")
+
+    day = datetime.now().strftime("%Y%m%d")
+    name = f"shot-{day}/{int(time.time())}-{uuid4().hex[:8]}.jpg"
+    (PHOTO_ROOT / f"shot-{day}").mkdir(parents=True, exist_ok=True)
+    (PHOTO_ROOT / name).write_bytes(data)
+    return {
+        "path": f"inspection_photos/{name}",
+        "url": f"/api/v1/inspection/photos/{name}",
+        "bytes": len(data),
+        "stream": stream,
+    }
