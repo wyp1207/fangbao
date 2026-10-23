@@ -51,6 +51,7 @@ class SensorIn(BaseModel):
     crit_high: float | None = None
     note: str | None = None
     enabled: bool = True
+    robot_id: int | None = None
 
 
 class ReadingIn(BaseModel):
@@ -65,6 +66,7 @@ def _out(s: Sensor, latest: SensorReading | None = None) -> dict:
         "kind_label": KINDS.get(s.kind, {}).get("label", s.kind),
         "unit": s.unit or KINDS.get(s.kind, {}).get("unit", ""),
         "station": s.station, "location": s.location, "serial": s.serial,
+        "robot_id": s.robot_id,
         "warn_low": s.warn_low, "warn_high": s.warn_high,
         "crit_low": s.crit_low, "crit_high": s.crit_high,
         "enabled": s.enabled, "note": s.note,
@@ -107,7 +109,13 @@ def create_sensor(
         raise BadRequest(f"未知传感器类型 {body.kind}", code="BAD_KIND")
     if body.warn_high is not None and body.crit_high is not None and body.crit_high < body.warn_high:
         raise BadRequest("严重阈值应大于提醒阈值", code="BAD_THRESHOLD")
-    s = Sensor(**body.model_dump(), unit=KINDS[body.kind]["unit"])
+    data = body.model_dump()
+    if data.get("robot_id") is None:      # 没指定设备就挂第一台在用设备，别造孤儿数据
+        from app.models.robot import Robot as _Robot
+
+        first = db.query(_Robot).filter(_Robot.is_active.is_(True)).order_by(_Robot.id).first()
+        data["robot_id"] = first.id if first else None
+    s = Sensor(**data, unit=KINDS[body.kind]["unit"])
     db.add(s)
     db.commit()
     db.refresh(s)

@@ -500,7 +500,7 @@ async function logout() {
           </div>
         </ScadaPanel>
 
-        <ScadaPanel v-if="hasPanel('video.thermal') || true" title="热红外视频" tone="gold" class="grow" body-class="no-pad">
+        <ScadaPanel title="热红外视频" tone="gold" class="grow" body-class="no-pad">
           <div class="embed">
             <iframe v-if="thermalStream" :src="thermalStream" title="热红外" allow="autoplay; fullscreen" />
             <div v-else class="embed-empty">

@@ -23,7 +23,10 @@ const pwdBusy = ref(false)
 
 const username = computed(() => auth.user?.username ?? '未登录')
 const initial = computed(() => username.value.slice(0, 1).toUpperCase())
-const ROLE_TEXT: Record<string, string> = { admin: '管理员', safety: '安全管理员', operator: '操作员', viewer: '只读' }
+const ROLE_TEXT: Record<string, string> = {
+  admin: '超级管理员', sysadmin: '系统管理员', secadmin: '安全管理员',
+  auditor: '审计员', safety: '安全员', operator: '操作员', viewer: '只读',
+}
 const roleText = computed(() => ROLE_TEXT[auth.user?.role ?? ''] ?? '未知角色')
 const isAdmin = computed(() => auth.user?.role === 'admin')
 
@@ -75,6 +78,8 @@ const totpEnabled = ref(false)
 const totpErr = ref('')
 
 async function openTotp() {
+  // 已开启就别再请求密钥：服务端虽然已拦，前端也不该制造"密钥换了"的错觉
+  if (totpEnabled.value) { totpOpen.value = true; return }
   totpOpen.value = true
   totpErr.value = ''
   totpCode.value = ''
