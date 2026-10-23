@@ -35,6 +35,11 @@ class AlarmRecord(Base):
 
     escalated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     # 条件消失自动恢复（行业通行做法：active → resolved，而不是让人手动关）
+    # 告警搁置（ISA-18.2）：维修/标定期间临时屏蔽，到期自动恢复，必须留原因
+    shelved_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    shelve_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    priority: Mapped[str | None] = mapped_column(String(8), nullable=True)   # P1..P4
+
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     closed_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
