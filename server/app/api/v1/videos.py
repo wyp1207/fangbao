@@ -207,6 +207,7 @@ def list_videos(
 
 @router.get("/go2rtc-streams")
 def list_go2rtc_streams(
+    all: bool = Query(False, description="true 时列出 go2rtc 全部流（排障用）"),
     db: Session = Depends(get_db),
     _: User = Depends(require_roles("admin", "operator", "viewer")),
 ) -> dict:
@@ -242,6 +243,9 @@ def list_go2rtc_streams(
             "registered": name in registered,
         })
     out.sort(key=lambda x: (not x["web"], x["name"]))
+    if not all:
+        # 默认只给已登记的：现场不需要看到 lab1–lab6 这些测试流
+        out = [x for x in out if x["registered"]]
     return {"ok": True, "streams": out}
 
 
@@ -369,7 +373,7 @@ def videos_health(
 
     base = getattr(get_settings(), "go2rtc_base", "") or ""
     with SessionLocal() as db:
-        q = db.query(VideoSource)
+        q = db.query(VideoSource).filter(VideoSource.show_on_dashboard.is_(True))
         if robot_id is not None:
             q = q.filter(VideoSource.robot_id == robot_id)
         rows = [(v.id, v.name, v.stream_name or "") for v in q.all()]
