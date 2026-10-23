@@ -158,6 +158,21 @@ function openVideo(which: string) {
   toast(`${which}通道未接入：真机联调后按 RTSP / WebRTC 接入`, 'warn', 3000)
 }
 const busyMotion = ref(false)
+// 环境趋势：取第一台传感器的近 1 小时读数画折线（面板空白用它填上）
+const spark = ref<number[]>([])
+const sparkWindow = ref('近 1 小时')
+const trendSensor = ref('')
+const sparkPoints = computed(() => {
+  const v = spark.value
+  if (v.length < 2) return ''
+  const min = Math.min(...v), max = Math.max(...v)
+  const span = max - min || 1
+  return v.map((n, i) => {
+    const x = (i / (v.length - 1)) * 100
+    const y = 30 - ((n - min) / span) * 26
+    return `${x.toFixed(1)},${y.toFixed(1)}`
+  }).join(' ')
+})
 const located = computed(() => {
   const st = (robot.snapshot?.status ?? {}) as Record<string, unknown>
   return Boolean(st.located ?? st.Location)
@@ -313,7 +328,7 @@ type EnvSummary = Record<string, { name: string; unit: string; value: number | n
 const env = ref<EnvSummary>({})
 
 // 环境面板只显示"这台设备上真有"的传感器（X30 有 SF6/温湿度，JCROB 可能是噪声）
-const envSensors = ref<{ name: string; unit: string; value: number | null }[]>([])
+const envSensors = ref<{ id: number; name: string; unit: string; value: number | null }[]>([])
 
 function fmtEnv(v: number | null): string {
   if (v === null || v === undefined) return '--'
@@ -355,10 +370,12 @@ async function loadEnv() {
     // 按设备取：切换设备后这里拿到的就是那台设备自己的传感器
     const rows = await api.sensors(Number.isFinite(id) ? id : undefined)
     envSensors.value = rows.map((s) => ({
+      id: s.id,
       name: s.name,
       unit: s.unit,
       value: s.latest?.value ?? null,
     }))
+    void loadSpark()
   } catch {
     envSensors.value = []   // 该设备没接传感器就空着，不显示别人的数据
   }
@@ -366,6 +383,26 @@ async function loadEnv() {
 
 function num(v: unknown, digits = 2): string {
   return typeof v === 'number' ? v.toFixed(digits) : '—'
+}
+
+async function loadSpark() {
+  const first = envSensors.value[0]
+  if (!first) { spark.value = []; trendSensor.value = ''; return }
+  trendSensor.value = first.name
+  // 先看近 1 小时；没数据就退到 24 小时（传感器不是一直都在采）
+  for (const hours of [1, 24]) {
+    try {
+      const res = await api.sensorHistory(first.id, hours, 60) as { points?: { value: number }[] }
+      const rows = res.points ?? []
+      const vals = rows.map((r) => Number(r.value)).filter((n) => Number.isFinite(n))
+      if (vals.length >= 2) {
+        spark.value = vals
+        sparkWindow.value = hours === 1 ? '近 1 小时' : '近 24 小时'
+        return
+      }
+    } catch { /* 换下一个窗口 */ }
+  }
+  spark.value = []
 }
 
 async function loadMap() {
@@ -670,24 +707,21 @@ async function logout() {
               <span class="env-value empty" v-else>--<small>{{ e.unit }}</small></span>
             </div>
           </div>
+          <div v-if="envCount" class="env-trend">
+            <div class="env-trend-hd">
+              <span>{{ trendSensor }}</span>
+              <span class="dim">{{ sparkWindow }}</span>
+            </div>
+            <svg viewBox="0 0 100 32" preserveAspectRatio="none" class="spark">
+              <polyline v-if="sparkPoints" :points="sparkPoints" fill="none" />
+            </svg>
+          </div>
           <p v-if="envCount" class="dim small">
             本机 {{ envCount }} 个传感器；未标定阈值的只记录不告警
           </p>
           <p v-else class="dim small">这台设备没有登记传感器</p>
         </ScadaPanel>
 
-        <ScadaPanel title="设备状态摘要" class="grow" tone="cyan">
-          <table class="tbl mini">
-            <tbody>
-              <tr><td class="dim">适配器</td><td>{{ currentDevice?.adapter ?? '—' }}</td></tr>
-              <tr><td class="dim">固件版本</td><td>{{ currentDevice?.adapter === 'deeprobotics_x30' ? 'X30 固件见设备台账' : '—' }}</td></tr>
-              <tr><td class="dim">当前地图</td><td>{{ robot.currentMap || '—' }}</td></tr>
-              <tr><td class="dim">定位状态</td><td>{{ located ? '已定位' : '未定位' }}</td></tr>
-              <tr><td class="dim">数据年龄</td><td>{{ robot.snapshot?.online ? Math.round(robot.snapshot?.age_s ?? 0) + ' 秒前' : '离线' }}</td></tr>
-              <tr><td class="dim">写操作</td><td>{{ auth.canWrite ? '已授权' : '未开放' }}</td></tr>
-            </tbody>
-          </table>
-        </ScadaPanel>
 
         <ScadaPanel title="巡检点位" class="h-points" :right="`${points.length} 点`">
           <ul class="points">
@@ -971,7 +1005,7 @@ async function logout() {
   position: relative;
   display: grid;
   /* 左栏宽 1.2 倍（视频更大），中栏吃掉剩余，右栏固定居右 */
-  grid-template-columns: clamp(396px, 29.3vw, 528px) minmax(0, 1fr) clamp(320px, 24vw, 430px);
+  grid-template-columns: clamp(388px, 26.9vw, 477px) minmax(0, 1fr) clamp(330px, 22.9vw, 411px);
   grid-template-rows: minmax(0, 1fr);
   gap: 10px;
   padding: 10px 12px;
@@ -1480,5 +1514,12 @@ async function logout() {
 .tbl.mini td:first-child { width: 78px; }
 /* 右栏：告警固定、设备摘要吃掉剩余、环境与点位按内容高 */
 .col.right > .grow { flex: 1 1 auto; min-height: 0; }
+.col.right .env-grid { align-content: start; }
 .col.right > .h-points { flex: 0 0 auto; }
+
+.env-trend { margin-top: 10px; border-top: 1px dashed rgba(80,170,255,.28); padding-top: 8px; }
+.env-trend-hd { display: flex; justify-content: space-between; font-size: 12px; color: #9fd2ff; margin-bottom: 6px; }
+.spark { width: 100%; height: 92px; display: block; }
+.spark polyline { stroke: #54d8ff; stroke-width: 1.4; vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 4px rgba(84,216,255,.55)); }
 </style>
