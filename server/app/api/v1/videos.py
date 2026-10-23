@@ -155,6 +155,7 @@ def list_videos(
 
 @router.get("/go2rtc-streams")
 def list_go2rtc_streams(
+    db: Session = Depends(get_db),
     _: User = Depends(require_roles("admin", "operator", "viewer")),
 ) -> dict:
     """把 go2rtc 里已有的流列出来，前端直接选，不用手打流名。
@@ -173,6 +174,8 @@ def list_go2rtc_streams(
     except Exception as exc:  # noqa: BLE001 - 中继不可达只影响这个下拉
         return {"ok": False, "reason": f"go2rtc 不可达：{exc.__class__.__name__}", "streams": []}
 
+    registered = {v.stream_name for v in db.query(VideoSource).all() if v.stream_name}
+
     out = []
     for name, info in data.items():
         producers = info.get("producers") or []
@@ -184,6 +187,7 @@ def list_go2rtc_streams(
             "source": mask_url(source) if source else "",
             "web": name.endswith("_web"),
             "ready": bool(producers),
+            "registered": name in registered,
         })
     out.sort(key=lambda x: (not x["web"], x["name"]))
     return {"ok": True, "streams": out}
@@ -246,6 +250,42 @@ def test_video(
             return {"ok": True, "target": f"{host}:{port}", "message": f"端口 {port} 可连通"}
     except OSError as exc:
         return {"ok": False, "target": f"{host}:{port}", "message": f"连不上：{exc.__class__.__name__}"}
+
+
+@router.get("/{video_id}/live.jpg")
+def live_jpg(
+    video_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles("admin", "operator", "viewer")),
+):
+    """代理 go2rtc 的一帧。
+
+    为什么不让前端 iframe 播：go2rtc 播放器会铺满容器（裁掉两边）并在断流时把
+    "mse: dial tcp ..." 糊在画面上。首页要的是"看全、干净"，用图片 + contain 最稳；
+    需要流畅播放就点「打开全屏页」。
+    """
+    import urllib.request as _req
+
+    from fastapi import Response
+
+    from app.core.errors import ExternalUnavailable
+
+    v = db.get(VideoSource, video_id)
+    if not v or not v.stream_name:
+        raise NotFound("视频源不存在或未设置流名")
+    base = getattr(get_settings(), "go2rtc_base", "") or ""
+    if not base:
+        raise ExternalUnavailable("未配置 go2rtc", code="NO_GO2RTC")
+    url = f"{base.rstrip('/')}/api/frame.jpeg?src={v.stream_name}"
+    try:
+        with _req.urlopen(url, timeout=4) as resp:
+            data = resp.read()
+    except Exception as exc:  # noqa: BLE001
+        raise ExternalUnavailable(f"抓帧失败：{exc.__class__.__name__}", code="FRAME_FAIL") from exc
+    if len(data) < 1024:
+        raise ExternalUnavailable("相机无画面", code="FRAME_EMPTY")
+    return Response(content=data, media_type="image/jpeg",
+                    headers={"Cache-Control": "no-store"})
 
 
 @router.get("/health")
