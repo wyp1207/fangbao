@@ -334,7 +334,23 @@ class AlarmStore:
             if where is not None:
                 q = q.where(where)
             rows = db.scalars(q).all()
-            return {"total": total or 0, "items": [r.to_dict() for r in rows]}
+            items = [r.to_dict() for r in rows]
+            # 双向关联：告警上带出已生成的工单 id，前端可直接跳过去
+            try:
+                from app.models.inspection import WorkOrder
+
+                ids = [i["id"] for i in items]
+                linked = {}
+                if ids:
+                    for wo in db.query(WorkOrder).filter(
+                            WorkOrder.source == "alarm",
+                            WorkOrder.source_id.in_(ids)).all():
+                        linked.setdefault(wo.source_id, wo.id)
+                for i in items:
+                    i["work_order_id"] = linked.get(i["id"])
+            except Exception:  # noqa: BLE001
+                pass
+            return {"total": total or 0, "items": items}
 
     def handle(self, alarm_id: int, who: str, note: str) -> dict | None:
         """处置：说明"为什么报警、做了什么"，不同于确认。"""

@@ -423,8 +423,21 @@ def _push_to_assignee(db: Session, o: WorkOrder) -> None:
     )
 
 
-def _order_out(o: WorkOrder) -> dict:
+def _order_out(o: WorkOrder, db: Session | None = None) -> dict:
+    alarm = None
+    if db is not None and o.source == "alarm" and o.source_id:
+        from app.models.alarm import AlarmRecord
+
+        a = db.get(AlarmRecord, o.source_id)
+        if a is not None:
+            alarm = {
+                "id": a.id, "metric": a.metric, "level": a.level,
+                "message": a.message,
+                "started_at": a.started_at.isoformat(timespec="minutes") if a.started_at else None,
+                "acked": a.acked_at is not None,
+            }
     return {
+        "alarm": alarm,
         "id": o.id, "code": o.code, "title": o.title, "source": o.source,
         "source_id": o.source_id, "level": o.level, "status": o.status,
         "status_label": ORDER_STATUS.get(o.status, o.status),
@@ -456,7 +469,7 @@ def list_orders(
         q = q.where(WorkOrder.assignee_id == assignee_id)
         cq = cq.where(WorkOrder.assignee_id == assignee_id)
     rows = db.scalars(q).all()
-    return {"total": db.scalar(cq) or 0, "items": [_order_out(o) for o in rows]}
+    return {"total": db.scalar(cq) or 0, "items": [_order_out(o, db) for o in rows]}
 
 
 @router.get("/work-orders/{order_id}")
@@ -465,7 +478,7 @@ def get_order(order_id: int, db: Session = Depends(get_db),
     o = db.get(WorkOrder, order_id)
     if not o:
         raise NotFound("工单不存在")
-    return _order_out(o)
+    return _order_out(o, db)
 
 
 @router.post("/work-orders", dependencies=[Depends(require_csrf)])
@@ -492,7 +505,7 @@ def create_order(
           detail={"level": o.level, "assignee": o.assignee_id})
     if o.assignee_id:
         _push_to_assignee(db, o)
-    return _order_out(o)
+    return _order_out(o, db)
 
 
 class AssignIn(BaseModel):
@@ -517,7 +530,7 @@ def assign_order(
     audit(db=db, action="work_order.assign", target=o.code or str(o.id), user=me,
           detail={"assignee": body.assignee_id})
     _push_to_assignee(db, o)
-    return _order_out(o)
+    return _order_out(o, db)
 
 
 @router.post("/work-orders/{order_id}/transition", dependencies=[Depends(require_csrf)])
@@ -558,7 +571,7 @@ def transition_order(
     db.commit()
     db.refresh(o)
     audit(db=db, action=f"work_order.{target}", target=o.code or str(o.id), user=me)
-    return _order_out(o)
+    return _order_out(o, db)
 
 
 @router.post("/work-orders/{order_id}/photo", dependencies=[Depends(require_csrf)])
@@ -614,4 +627,4 @@ def escalate_order(
     msg_store.add("warn", "work_order", f"工单升级：{o.title}",
                   f"{o.code} 超过期限未处置，已上报值班长", {"to": "work-orders"})
     audit(db=db, action="work_order.escalate", target=o.code or str(o.id), user=me)
-    return _order_out(o)
+    return _order_out(o, db)

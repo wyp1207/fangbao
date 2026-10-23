@@ -278,7 +278,12 @@ watch([levelFilter, ackFilter], async () => { page.value = 1; await reload() })
                 <button class="act" title="处置（写清做了什么）" :disabled="!auth.canWrite || !!a.closed_at" @click="openAct(a, 'handle')">✎</button>
                 <button v-if="a.camera_id" class="act" title="看当时的录像"
                         @click="goPlayback(a)">▶</button>
-                <button class="act" title="转工单（派单闭环）" :disabled="!auth.canWrite || !!a.closed_at" @click="asWorkOrder(a)">→</button>
+                <button v-if="!a.work_order_id" class="act" title="转工单（派单闭环）"
+                        :disabled="!auth.canWrite || !!a.closed_at" @click="asWorkOrder(a)">→</button>
+                <button v-else class="act ok" :title="`已生成工单 #${a.work_order_id}，点击查看`"
+                        @click="router.push({ name: 'work-orders', query: { focus: a.work_order_id } })">
+                  工单{{ a.work_order_id }}
+                </button>
                 <button class="act danger" title="关闭（给结论）" :disabled="!auth.canWrite || !!a.closed_at" @click="openAct(a, 'close')">⏹</button>
                 <button class="act" title="回看这个时刻的录像" @click="router.push({ name: 'record-playback', query: { date: a.started_at.slice(0, 10), t: a.started_at.slice(11, 19) } })">⟲</button>
               </div>
