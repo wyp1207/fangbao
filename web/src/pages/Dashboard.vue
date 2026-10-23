@@ -89,10 +89,13 @@ const sites = computed(() => {
   const names = [...new Set(devices.value.map((d) => d.station).filter(Boolean))]
   return (names.length ? names : ['未分场站']).map((n) => ({ value: n, label: n }))
 })
+// 设备下拉列出全部设备（含其他场站的），选谁就自动切到它的场站。
+// 之前按场站过滤，结果"实验室"里的两台在默认场站下根本选不到。
 const deviceOptions = computed(() =>
-  devices.value
-    .filter((d) => !site.value || d.station === site.value)
-    .map((d) => ({ value: String(d.id), label: d.name })),
+  devices.value.map((d) => ({
+    value: String(d.id),
+    label: d.station && d.station !== site.value ? `${d.name}（${d.station}）` : d.name,
+  })),
 )
 
 function onSite(v: string) {
