@@ -217,6 +217,49 @@ def _summary_impl(
     first_ts = db.scalar(select(func.min(TelemetrySample.ts)))
     last_ts = db.scalar(select(func.max(TelemetrySample.ts)))
 
+    # ---- 响应与闭环：告警→确认→工单→销号，每段耗时 ----
+    from app.models.inspection import WorkOrder as _WO2
+
+    def _avg(xs: list[float]) -> float | None:
+        return round(sum(xs) / len(xs), 1) if xs else None
+
+    ack_mins: list[float] = []
+    close_mins: list[float] = []
+    for a in alarms:
+        if a.acked_at and a.started_at:
+            ack_mins.append((a.acked_at - a.started_at).total_seconds() / 60)
+        if a.closed_at and a.started_at:
+            close_mins.append((a.closed_at - a.started_at).total_seconds() / 60)
+
+    alarm_ids = [a.id for a in alarms]
+    orders = (db.query(_WO2)
+              .filter(_WO2.created_at >= start, _WO2.created_at < end).all())
+    from_alarm = [o for o in orders if o.source == "alarm" and o.source_id in alarm_ids]
+    alarm_by_id = {a.id: a for a in alarms}
+
+    alarm_to_order: list[float] = []
+    order_close: list[float] = []
+    for o in from_alarm:
+        a = alarm_by_id.get(o.source_id)
+        if a and a.started_at and o.created_at:
+            alarm_to_order.append((o.created_at - a.started_at).total_seconds() / 60)
+        if o.closed_at and o.created_at:
+            order_close.append((o.closed_at - o.created_at).total_seconds() / 60)
+
+    response_metrics = {
+        "alarms": len(alarms),
+        "alarms_acked": sum(1 for a in alarms if a.acked_at),
+        "alarms_closed": sum(1 for a in alarms if a.closed_at),
+        "ack_avg_min": _avg(ack_mins),
+        "alarm_close_avg_min": _avg(close_mins),
+        "orders": len(orders),
+        "orders_from_alarm": len(from_alarm),
+        "alarm_to_order_avg_min": _avg(alarm_to_order),
+        "order_close_avg_min": _avg(order_close),
+        "order_close_rate": round(len([o for o in from_alarm if o.closed_at]) / len(from_alarm) * 100, 1)
+        if from_alarm else None,
+    }
+
     # ---- 考核：按人/班组统计人工巡检与工单 ----
     from app.models.inspection import InspectionItem as _II
     from app.models.inspection import InspectionTask as _IT
@@ -262,6 +305,7 @@ def _summary_impl(
         r["done_rate"] = round(r["done"] / r["tasks"] * 100, 1) if r["tasks"] else None
 
     return {
+        "response_metrics": response_metrics,
         "inspection_performance": sorted(perf.values(), key=lambda x: -x["tasks"]),
         "range": {"from": start.date().isoformat(), "to": (end - timedelta(days=1)).date().isoformat()},
         # 实际覆盖：选的区间可能没有那么多数据，页面要照实说
@@ -395,6 +439,26 @@ def export_xlsx(
     style_header(ws3, 8)
     for col, width in zip("ABCDEFGH", (22, 14, 12, 10, 10, 12, 14, 10)):
         ws3.column_dimensions[col].width = width
+
+    # 响应与闭环（甲方最关心的"发现→处置→销号"时长）
+    rm = data.get("response_metrics") or {}
+    ws5 = wb.create_sheet("响应闭环")
+    ws5.append(["环节", "数值"])
+    for k, v in [
+        ("告警总数", rm.get("alarms")),
+        ("已确认", rm.get("alarms_acked")),
+        ("已关闭", rm.get("alarms_closed")),
+        ("平均确认时长(分钟)", rm.get("ack_avg_min")),
+        ("平均关闭时长(分钟)", rm.get("alarm_close_avg_min")),
+        ("转工单数", rm.get("orders_from_alarm")),
+        ("告警→建单时长(分钟)", rm.get("alarm_to_order_avg_min")),
+        ("工单闭环时长(分钟)", rm.get("order_close_avg_min")),
+        ("工单闭环率(%)", rm.get("order_close_rate")),
+    ]:
+        ws5.append([k, v])
+    style_header(ws5, 2)
+    ws5.column_dimensions["A"].width = 26
+    ws5.column_dimensions["B"].width = 16
 
     ws4 = wb.create_sheet("运行")
     ws4.append(["指标", "数值"])
