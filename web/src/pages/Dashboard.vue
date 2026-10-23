@@ -1360,7 +1360,7 @@ async function logout() {
 
 /* ===== 实时消息：1:1 复刻参考（配色用豆包给出的精确值） ===== */
 .rt {
-  height: auto; flex: none;   /* 高度由内容决定，不留底部空白，地图吃剩余空间 */ display: flex; flex-direction: column;
+  height: 236px; flex: none;   /* 定高：左侧列表撑满到底，图表区不塌陷 */ display: flex; flex-direction: column;
   background: #0f2b52; border: 1px solid #3098e8; border-radius: 3px;
   box-shadow: 0 0 0 1px rgba(48, 152, 232, .25), 0 0 12px rgba(48, 152, 232, .18);
   overflow: hidden;
@@ -1375,8 +1375,8 @@ async function logout() {
   text-shadow: 0 0 8px rgba(255, 208, 64, .35);
 }
 /* 左栏比原来窄约 12%（70%→62%），右栏随之左移变宽 */
-.rt-body { flex: 1; min-height: 0; display: grid; align-items: stretch; grid-template-columns: 6.2fr 1px 3.8fr; }
-.rt-left { min-width: 0; display: flex; flex-direction: column; }
+.rt-body { flex: 1; min-height: 0; height: 100%; display: grid; grid-template-rows: minmax(0, 1fr); align-items: stretch; grid-template-columns: 6.2fr 1px 3.8fr; }
+.rt-left { min-width: 0; min-height: 0; height: 100%; display: flex; flex-direction: column; }
 .rt-tabs { display: flex; gap: 0; padding: 6px 8px 5px; flex: none; }
 .rt-tabs button {
   padding: 4px 14px; font-size: 12px; font-weight: 600; cursor: pointer;
@@ -1384,7 +1384,7 @@ async function logout() {
   margin-right: 4px;
 }
 .rt-tabs button.on { background: #54b8f5; color: #ffffff; border-color: #7fd0ff; }
-.rt-scroll { min-height: 0; max-height: 138px; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; }
+.rt-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; }
 .rt-scroll::-webkit-scrollbar { width: 6px; }
 .rt-scroll::-webkit-scrollbar-thumb { background: #2f7fc4; border-radius: 3px; }
 .rt-tbl { width: 100%; border-collapse: collapse; table-layout: fixed; }
