@@ -125,11 +125,13 @@ function onDevice(v: string) {
   void loadEnv()
   void loadTrend()
   void loadCaps()
+  void loadRuns()
   // 切设备时重建定时器：先清掉旧的，否则每切一次就多 3 个轮询
   timers.forEach((t) => window.clearInterval(t))
   timers = []
   timers.push(window.setInterval(loadEnv, 15000))
   timers.push(window.setInterval(loadTrend, 60000))
+  timers.push(window.setInterval(loadRuns, 10000))
 
   // 切设备时把场站也对齐，否则下拉显示"全部"、后面地图/健康还停在旧设备
   const d = devices.value.find((x) => String(x.id) === v)
@@ -152,6 +154,39 @@ function openVideo(which: string) {
   toast(`${which}通道未接入：真机联调后按 RTSP / WebRTC 接入`, 'warn', 3000)
 }
 const busyMotion = ref(false)
+
+// 今日任务状态（右半边）
+type RunRow = { id: number; name: string; status: string; steps?: number; ok?: number }
+const runs = ref<RunRow[]>([])
+const runStats = computed(() => {
+  const st = { total: runs.value.length, planned: 0, running: 0, done: 0, failed: 0, cancelled: 0 }
+  for (const r of runs.value) {
+    if (r.status in st) (st as Record<string, number>)[r.status] += 1
+  }
+  return st
+})
+const currentRun = computed(() => runs.value.find((r) => r.status === 'running') ?? null)
+const runStatusText = computed(() => {
+  const map: Record<string, string> = {
+    planned: '待执行', running: '正在执行', done: '已完成', failed: '失败', cancelled: '已取消',
+  }
+  return currentRun.value ? (map[currentRun.value.status] ?? currentRun.value.status) : '当前无任务'
+})
+const runEta = computed(() => {
+  const r = currentRun.value
+  if (!r || !r.steps) return '—'
+  const left = Math.max(0, r.steps - (r.ok ?? 0))
+  return left ? `${left} 个点位（约 ${left * 3} 分钟）` : '收尾中'
+})
+
+async function loadRuns() {
+  try {
+    const res = await api.taskRuns({ limit: 50 })
+    runs.value = ((res as unknown as { items?: RunRow[] }).items ?? [])
+  } catch {
+    runs.value = []
+  }
+}
 const caps = ref<{ actions?: string[] }>({})
 
 async function loadCaps() {
@@ -223,11 +258,19 @@ const env = ref<EnvSummary>({})
 // 环境面板只显示"这台设备上真有"的传感器（X30 有 SF6/温湿度，JCROB 可能是噪声）
 const envSensors = ref<{ name: string; unit: string; value: number | null }[]>([])
 
+function fmtEnv(v: number | null): string {
+  if (v === null || v === undefined) return '--'
+  const abs = Math.abs(v)
+  if (abs >= 100) return v.toFixed(1)      // 114.3
+  if (abs >= 10) return v.toFixed(1)       // 33.2
+  return v.toFixed(2)                      // 7.60
+}
+
 const envCells = computed(() =>
   envSensors.value.map((s) => ({
     label: s.name,
     unit: s.unit,
-    value: s.value,
+    value: s.value === null ? null : fmtEnv(s.value),
   })),
 )
 
@@ -286,11 +329,13 @@ onMounted(async () => {
   void loadEnv()
   void loadTrend()
   void loadCaps()
+  void loadRuns()
   // 切设备时重建定时器：先清掉旧的，否则每切一次就多 3 个轮询
   timers.forEach((t) => window.clearInterval(t))
   timers = []
   timers.push(window.setInterval(loadEnv, 15000))
   timers.push(window.setInterval(loadTrend, 60000))
+  timers.push(window.setInterval(loadRuns, 10000))
   void api.devices().then((rows) => {
     devices.value = rows.map((d) => ({ id: d.id, name: d.name, station: d.station }))
     site.value = rows[0]?.station ?? '未分场站'
@@ -453,6 +498,8 @@ async function logout() {
         </ScadaPanel>
 
         <ScadaPanel title="实时消息" tone="violet" class="h-msg" right="查看全部 →" right-to="alarms">
+          <div class="msg-split">
+          <div class="msg-main">
           <table class="tbl">
             <thead><tr><th>时间</th><th>级别</th><th>内容</th><th>状态</th></tr></thead>
             <tbody>
@@ -470,6 +517,26 @@ async function logout() {
               </tr>
             </tbody>
           </table>
+          </div>
+
+          <div class="msg-side">
+            <div class="ms-head">今日任务状态</div>
+            <div class="ms-row"><span>任务名称</span><b>{{ currentRun?.name || '—' }}</b></div>
+            <div class="ms-row"><span>任务状态</span>
+              <b :class="currentRun?.status === 'running' ? 'green' : currentRun ? 'gold' : 'dim'">
+                {{ runStatusText }}
+              </b>
+            </div>
+            <div class="ms-row"><span>预估剩余</span><b>{{ runEta }}</b></div>
+            <div class="ms-counts">
+              <div><b>{{ runStats.total }}</b><span>总数</span></div>
+              <div><b class="gold">{{ runStats.planned }}</b><span>待执行</span></div>
+              <div><b class="dim">{{ runStats.cancelled }}</b><span>已取消</span></div>
+              <div><b class="green">{{ runStats.done }}</b><span>正常</span></div>
+              <div><b class="red">{{ runStats.failed }}</b><span>异常</span></div>
+            </div>
+          </div>
+          </div>
         </ScadaPanel>
       </main>
 
@@ -802,7 +869,8 @@ async function logout() {
 .body {
   position: relative;
   display: grid;
-  grid-template-columns: clamp(300px, 22vw, 400px) minmax(0, 1fr) clamp(320px, 24vw, 430px);
+  /* 中栏比原来窄 8%，让左侧视频/控制更大一些 */
+  grid-template-columns: clamp(330px, 24.4vw, 440px) minmax(0, 0.92fr) clamp(320px, 24vw, 430px);
   grid-template-rows: minmax(0, 1fr);
   gap: 10px;
   padding: 10px 12px;
@@ -811,11 +879,28 @@ async function logout() {
 .body { min-height: 0; }
 .col { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
 .grow { flex: 1; min-height: 0; }
+.left .panel.grow { flex: 1 1 0; }   /* 可见光/热红外等高 */
 .col.center { display: grid; grid-template-rows: minmax(0, 1fr) auto; }
 .h-ctrl { height: 172px; flex: none; }
 .h-donut { height: 208px; flex: none; }
 .h-points { height: 176px; flex: none; }
-.h-msg { height: 196px; flex: none; }
+.h-msg { height: 232px; flex: none; }
+.h-msg :deep(.panel-body) { padding: 0; }
+.msg-split { display: grid; grid-template-columns: 5.8fr 4.2fr; height: 100%; min-height: 0; }
+.msg-main { min-width: 0; overflow: auto; }
+.msg-side {
+  padding: 4px 10px 8px; border-left: 1px solid rgba(111, 227, 255, .22);
+  display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; overflow: hidden;
+}
+.ms-head { color: #8ef0ff; font-weight: 600; letter-spacing: 1px; }
+.ms-row { display: flex; justify-content: space-between; gap: 6px; align-items: baseline; font-size: 11.5px; }
+.ms-row b { max-width: 62%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
+.ms-row span { color: #bfe6ff; }
+.ms-row b { color: #f2fbff; font-weight: 600; }
+.ms-counts { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; margin-top: 4px; }
+.ms-counts div { text-align: center; background: rgba(0, 90, 160, .35); border-radius: 3px; padding: 2px 0; }
+.ms-counts b { display: block; font-size: 14px; color: #f2fbff; line-height: 1.15; }
+.ms-counts span { font-size: 9.5px; color: #9fd2ff; line-height: 1.1; display: block; }
 
 .no-pad { padding: 6px !important; }
 .clickable { height: 100%; cursor: pointer; }
@@ -915,8 +1000,8 @@ async function logout() {
   background: linear-gradient(180deg, rgba(0, 110, 190, 0.45), rgba(0, 70, 140, 0.55));
   border: 1px solid rgba(111, 227, 255, 0.22);
 }
-.env-label { font-size: 11.5px; color: #cfeaff; }
-.env-value { font-size: 16px; color: #f2fbff; font-weight: 600; text-shadow: 0 0 8px rgba(120, 225, 255, 0.45); font-variant-numeric: tabular-nums; }
+.env-label { font-size: 11px; color: #cfeaff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.env-value { font-size: 15px; color: #f2fbff; font-weight: 600; text-shadow: 0 0 8px rgba(120, 225, 255, 0.45); font-variant-numeric: tabular-nums; }
 .env-value small { font-size: 10px; margin-left: 2px; color: #9fe0ff; font-weight: 400; text-shadow: none; }
 .env-value.empty { color: #7fb6dd; font-weight: 400; text-shadow: none; }
 
@@ -1085,4 +1170,10 @@ async function logout() {
 .trend-col .b-warn { background: linear-gradient(180deg, #ffe066, #d9a300); }
 .trend-x { font-size: 9px; color: #6f9dc4; line-height: 1; }
 .trend p { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; }
+
+/* 实时消息表格：级别/状态不换行，内容列吃剩余宽度 */
+.msg-main .tbl th:nth-child(1), .msg-main .tbl td:nth-child(1) { width: 72px; }
+.msg-main .tbl th:nth-child(2), .msg-main .tbl td:nth-child(2) { width: 70px; white-space: nowrap; }
+.msg-main .tbl th:nth-child(4), .msg-main .tbl td:nth-child(4) { width: 74px; white-space: nowrap; }
+.msg-main .tbl td:nth-child(3) { white-space: normal; }
 </style>
