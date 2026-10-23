@@ -1308,7 +1308,8 @@ async function logout() {
   color: #ffd040; font-weight: 700; font-size: 14px; letter-spacing: 3px;
   text-shadow: 0 0 8px rgba(255, 208, 64, .35);
 }
-.rt-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 7fr 1px 3fr; }
+/* 左栏比原来窄约 12%（70%→62%），右栏随之左移变宽 */
+.rt-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 6.2fr 1px 3.8fr; }
 .rt-left { min-width: 0; display: flex; flex-direction: column; }
 .rt-tabs { display: flex; gap: 0; padding: 6px 8px 5px; flex: none; }
 .rt-tabs button {
