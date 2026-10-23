@@ -529,11 +529,11 @@ async function logout() {
             </div>
             <div class="ms-row"><span>预估剩余</span><b>{{ runEta }}</b></div>
             <div class="ms-counts">
-              <div><b>{{ runStats.total }}</b><span>总数</span></div>
-              <div><b class="gold">{{ runStats.planned }}</b><span>待执行</span></div>
-              <div><b class="dim">{{ runStats.cancelled }}</b><span>已取消</span></div>
-              <div><b class="green">{{ runStats.done }}</b><span>正常</span></div>
-              <div><b class="red">{{ runStats.failed }}</b><span>异常</span></div>
+              <div><b class="c-total">{{ runStats.total }}</b><span>总数</span></div>
+              <div><b class="c-plan">{{ runStats.planned }}</b><span>待执行</span></div>
+              <div><b class="c-cancel">{{ runStats.cancelled }}</b><span>已取消</span></div>
+              <div><b class="c-done">{{ runStats.done }}</b><span>正常</span></div>
+              <div><b class="c-fail">{{ runStats.failed }}</b><span>异常</span></div>
             </div>
           </div>
           </div>
@@ -643,7 +643,7 @@ async function logout() {
 .board {
   position: fixed; inset: 0; z-index: 40;
   display: grid;
-  grid-template-rows: 54px 40px auto minmax(0, 1fr) 26px;
+  grid-template-rows: 54px 40px minmax(0, 1fr) 26px;   /* header/subbar/body/foot 四行 */
   overflow: hidden;   /* 整页固定，滚动只发生在面板内部 */
   color: #dff0ff;
   font-size: 13px;
@@ -884,20 +884,20 @@ async function logout() {
 .h-ctrl { height: 172px; flex: none; }
 .h-donut { height: 208px; flex: none; }
 .h-points { height: 176px; flex: none; }
-.h-msg { height: 232px; flex: none; }
+.h-msg { height: 244px; flex: none; }
 .h-msg :deep(.panel-body) { padding: 0; }
 .msg-split { display: grid; grid-template-columns: 5.8fr 4.2fr; height: 100%; min-height: 0; }
 .msg-main { min-width: 0; overflow: auto; }
 .msg-side {
   padding: 4px 10px 8px; border-left: 1px solid rgba(111, 227, 255, .22);
-  display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; overflow: hidden;
+  display: flex; flex-direction: column; gap: 1px; font-size: 11px; overflow: hidden;
 }
 .ms-head { color: #8ef0ff; font-weight: 600; letter-spacing: 1px; }
-.ms-row { display: flex; justify-content: space-between; gap: 6px; align-items: baseline; font-size: 11.5px; }
+.ms-row { display: flex; justify-content: space-between; gap: 6px; align-items: baseline; font-size: 11px; line-height: 1.35; }
 .ms-row b { max-width: 62%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
 .ms-row span { color: #bfe6ff; }
 .ms-row b { color: #f2fbff; font-weight: 600; }
-.ms-counts { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; margin-top: 4px; }
+.ms-counts { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; margin-top: 2px; }
 .ms-counts div { text-align: center; background: rgba(0, 90, 160, .35); border-radius: 3px; padding: 2px 0; }
 .ms-counts b { display: block; font-size: 14px; color: #f2fbff; line-height: 1.15; }
 .ms-counts span { font-size: 9.5px; color: #9fd2ff; line-height: 1.1; display: block; }
@@ -1053,7 +1053,7 @@ async function logout() {
   .h-ctrl { height: 182px; }
   .h-donut { height: 196px; }
   .h-points { height: 168px; }
-  .h-msg { height: 158px; }
+  .h-msg { height: 216px; }
 }
 
 /* 窄屏：仍保持固定三列，靠压缩列宽 + 面板内滚，不整页滚 */
@@ -1072,7 +1072,7 @@ async function logout() {
   .h-ctrl { height: 168px; }
   .h-donut { height: 190px; }
   .h-points { height: 160px; }
-  .h-msg { height: 150px; }
+  .h-msg { height: 200px; }
 }
 
 @media (max-width: 1240px) {
@@ -1176,4 +1176,42 @@ async function logout() {
 .msg-main .tbl th:nth-child(2), .msg-main .tbl td:nth-child(2) { width: 70px; white-space: nowrap; }
 .msg-main .tbl th:nth-child(4), .msg-main .tbl td:nth-child(4) { width: 74px; white-space: nowrap; }
 .msg-main .tbl td:nth-child(3) { white-space: normal; }
+
+/* ===== 实时消息：按参考图（工业蓝+青+橙）重做 ===== */
+.h-msg :deep(.panel-body) { padding: 0; }
+.h-msg .tbl th {
+  background: linear-gradient(180deg, #0d2a52, #0a244b);
+  color: #eaf3ff; font-size: 12.5px; font-weight: 700; letter-spacing: .5px;
+  border: 1px solid rgba(37, 116, 187, .75);
+}
+.h-msg .tbl td {
+  font-size: 12.5px; color: #eaf3ff;
+  border: 1px solid rgba(37, 116, 187, .55);
+  padding: 7px 8px;
+}
+.h-msg .tbl tbody tr:nth-child(even) td { background: transparent; }
+.h-msg .tbl tbody tr:hover td { background: rgba(47, 224, 240, .12); }
+.msg-side {
+  background: linear-gradient(180deg, rgba(8, 32, 64, .55), rgba(6, 24, 48, .35));
+  border-left: 2px solid rgba(37, 116, 187, .8);
+}
+.ms-head {
+  color: #ffc23c; font-weight: 700; letter-spacing: 1.5px; font-size: 12px;
+  padding-bottom: 2px; border-bottom: 1px solid rgba(37, 116, 187, .5);
+}
+.ms-row span { color: #7fd8ff; font-size: 11.5px; }
+.ms-row b { color: #ffb62e; font-weight: 700; font-size: 12px; }
+.ms-counts { gap: 4px; }
+.ms-counts div {
+  background: rgba(6, 26, 54, .55);
+  border: 1px solid rgba(37, 116, 187, .45);
+  border-radius: 2px; padding: 3px 0 2px;
+}
+.ms-counts b { font-size: 15px; font-weight: 700; }
+.ms-counts b.c-total { color: #ff6a6e; }
+.ms-counts b.c-plan { color: #ff6a6e; }
+.ms-counts b.c-cancel { color: #9fb8d0; }
+.ms-counts b.c-done { color: #4dff46; }
+.ms-counts b.c-fail { color: #ff4b45; }
+.ms-counts span { color: #8fb7d8; font-size: 9.5px; }
 </style>
