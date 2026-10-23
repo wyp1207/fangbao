@@ -22,7 +22,7 @@ import time
 log = logging.getLogger(__name__)
 
 FFMPEG = shutil.which("ffmpeg")
-FPS = 8
+FPS = 20   # 20fps 才不卡；8fps 肉眼就是"一卡一卡"
 
 
 def _scale_width() -> int:

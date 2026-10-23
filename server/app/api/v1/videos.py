@@ -178,7 +178,8 @@ def _go2rtc_url(stream_name: str) -> str | None:
         return None
     # 和 detask(8123) 一致：H265 相机走 _web 变体（约 0.5s 延迟、每路约 0.3 核）
     name = f"{stream_name}_web" if _has_web_variant(stream_name, base) else stream_name
-    return f"{base.rstrip('/')}/stream.html?src={name}&mode=mse"
+    mode = getattr(get_settings(), "video_play_mode", "webrtc") or "webrtc"
+    return f"{base.rstrip('/')}/stream.html?src={name}&mode={mode}"
 
 
 def _out(v: VideoSource) -> VideoOut:
