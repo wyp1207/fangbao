@@ -12,7 +12,7 @@
 set -euo pipefail
 
 cd "$(dirname "$0")"
-COMPOSE="docker compose -f docker-compose.yml"
+COMPOSE="docker compose --env-file env -f docker-compose.yml"
 DATA_ROOT=/data/jcrob-platform
 
 echo "== 1/5 环境检查 =="
@@ -27,7 +27,8 @@ done
 # 非 root 部署时 chown 会失败，退回 0777——内网单机可以接受，有 root 就用 chown。
 if ! chown -R 10001:10001 "$DATA_ROOT/recordings" "$DATA_ROOT/maps" 2>/dev/null; then
   echo "  (非 root，无法 chown，改用 chmod 777 让容器能写)"
-  chmod -R 777 "$DATA_ROOT/recordings" "$DATA_ROOT/maps"
+  # 有些旧文件是 root 建的，非 root 改不动；不能因为这个整脚本退出（set -e）
+  chmod -R 777 "$DATA_ROOT/recordings" "$DATA_ROOT/maps" 2>/dev/null || true
 fi
 df -h "$DATA_ROOT" | tail -1
 
