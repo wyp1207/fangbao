@@ -1195,3 +1195,33 @@ def test_x30_motion_udp():
     code, value, typ = (int.from_bytes(payload[i:i + 4], "little") for i in (0, 4, 8))
     assert code == 0x31010202          # 0x31 = 来自导航模块
     assert value == 0 and typ == 0
+
+
+def test_peripheral_derives_capabilities(auth_client):
+    """外设 → 能力派生：加了热像仪就有 video.thermal，删掉就没了。"""
+    from app.db.session import SessionLocal
+    from app.models.peripheral import Peripheral
+
+    with SessionLocal() as db:
+        before = auth_client.get("/api/v1/robots/1/capabilities").json()
+        assert "video.live" in before["capabilities"] or before["peripherals"] == []
+
+        p = Peripheral(robot_id=1, kind="thermal", vendor="hikvision", channel="CH201")
+        db.add(p)
+        db.commit()
+        db.refresh(p)
+
+    after = auth_client.get("/api/v1/robots/1/capabilities").json()
+    assert "video.thermal" in after["capabilities"]
+    assert "thermometry" in after["capabilities"]
+
+    # 外设接口能按设备列出
+    rows = auth_client.get("/api/v1/peripherals?robot_id=1").json()
+    assert any(r["kind"] == "thermal" for r in rows)
+
+    with SessionLocal() as db:
+        db.delete(db.get(Peripheral, p.id))
+        db.commit()
+
+    final = auth_client.get("/api/v1/robots/1/capabilities").json()
+    assert "video.thermal" not in final["capabilities"]

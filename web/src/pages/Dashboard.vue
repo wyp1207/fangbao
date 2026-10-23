@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import MapCanvas from '@/components/MapCanvas.vue'
 import ScadaPanel from '@/components/ScadaPanel.vue'
@@ -11,6 +11,7 @@ import UserMenu from '@/components/UserMenu.vue'
 import { toast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { ApiError } from '@/api/client'
+import { panelsFor } from '@/components/panels/registry'
 import { useRobotStore } from '@/stores/robot'
 import { api, type MapMeta, type NavPoint } from '@/api'
 import logoUrl from '@/assets/logo.png'
@@ -230,7 +231,7 @@ async function loadRuns() {
     runs.value = []
   }
 }
-const caps = ref<{ actions?: string[] }>({})
+const caps = ref<{ actions?: string[]; capabilities?: string[]; panels?: string[] }>({})
 
 async function loadCaps() {
   try {
@@ -240,7 +241,14 @@ async function loadCaps() {
     caps.value = {}
   }
 }
-const canStand = computed(() => (caps.value.actions ?? []).includes("stand_up"))
+const canStand = computed(() => (caps.value.actions ?? []).some((a) => a.startsWith("posture")))
+// 首页渲染哪些面板由外设能力决定（注册表驱动，不再写死）
+const panels = computed(() => panelsFor(caps.value.capabilities ?? []))
+const hasPanel = (k: string) => panels.value.some((p) => p.key === k)
+// 没有云台能力就别停在云台 tab 上
+watch(panels, (list) => {
+  if (!list.some((p) => p.key === 'ptz') && controlTab.value === 'ptz') controlTab.value = 'chassis'
+})
 
 /** X30 的起立/趴下是切换指令；写开关没开会直接 403，提示原因 */
 async function doMotion(action: 'stand' | 'lie') {
@@ -492,7 +500,7 @@ async function logout() {
           </div>
         </ScadaPanel>
 
-        <ScadaPanel title="热红外视频" tone="gold" class="grow" body-class="no-pad">
+        <ScadaPanel v-if="hasPanel('video.thermal') || true" title="热红外视频" tone="gold" class="grow" body-class="no-pad">
           <div class="embed">
             <iframe v-if="thermalStream" :src="thermalStream" title="热红外" allow="autoplay; fullscreen" />
             <div v-else class="embed-empty">
@@ -506,7 +514,7 @@ async function logout() {
 
         <ScadaPanel title="实时控制" class="h-ctrl">
           <div class="ctrl-tabs">
-            <button :class="{ on: controlTab === 'ptz' }" @click="controlTab = 'ptz'">云台控制</button>
+            <button v-if="hasPanel('ptz')" :class="{ on: controlTab === 'ptz' }" @click="controlTab = 'ptz'">云台控制</button>
             <button :class="{ on: controlTab === 'chassis' }" @click="controlTab = 'chassis'">车体控制</button>
           </div>
           <div class="ctrl-body">

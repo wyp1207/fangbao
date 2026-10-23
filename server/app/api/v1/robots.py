@@ -151,10 +151,24 @@ async def tasks(robot_id: int, adapter=Depends(get_adapter),
 @router.get("/{robot_id}/capabilities")
 def capabilities(robot_id: int, db: Session = Depends(get_db),
                  _user: User = Depends(get_current_user)) -> dict:
+    """能力 = 外设派生 + 适配器探测结果（派生为准，探测只补充版本信息）。"""
+    from app.models.peripheral import Peripheral
+    from app.services.capabilities import derive
+
     robot = _robot_or_default(db, robot_id)
-    if not robot.capabilities_json:
-        return {"probed": False, "message": "还没探测过，POST /probe"}
-    return {"probed": True, **json.loads(robot.capabilities_json)}
+    periphs = db.query(Peripheral).filter(Peripheral.robot_id == robot.id).all()
+    data = derive(robot, periphs)
+    probed = {}
+    if robot.capabilities_json:
+        try:
+            parsed = json.loads(robot.capabilities_json)
+            if isinstance(parsed, dict):
+                probed = parsed
+        except Exception:  # noqa: BLE001
+            probed = {}
+    data["probed"] = bool(probed)
+    data["probe"] = probed
+    return data
 
 
 @router.post("/{robot_id}/probe", dependencies=[Depends(require_csrf)])
