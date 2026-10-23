@@ -40,6 +40,7 @@ def ensure_from_alarm(db, alarm) -> WorkOrder | None:
         source_id=alarm_id,
         level=getattr(alarm, "level", "warn") or "warn",
         status="open",
+        due_at=sla.due_at(getattr(alarm, "priority", None), getattr(alarm, "level", None)),
         description=(getattr(alarm, "message", None) or "")[:500],
     )
     db.add(order)
