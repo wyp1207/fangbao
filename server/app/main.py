@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 
 from app.adapters.jcrob import build_adapter
 from app.adapters.jcrob import errors as jerr
-from app.api.v1 import (alarms, audit, auth, devices, health, map_library, metrics as health_metrics,
+from app.api.v1 import (alarms, audit, auth, devices, feed, health, map_library, metrics as health_metrics,
                         ai, api_clients, inspection, messages, notify, sensor_gateways, record_plans, recordings, reports, robots, sensors,
                         task_runs, task_templates, telemetry,
                         settings as settings_api, users, videos)
@@ -291,6 +291,7 @@ def create_app() -> FastAPI:
         )
 
     app.include_router(health.router)
+    app.include_router(feed.router, prefix=settings.api_prefix)
     app.include_router(health_metrics.router)
     app.include_router(auth.router, prefix=settings.api_prefix)
     app.include_router(robots.router, prefix=settings.api_prefix)

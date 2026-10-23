@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api, type AlarmItem } from '@/api'
 import { useRobotStore } from '@/stores/robot'
@@ -28,6 +28,7 @@ const keyword = ref('')
 const levelFilter = ref('')
 const ackFilter = ref('')
 const page = ref(1)
+const focusRow = ref<number | null>(null)
 const pageSize = 10
 
 const levelText: Record<string, string> = { critical: '严重', warn: '提醒' }
@@ -208,6 +209,14 @@ function exportCsv() {
 }
 
 onMounted(async () => {
+  const f = Number(route.query.focus ?? 0)
+  if (f) {
+    focusRow.value = f
+    await nextTick()
+    const el = document.querySelector(`tr[data-alarm-id="${f}"]`)
+    el?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    window.setTimeout(() => { focusRow.value = null }, 2400)
+  }
   applyQuery()
   await reload()
   void robot.refreshAlarms()
@@ -359,4 +368,6 @@ watch([levelFilter, ackFilter], async () => { page.value = 1; await reload() })
 .page > .panel:first-of-type { flex: 1; min-height: 0; overflow: auto; }
 .small { font-size: 12px; line-height: 1.6; }
 .num { font-variant-numeric: tabular-nums; }
+
+tr.flash td { background: rgba(255, 176, 46, .28) !important; box-shadow: inset 0 0 0 1px rgba(255,176,46,.7); }
 </style>

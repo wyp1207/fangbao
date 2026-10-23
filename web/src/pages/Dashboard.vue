@@ -126,12 +126,15 @@ function onDevice(v: string) {
   void loadTrend()
   void loadCaps()
   void loadRuns()
+  void loadFeed()
   // 切设备时重建定时器：先清掉旧的，否则每切一次就多 3 个轮询
   timers.forEach((t) => window.clearInterval(t))
   timers = []
   timers.push(window.setInterval(loadEnv, 15000))
   timers.push(window.setInterval(loadTrend, 60000))
   timers.push(window.setInterval(loadRuns, 10000))
+  timers.push(window.setInterval(loadFeed, 15000))
+  timers.push(window.setInterval(pollUnread, 30000))
 
   // 切设备时把场站也对齐，否则下拉显示"全部"、后面地图/健康还停在旧设备
   const d = devices.value.find((x) => String(x.id) === v)
@@ -154,8 +157,43 @@ function openVideo(which: string) {
   toast(`${which}通道未接入：真机联调后按 RTSP / WebRTC 接入`, 'warn', 3000)
 }
 const busyMotion = ref(false)
-const msgTab = ref<'patrol' | 'alarm' | 'ctrl'>('patrol')
-const msgRows = computed(() => robot.alarms.slice(0, 6))
+type FeedRow = { id: number; ts: string; text: string; level: string; badge: string; link: string }
+const msgTab = ref<'patrol' | 'alarm' | 'control'>('alarm')
+const tabTitle = computed(() => ({ patrol: '巡检消息', alarm: '告警内容', control: '控制指令' }[msgTab.value]))
+// 未读：记录每个 tab 见过的最大 id，轮询发现更大就点亮红点
+const lastSeen = ref<Record<string, number>>({ patrol: 0, alarm: 0, control: 0 })
+const unread = ref<Record<string, boolean>>({ patrol: false, alarm: false, control: false })
+
+function markSeen() {
+  const top = feedRows.value[0]?.id ?? 0
+  lastSeen.value[msgTab.value] = Math.max(lastSeen.value[msgTab.value] ?? 0, top)
+  unread.value[msgTab.value] = false
+}
+
+async function pollUnread() {
+  for (const kind of ['patrol', 'alarm', 'control'] as const) {
+    if (kind === msgTab.value) continue
+    try {
+      const top = (await api.dashboardFeed(kind, 1)).items[0]?.id ?? 0
+      if (top > (lastSeen.value[kind] ?? 0)) unread.value[kind] = true
+    } catch { /* 忽略 */ }
+  }
+}
+const feedRows = ref<FeedRow[]>([])
+const msgRows = computed(() => feedRows.value)
+
+async function loadFeed() {
+  try {
+    feedRows.value = (await api.dashboardFeed(msgTab.value, 30)).items
+    markSeen()
+  } catch {
+    feedRows.value = []
+  }
+}
+
+function openMsg(row: FeedRow) {
+  void router.push(row.link)     // 和后端页面一一对应：告警/任务执行/系统日志
+}
 const alarmUnacked = computed(() => robot.alarms.filter((a) => !a.acked_at).length)
 const alarmAcked = computed(() => robot.alarms.filter((a) => !!a.acked_at).length)
 const alarmCritical = computed(() => robot.alarms.filter((a) => a.level === 'critical').length)
@@ -335,12 +373,15 @@ onMounted(async () => {
   void loadTrend()
   void loadCaps()
   void loadRuns()
+  void loadFeed()
   // 切设备时重建定时器：先清掉旧的，否则每切一次就多 3 个轮询
   timers.forEach((t) => window.clearInterval(t))
   timers = []
   timers.push(window.setInterval(loadEnv, 15000))
   timers.push(window.setInterval(loadTrend, 60000))
   timers.push(window.setInterval(loadRuns, 10000))
+  timers.push(window.setInterval(loadFeed, 15000))
+  timers.push(window.setInterval(pollUnread, 30000))
   void api.devices().then((rows) => {
     devices.value = rows.map((d) => ({ id: d.id, name: d.name, station: d.station }))
     site.value = rows[0]?.station ?? '未分场站'
@@ -507,23 +548,34 @@ async function logout() {
           <div class="rt-body">
             <div class="rt-left">
               <div class="rt-tabs">
-                <button :class="{ on: msgTab === 'patrol' }" @click="msgTab = 'patrol'">巡检消息</button>
-                <button :class="{ on: msgTab === 'alarm' }" @click="msgTab = 'alarm'">告警消息</button>
-                <button :class="{ on: msgTab === 'ctrl' }" @click="msgTab = 'ctrl'">控制消息</button>
+                <button :class="{ on: msgTab === 'patrol' }" @click="msgTab = 'patrol'; loadFeed()">
+                  巡检消息<i v-if="unread.patrol" class="dot-new" />
+                </button>
+                <button :class="{ on: msgTab === 'alarm' }" @click="msgTab = 'alarm'; loadFeed()">
+                  告警消息<i v-if="unread.alarm" class="dot-new" />
+                </button>
+                <button :class="{ on: msgTab === 'control' }" @click="msgTab = 'control'; loadFeed()">
+                  控制消息<i v-if="unread.control" class="dot-new" />
+                </button>
               </div>
               <div class="rt-scroll">
                 <table class="rt-tbl">
-                  <thead><tr><th>时间</th><th>巡检消息</th></tr></thead>
+                  <thead><tr><th>时间</th><th>{{ tabTitle }}</th><th>状态</th></tr></thead>
                   <tbody>
                     <tr v-for="a in msgRows" :key="a.id" class="clickable-row"
-                        title="点击查看告警" @click="goAlarms('unacked')">
-                      <td class="c-time">{{ a.started_at.slice(0, 16).replace('T', ' ') }}</td>
+                        :title="`${a.ts} 打开详情：${a.link}`" @click="openMsg(a)">
+                      <td class="c-time">{{ a.ts.slice(11, 19) || a.ts }}</td>
                       <td class="c-text">
-                        {{ a.message }}
-                        <i class="st" :class="a.acked_at ? 'g' : 'r'">{{ a.acked_at ? '正常' : '异常' }}</i>
+                        <i class="bar" :class="a.level" />
+                        <span class="ellipsis">{{ a.text }}</span>
+                      </td>
+                      <td class="c-badge">
+                        <em class="pill" :class="a.level === 'critical' ? 'bad' : a.level === 'warn' ? 'warn' : 'ok'">
+                          {{ a.badge }}
+                        </em>
                       </td>
                     </tr>
-                    <tr v-if="!msgRows.length"><td colspan="2" class="dim">暂无消息</td></tr>
+                    <tr v-if="!msgRows.length"><td colspan="3" class="dim">暂无消息</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -1324,7 +1376,9 @@ async function logout() {
   margin-right: 4px;
 }
 .rt-tabs button.on { background: #54b8f5; color: #ffffff; border-color: #7fd0ff; }
-.rt-scroll { flex: 1; min-height: 0; overflow: auto; }
+.rt-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; }
+.rt-scroll::-webkit-scrollbar { width: 6px; }
+.rt-scroll::-webkit-scrollbar-thumb { background: #2f7fc4; border-radius: 3px; }
 .rt-tbl { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .rt-tbl th {
   color: #ffffff; font-size: 12px; font-weight: 700; text-align: left;
@@ -1360,7 +1414,7 @@ async function logout() {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .rt-groups {
-  display: flex; flex-direction: column; gap: 2px; margin-top: auto; flex: none;
+  display: flex; flex-direction: column; gap: 2px; margin-top: 4px; flex: none;
   border-top: 1px solid #3098e8; padding-top: 5px;
 }
 .rt-grow { display: grid; grid-template-columns: 60px repeat(3, 1fr); align-items: baseline; white-space: nowrap; }
@@ -1372,4 +1426,23 @@ async function logout() {
 .rt-grow .gv i.w { color: #ffffff; }
 .rt-grow .gv i.g { color: #30d040; text-shadow: 0 0 8px rgba(48, 208, 64, .4); }
 
+
+/* 三列消息表：色条 + 省略 + 状态 pill */
+.rt-tbl th:nth-child(1) { width: 74px; }
+.rt-tbl th:nth-child(3) { width: 66px; }
+.rt-tbl .c-time { color: #cfe6ff; white-space: nowrap; }
+.rt-tbl .c-text { display: flex; align-items: center; gap: 6px; }
+.rt-tbl .c-text .bar { flex: none; width: 3px; height: 13px; border-radius: 1px; background: #3a6f9e; }
+.rt-tbl .c-text .bar.critical { background: #ff3333; box-shadow: 0 0 6px rgba(255,51,51,.6); }
+.rt-tbl .c-text .bar.warn { background: #ffa82e; }
+.rt-tbl .c-text .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rt-tbl .c-badge { text-align: center; }
+.rt-tbl .pill { font-style: normal; font-size: 10.5px; padding: 1px 6px; border-radius: 2px; }
+.rt-tbl .pill.bad { color: #fff; background: #d33; }
+.rt-tbl .pill.warn { color: #06253f; background: #ffa82e; }
+.rt-tbl .pill.ok { color: #4dff46; border: 1px solid rgba(77,255,70,.55); }
+.rt-tabs .dot-new {
+  display: inline-block; width: 6px; height: 6px; margin-left: 4px; border-radius: 50%;
+  background: #ff3b3b; box-shadow: 0 0 6px #ff3b3b; vertical-align: middle;
+}
 </style>
