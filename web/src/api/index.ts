@@ -343,6 +343,8 @@ export const api = {
   cancelCruise: (id: number) =>
     request<{ ok: boolean }>(`/task-runs/${id}/cruise/cancel`, { method: 'POST' }),
   cruiseStatus: () => request<{ running: number[] }>('/task-runs/cruise/status'),
+  robotMotion: (id: number, action: 'stand' | 'lie') =>
+    request<{ ok: boolean }>(`/robots/${id}/motion`, { method: 'POST', body: { action } }),
   pauseTaskRun: (id: number) =>
     request<Record<string, unknown>>(`/task-runs/${id}/pause`, { method: 'POST' }),
   resumeTaskRun: (id: number) =>

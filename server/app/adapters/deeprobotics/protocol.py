@@ -38,6 +38,13 @@ MOTION_STATES = {
 }
 NAV_STATES = {"0": "完成", "1": "执行中", "-1": "无法执行"}
 
+# 运动控制走 UDP（官方文档 2udp指令.md）：三个 uint32 小端 = code / 指令值 / 类型
+MOTION_HOST_DEFAULT = "192.168.1.103"
+MOTION_UDP_PORT = 43893
+CMD_STAND_LIE = 0x31010202   # 起立/趴下轮流切换（0x31 = 来自导航模块）
+CMD_START_STOP = 0x31010201  # 开始/停止运动
+CMD_SOFT_ESTOP = 0x21010206  # 软急停（保留，不用）
+
 MOTION_STAND = 18
 MOTION_LIE = 15
 
@@ -91,6 +98,17 @@ def read_frame(sock: socket.socket) -> tuple[bytes, bytes]:
     if length <= 0 or length > 65535:
         raise ValueError(f"长度异常: {length}")
     return magic, _recv_exact(sock, length)
+
+
+def send_motion(code: int, host: str = MOTION_HOST_DEFAULT,
+                port: int = MOTION_UDP_PORT, value: int = 0,
+                timeout: float = 2.0) -> dict:
+    """发一条 UDP 简单指令到运动主机。返回 {"ok": bool, "code": hex}。"""
+    payload = struct.pack("<III", code, value, 0)
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        sock.settimeout(timeout)
+        sock.sendto(payload, (host, port))
+    return {"ok": True, "code": hex(code)}
 
 
 class X30Client:

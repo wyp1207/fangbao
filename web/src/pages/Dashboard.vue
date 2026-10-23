@@ -10,6 +10,7 @@ import TopNav from '@/components/TopNav.vue'
 import UserMenu from '@/components/UserMenu.vue'
 import { toast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
+import { ApiError } from '@/api/client'
 import { useRobotStore } from '@/stores/robot'
 import { api, type MapMeta, type NavPoint } from '@/api'
 import logoUrl from '@/assets/logo.png'
@@ -146,6 +147,22 @@ function goVideo(v: { id: number } | null) {
 function openVideo(which: string) {
   toast(`${which}通道未接入：真机联调后按 RTSP / WebRTC 接入`, 'warn', 3000)
 }
+const busyMotion = ref(false)
+
+/** X30 的起立/趴下是切换指令；写开关没开会直接 403，提示原因 */
+async function doMotion(action: 'stand' | 'lie') {
+  busyMotion.value = true
+  try {
+    await api.robotMotion(Number(deviceId.value), action)
+    toast(action === 'stand' ? '已发送起立指令' : '已发送趴下指令', 'ok', 3000)
+  } catch (e) {
+    const msg = e instanceof ApiError ? e.message : '指令发送失败'
+    toast(msg, e instanceof ApiError && e.code === 'WRITE_LOCKED' ? 'warn' : 'danger', 5000)
+  } finally {
+    busyMotion.value = false
+  }
+}
+
 function tryControl() {
   toast('写操作未开放：需真机联调通过 + 现场授权签字（采集表 01 表 15–17 行）', 'warn', 3200)
 }
@@ -377,6 +394,10 @@ async function logout() {
           <div class="ctrl-body">
             <div class="stick" title="点击查看为什么不能操作" @click="tryControl"><span class="knob" /></div>
             <div class="ctrl-meta">
+              <div class="pose-actions">
+                <button class="btn" :disabled="busyMotion" @click="doMotion('stand')">起立</button>
+                <button class="btn" :disabled="busyMotion" @click="doMotion('lie')">趴下</button>
+              </div>
               <div><span>电压</span><b>{{ num(galileo.power, 1) }} V</b></div>
               <div><span>速度</span><b>{{ num(galileo.currentSpeedX) }} m/s</b></div>
               <div><span>角速度</span><b>{{ num(galileo.currentSpeedTheta, 3) }} rad/s</b></div>
