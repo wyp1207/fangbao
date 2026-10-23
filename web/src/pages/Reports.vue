@@ -44,6 +44,7 @@ const preset = ref('7d')
 const dateFrom = ref('')
 const dateTo = ref('')
 const data = ref<Summary | null>(null)
+const kpi = ref<Record<string, unknown> | null>(null)
 
 // 「响应与闭环」统计（毫秒没有，统一分钟；空值显示 —）
 const rm = computed(() => data.value?.response_metrics ?? {
@@ -105,6 +106,11 @@ function applyPreset(v: string) {
   if (v !== 'custom') void load()
 }
 
+function pCount(p: string): number {
+  const m = (kpi.value?.by_priority ?? {}) as Record<string, number>
+  return m[p] ?? 0
+}
+
 function duration(sec: number | null): string {
   if (sec === null || sec === undefined) return '—'
   if (sec < 60) return `${Math.round(sec)} 秒`
@@ -115,7 +121,12 @@ function duration(sec: number | null): string {
 async function load() {
   loading.value = true
   try {
-    data.value = await api.reportSummary(dateFrom.value || undefined, dateTo.value || undefined) as unknown as Summary
+    const [summary, k] = await Promise.all([
+      api.reportSummary(dateFrom.value || undefined, dateTo.value || undefined),
+      api.alarmKpi(24).catch(() => null),
+    ])
+    data.value = summary as unknown as Summary
+    kpi.value = k as Record<string, unknown> | null
   } finally {
     loading.value = false
   }
@@ -240,6 +251,23 @@ onMounted(() => applyPreset('7d'))
                   <td class="muted small">建单 → 销号</td></tr>
                 <tr><td>工单闭环率</td><td class="num">{{ rm.order_close_rate === null ? '—' : rm.order_close_rate + '%' }}</td>
                   <td class="muted small">来源告警的工单里已销号的比例</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="block">
+            <div class="block-title">告警治理 KPI（近 24h）</div>
+            <table class="grid">
+              <thead><tr><th>指标</th><th style="width:110px">当前</th><th style="width:110px">目标</th></tr></thead>
+              <tbody>
+                <tr><td>告警频次（条/小时）</td><td class="num">{{ kpi?.per_hour ?? '—' }}</td><td class="num muted">≤ 6</td></tr>
+                <tr><td>10 分钟峰值</td><td class="num">{{ kpi?.peak_10min ?? '—' }}</td><td class="num muted">≤ 10</td></tr>
+                <tr><td>洪泛时间占比</td><td class="num">{{ kpi?.flood_ratio ?? '—' }}%</td><td class="num muted">&lt; 1%</td></tr>
+                <tr><td>未确认 / 未关闭</td><td class="num">{{ kpi?.unacked ?? '—' }} / {{ kpi?.open ?? '—' }}</td><td class="num muted">0</td></tr>
+                <tr><td>P1 / P2 / P3</td>
+                  <td class="num">{{ pCount('P1') }} / {{ pCount('P2') }} / {{ pCount('P3') }}</td>
+                  <td class="num muted">P1 单独跟踪</td></tr>
+                <tr><td>搁置中</td><td class="num">{{ kpi?.shelved ?? 0 }}</td><td class="num muted">有原因有期限</td></tr>
               </tbody>
             </table>
           </div>

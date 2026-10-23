@@ -185,6 +185,7 @@ export interface AlarmPage {
 
 export interface AlarmItem {
   work_order_id?: number | null
+  priority?: string | null
   status?: 'new' | 'acked' | 'handled' | 'closed'
   handled_at?: string | null
   handled_by?: string | null
@@ -283,6 +284,7 @@ export const api = {
       .join('&')
     return request<{ total: number; items: Record<string, unknown>[] }>(`/notify/logs${qs ? `?${qs}` : ''}`)
   },
+  alarmKpi: (hours = 24) => request<Record<string, unknown>>(`/alarms/kpi?hours=${hours}`),
   reportSummary: (dateFrom?: string, dateTo?: string) => {
     const q: string[] = []
     if (dateFrom) q.push(`date_from=${dateFrom}`)

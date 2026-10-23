@@ -44,10 +44,22 @@ def upgrade() -> None:
                 op.add_column("robot", sa.Column(name, typ))
 
     if insp.has_table("alarm_record"):
-        have = cols("alarm_record")
+        insp2 = sa.inspect(op.get_bind())
+        have = {c["name"] for c in insp2.get_columns("alarm_record")}
         for name, typ in ALARM_COLS:
             if name not in have:
                 op.add_column("alarm_record", sa.Column(name, typ))
+
+        # 历史告警回填分级（列加完再 UPDATE）
+        op.execute("""
+            UPDATE alarm_record SET priority = CASE
+              WHEN level='critical' AND (metric LIKE '%env_gas%' OR metric LIKE '%estop%'
+                   OR metric LIKE '%smoke%' OR metric LIKE '%fire%') THEN 'P1'
+              WHEN level='critical' THEN 'P2'
+              WHEN level='warn' THEN 'P3'
+              ELSE 'P4' END
+            WHERE priority IS NULL
+        """)
 
 
 def downgrade() -> None:

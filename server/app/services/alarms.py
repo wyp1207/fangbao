@@ -47,6 +47,22 @@ class Alarm:
         }
 
 
+# ISA-18.2 式分级的简化落地：后果 × 允许响应时间
+# P1 立即（安全/人身）、P2 紧急（设备/生产）、P3 一般、P4 提示
+SAFETY_METRICS = ("estop", "env_gas", "smoke", "fire")
+
+
+def priority_for(metric: str, level: str) -> str:
+    m = (metric or "").lower()
+    if level == "critical":
+        if any(k in m for k in SAFETY_METRICS):
+            return "P1"
+        return "P2"
+    if level == "warn":
+        return "P3"
+    return "P4"
+
+
 class AlarmStore:
     def __init__(self, *, max_items: int = 200, dedupe_s: float = 60.0,
                  low_battery_warn: int = 20, low_battery_critical: int = 10,
@@ -236,6 +252,7 @@ class AlarmStore:
                 value_json=json.dumps(alarm.value, ensure_ascii=False) if alarm.value is not None else None,
                 started_at=_now(), robot_id=robot_id,
                 camera_id=getattr(alarm, "camera_id", None),
+                priority=priority_for(alarm.metric, alarm.level),
             )
             db.add(rec)
             db.commit()
