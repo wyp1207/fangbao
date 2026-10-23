@@ -83,9 +83,17 @@ function open(m: { to: Record<string, unknown> }) {
   void router.push({ name: t.name, query: t.query as Record<string, string> })
 }
 
-function markAllRead() {
-  readTs.value = Date.now() / 1000
-  localStorage.setItem(READ_KEY, String(readTs.value))
+async function markAllRead() {
+  // 服务端也记一份：换浏览器/刷新后仍然已读，未读数各页也一致
+  try {
+    const res = await api.markAllRead()
+    readTs.value = res.read_ts
+    localStorage.setItem(READ_KEY, String(res.read_ts))
+    await load()
+  } catch {
+    readTs.value = Date.now() / 1000
+    localStorage.setItem(READ_KEY, String(readTs.value))
+  }
 }
 
 async function load() {

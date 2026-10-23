@@ -36,6 +36,26 @@ def list_alarms(
     return res
 
 
+def _sync_order(db, alarm_id: int, note: str | None = None) -> None:
+    """告警关闭时把未销号的关联工单一起关掉，避免"告警关了工单还挂着"。"""
+    from datetime import datetime
+
+    from app.models.inspection import WorkOrder
+
+    try:
+        o = (db.query(WorkOrder)
+             .filter(WorkOrder.source == "alarm", WorkOrder.source_id == alarm_id,
+                     WorkOrder.status != "closed")
+             .first())
+        if o is not None:
+            o.status = "closed"
+            o.closed_at = datetime.now()
+            o.resolution = (f"{o.resolution}｜" if o.resolution else "") + "来源告警已关闭（联动）"
+            o.description = (o.description or "") + (f"｜告警结论：{note}" if note else "")
+    except Exception:  # noqa: BLE001
+        pass
+
+
 @router.post("/{alarm_id}/shelve", dependencies=[Depends(require_csrf)])
 def shelve_alarm(
     alarm_id: int,
@@ -209,6 +229,7 @@ def close_alarm(
     alarm = store.close(alarm_id, who=user.username, resolution=body.resolution, note=body.note)
     if alarm is None:
         raise NotFound(f"告警 {alarm_id} 不存在")
+    _sync_order(db, alarm_id, note=body.resolution)
     from app.services.messages import store as msg_store
 
     msg_store.add("info", "alarm", f"告警已关闭：{alarm['message']}",
