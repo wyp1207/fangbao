@@ -257,10 +257,30 @@ class AlarmStore:
             except Exception:  # noqa: BLE001 - 外发失败不能影响告警主流程
                 pass
 
+    def _is_shelved(self, metric: str) -> bool:
+        """同指标有未到期搁置 → 不上报告警（ISA-18.2 shelve）。"""
+        try:
+            from app.models.alarm import AlarmRecord
+
+            if self._session_factory is None:
+                return False
+            with self._session_factory() as db:  # type: ignore[misc]
+                row = (db.query(AlarmRecord)
+                       .filter(AlarmRecord.metric == metric,
+                               AlarmRecord.shelved_until.isnot(None))
+                       .order_by(AlarmRecord.id.desc()).first())
+                if row is None or row.shelved_until is None:
+                    return False
+                return row.shelved_until > datetime.now()
+        except Exception:  # noqa: BLE001
+            return False
+
     def raise_external(self, *, metric: str, level: str, message: str,
                        value: Any = None, camera_id: int | None = None,
                        robot_id: int | None = None) -> Alarm | None:
         """平台侧非遥测来源的告警（如环境传感器超限）。同样去重、同样落库。"""
+        if self._is_shelved(metric):
+            return None
         now = time.monotonic()
         with self._lock:
             last = self._last_raised.get(metric)

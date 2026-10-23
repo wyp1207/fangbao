@@ -36,6 +36,53 @@ def list_alarms(
     return res
 
 
+@router.post("/{alarm_id}/shelve", dependencies=[Depends(require_csrf)])
+def shelve_alarm(
+    alarm_id: int,
+    body: dict,
+    db: Session = Depends(get_db),
+    me: User = Depends(require_roles("admin", "operator", "safety")),
+) -> dict:
+    """搁置告警（ISA-18.2）：检修/标定时临时屏蔽，必须填原因和时长。"""
+    from datetime import datetime, timedelta
+
+    from app.models.alarm import AlarmRecord
+
+    minutes = int(body.get("minutes") or 0)
+    reason = str(body.get("reason") or "").strip()
+    if minutes <= 0 or minutes > 7 * 24 * 60:
+        raise BadRequest("搁置时长需在 1 分钟到 7 天之间", code="BAD_DURATION")
+    if not reason:
+        raise BadRequest("必须填写搁置原因（审计要留痕）", code="REASON_REQUIRED")
+
+    a = db.get(AlarmRecord, alarm_id)
+    if a is None:
+        raise NotFound("告警不存在")
+    a.shelved_until = datetime.now() + timedelta(minutes=minutes)
+    a.shelve_reason = reason[:200]
+    db.commit()
+    audit(db=db, action="alarm.shelve", target=f"#{alarm_id}", user=me,
+          detail={"minutes": minutes, "reason": reason})
+    return {"ok": True, "shelved_until": a.shelved_until.isoformat(timespec="minutes")}
+
+
+@router.delete("/{alarm_id}/shelve", dependencies=[Depends(require_csrf)])
+def unshelve_alarm(
+    alarm_id: int, db: Session = Depends(get_db),
+    me: User = Depends(require_roles("admin", "operator", "safety")),
+) -> dict:
+    from app.models.alarm import AlarmRecord
+
+    a = db.get(AlarmRecord, alarm_id)
+    if a is None:
+        raise NotFound("告警不存在")
+    a.shelved_until = None
+    a.shelve_reason = None
+    db.commit()
+    audit(db=db, action="alarm.unshelve", target=f"#{alarm_id}", user=me)
+    return {"ok": True}
+
+
 @router.get("/latest")
 def latest_alarms(
     limit: int = Query(50, le=200),

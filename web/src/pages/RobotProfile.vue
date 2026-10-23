@@ -27,6 +27,9 @@ const tried = ref(false)
 const form = ref({
   name: '', device_type: 'jcrob_wheel', adapter: 'jcrob_http', station: '默认场站',
   ip: '', port: 3546, ws_port: 3547, username: 'admin', password: '', mode: 'http', note: '',
+  // 防爆资产台账（验收必问）
+  asset_no: '', ex_marking: '', ex_cert_no: '', ex_cert_expiry: '',
+  ex_zone: '', owner: '', maint_due: '',
 })
 
 const deviceTypeOptions = computed(() => meta.value.device_types)
@@ -58,6 +61,9 @@ function openCreate() {
   form.value = {
     name: '', device_type: 'jcrob_wheel', adapter: 'jcrob_http', station: '默认场站',
     ip: '', port: 3546, ws_port: 3547, username: 'admin', password: '', mode: 'http', note: '',
+    asset_no: '' as string, ex_marking: '' as string, ex_cert_no: '' as string,
+    ex_cert_expiry: '' as string, ex_zone: '' as string, owner: '' as string,
+    maint_due: '' as string,
   }
   creating.value = true
 }
@@ -67,6 +73,10 @@ function openEdit(d: DeviceItem) {
     name: d.name, device_type: d.device_type, adapter: d.adapter, station: d.station,
     ip: d.ip, port: d.port, ws_port: d.ws_port, username: d.username ?? '',
     password: '', mode: d.mode, note: d.note ?? '',
+    asset_no: (d as any).asset_no ?? '', ex_marking: (d as any).ex_marking ?? '',
+    ex_cert_no: (d as any).ex_cert_no ?? '', ex_cert_expiry: (d as any).ex_cert_expiry ?? '',
+    ex_zone: (d as any).ex_zone ?? '', owner: (d as any).owner ?? '',
+    maint_due: (d as any).maint_due ?? '',
   }
   editing.value = d
 }
@@ -232,6 +242,20 @@ onMounted(async () => {
           <label class="fld"><span>账号</span><input class="input" v-model="form.username" /></label>
           <label class="fld"><span>密码</span><input class="input" type="password" v-model="form.password" placeholder="留空表示用服务端默认" /></label>
         </div>
+
+        <div class="fld-row">
+          <label class="fld"><span>资产编号</span><input class="input" v-model="form.asset_no" /></label>
+          <label class="fld"><span>防爆标志</span><input class="input" v-model="form.ex_marking" placeholder="Ex d IIB T4 Gb" /></label>
+        </div>
+        <div class="fld-row">
+          <label class="fld"><span>防爆合格证号</span><input class="input" v-model="form.ex_cert_no" /></label>
+          <label class="fld"><span>证书有效期</span><input class="input" type="date" v-model="form.ex_cert_expiry" /></label>
+        </div>
+        <div class="fld-row">
+          <label class="fld"><span>防爆区域</span><input class="input" v-model="form.ex_zone" placeholder="Zone 1 / Zone 2" /></label>
+          <label class="fld"><span>设备责任人</span><input class="input" v-model="form.owner" /></label>
+          <label class="fld"><span>下次维保</span><input class="input" type="date" v-model="form.maint_due" /></label>
+        </div>
         <label class="fld"><span>备注</span><input class="input" v-model="form.note" /></label>
         <div class="modal-actions">
           <button class="btn btn-sm" @click="creating = false">取消</button>
@@ -255,6 +279,20 @@ onMounted(async () => {
         <div class="two">
           <label class="fld"><span>账号</span><input class="input" v-model="form.username" /></label>
           <label class="fld"><span>密码</span><input class="input" type="password" v-model="form.password" placeholder="留空不改" /></label>
+        </div>
+
+        <div class="fld-row">
+          <label class="fld"><span>资产编号</span><input class="input" v-model="form.asset_no" /></label>
+          <label class="fld"><span>防爆标志</span><input class="input" v-model="form.ex_marking" placeholder="Ex d IIB T4 Gb" /></label>
+        </div>
+        <div class="fld-row">
+          <label class="fld"><span>防爆合格证号</span><input class="input" v-model="form.ex_cert_no" /></label>
+          <label class="fld"><span>证书有效期</span><input class="input" type="date" v-model="form.ex_cert_expiry" /></label>
+        </div>
+        <div class="fld-row">
+          <label class="fld"><span>防爆区域</span><input class="input" v-model="form.ex_zone" placeholder="Zone 1 / Zone 2" /></label>
+          <label class="fld"><span>设备责任人</span><input class="input" v-model="form.owner" /></label>
+          <label class="fld"><span>下次维保</span><input class="input" type="date" v-model="form.maint_due" /></label>
         </div>
         <label class="fld"><span>备注</span><input class="input" v-model="form.note" /></label>
         <div class="modal-actions">
@@ -289,4 +327,7 @@ onMounted(async () => {
 .fld .input { width: 100%; }
 .two { display: grid; grid-template-columns: 1fr 120px; gap: 10px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+
+.fld-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+.fld-row .fld { margin-bottom: 0; }
 </style>

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, DateTime, Integer, String, Text, func
+from sqlalchemy import Boolean, Date, DateTime, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -33,6 +33,15 @@ class Robot(Base):
 
     version: Mapped[str | None] = mapped_column(String(32), nullable=True)
     slam_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # 防爆资产台账（验收必问：标志/证书/有效期/区域/责任人）
+    asset_no: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ex_marking: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ex_cert_no: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ex_cert_expiry: Mapped[date | None] = mapped_column(Date, nullable=True)
+    ex_zone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    owner: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    maint_due: Mapped[date | None] = mapped_column(Date, nullable=True)
+
     capabilities_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     config_view_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 

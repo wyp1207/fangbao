@@ -13,6 +13,8 @@ import socket
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
+from datetime import date
+
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -48,6 +50,14 @@ class DeviceOut(BaseModel):
     last_seen: str | None = None
     note: str | None = None
     needs: list[str] = []
+    # 防爆台账
+    asset_no: str | None = None
+    ex_marking: str | None = None
+    ex_cert_no: str | None = None
+    ex_cert_expiry: date | None = None
+    ex_zone: str | None = None
+    owner: str | None = None
+    maint_due: date | None = None
 
 
 class DeviceIn(BaseModel):
@@ -63,6 +73,15 @@ class DeviceIn(BaseModel):
     mode: str = "http"
     note: str | None = None
 
+    # 防爆资产台账
+    asset_no: str | None = None
+    ex_marking: str | None = None
+    ex_cert_no: str | None = None
+    ex_cert_expiry: date | None = None
+    ex_zone: str | None = None
+    owner: str | None = None
+    maint_due: date | None = None
+
 
 class DevicePatch(BaseModel):
     name: str | None = None
@@ -77,6 +96,16 @@ class DevicePatch(BaseModel):
     mode: str | None = None
     note: str | None = None
     is_active: bool | None = None
+
+    # 防爆资产台账
+    asset_no: str | None = None
+    ex_marking: str | None = None
+    ex_cert_no: str | None = None
+    ex_cert_expiry: date | None = None
+    ex_zone: str | None = None
+    owner: str | None = None
+    maint_due: date | None = None
+
 
 
 async def _reload_polling(db: Session) -> None:
@@ -97,6 +126,9 @@ def _out(r: Robot) -> DeviceOut:
         version=r.version, slam_type=r.slam_type,
         last_seen=r.last_seen.isoformat(timespec="seconds") if r.last_seen else None,
         note=r.note, needs=meta.get("needs", []),
+        asset_no=r.asset_no, ex_marking=r.ex_marking, ex_cert_no=r.ex_cert_no,
+        ex_cert_expiry=r.ex_cert_expiry, ex_zone=r.ex_zone,
+        owner=r.owner, maint_due=r.maint_due,
     )
 
 
@@ -144,6 +176,10 @@ async def create_device(
         station=body.station, ip=body.ip, port=body.port, ws_port=body.ws_port,
         username=body.username, mode=body.mode, note=body.note,
         password_cipher=seal(body.password or "", secret=settings.secret_key),
+        # 防爆台账
+        asset_no=body.asset_no, ex_marking=body.ex_marking, ex_cert_no=body.ex_cert_no,
+        ex_cert_expiry=body.ex_cert_expiry, ex_zone=body.ex_zone,
+        owner=body.owner, maint_due=body.maint_due,
     )
     db.add(r)
     db.commit()
