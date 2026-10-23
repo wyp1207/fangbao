@@ -175,7 +175,56 @@ def dispatch(db, run: TaskRun, adapter) -> TaskRun:
     db.commit()
     db.refresh(run)
     log.info("任务下发 #%s → %s", run.id, run.external_id)
+
+    # 下发 ≠ 完成：异步轮询订单状态，把 run 从 running 推到 done/failed。
+    # 之前没有这一段，任务永远停在 running，30s 后看门狗误报"卡住"并建告警。
+    import threading
+
+    run_id = run.id
+    threading.Thread(target=_poll_until_done, args=(run_id, adapter),
+                     daemon=True, name=f"dispatch-{run_id}").start()
     return run
+
+
+def _poll_until_done(run_id: int, adapter, timeout_s: int = 1800) -> None:
+    """后台把单点下发跟到终态（最多 30 分钟）。"""
+    import time
+
+    from app.db.session import SessionLocal
+    from app.models.task_run import TaskRun
+
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        time.sleep(3)
+        try:
+            order = _call(adapter.get_order)
+        except Exception:  # noqa: BLE001
+            continue
+        state = (order or {}).get("state")
+        if state in ("FINISHED", "FAILED"):
+            with SessionLocal() as db:
+                run = db.get(TaskRun, run_id)
+                if run is None or run.status != "running":
+                    return
+                run.status = "done" if state == "FINISHED" else "failed"
+                run.finished_at = datetime.now()
+                if state == "FAILED":
+                    run.dispatch_error = "机器人报告任务失败"
+                steps = db.query(TaskRunStep).filter(TaskRunStep.run_id == run_id).all()
+                for st in steps:
+                    if st.status in ("pending", "running"):
+                        st.status = "ok" if state == "FINISHED" else "failed"
+                        st.finished_at = datetime.now()
+                db.commit()
+            return
+    # 超时：明确标失败，不留在 running 里让人猜
+    with SessionLocal() as db:
+        run = db.get(TaskRun, run_id)
+        if run is not None and run.status == "running":
+            run.status = "failed"
+            run.dispatch_error = f"超过 {timeout_s // 60} 分钟未收到完成状态"
+            run.finished_at = datetime.now()
+            db.commit()
 
 
 def pause(db, run: TaskRun, adapter) -> TaskRun:

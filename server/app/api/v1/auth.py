@@ -141,6 +141,7 @@ def login(body: LoginIn, response: Response, request: Request,
                                 status_code=401)
         step = totp_verify_step(user.totp_secret or "", body.totp_code)
         if step is None:
+            _record_fail(db, key)      # 动态码错误同样计入锁定，否则可无限撞码
             raise PlatformError("动态码不正确", code="TOTP_INVALID", status_code=401)
         # 防重放：同一个 30s 窗内的码用过就不能再用
         if user.totp_last_step is not None and step <= user.totp_last_step:
@@ -296,10 +297,18 @@ def totp_start(
     db: Session = Depends(get_db),
     me: User = Depends(get_current_user),
 ) -> dict:
-    """生成密钥并返回 otpauth:// 链接（还没启用，等输对一次码）。"""
+    """生成密钥并返回 otpauth:// 链接。
+
+    已启用时**绝不能重新生成**：那会让用户手机上的动态码立刻失效且新密钥不展示，
+    等于把用户锁在门外（QA 实测踩到过）。要换密钥必须先关闭再开启。
+    """
+    if me.totp_enabled and me.totp_secret:
+        return {"secret": "", "uri": "", "enabled": True, "already": True}
+
     secret = totp_secret()
     me.totp_secret = secret
     db.commit()
+    audit(db=db, action="auth.totp_start", target=me.username, user=me)
     return {"secret": secret, "uri": totp_uri(secret, me.username),
             "enabled": bool(me.totp_enabled)}
 

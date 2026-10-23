@@ -191,6 +191,14 @@ def delete_user(
     admins = db.scalars(select(User).where(User.role == "admin", User.is_active.is_(True))).all()
     if user.role == "admin" and len(admins) <= 1:
         raise BadRequest("至少要保留一个管理员", code="LAST_ADMIN")
+
+    # 清掉账号关联数据：否则 SQLite 复用 id 后，新用户首次改密会撞 PASSWORD_REUSED
+    from app.models.user import LoginAttempt, PasswordHistory
+
+    db.query(PasswordHistory).filter(PasswordHistory.user_id == user.id).delete(
+        synchronize_session=False)
+    db.query(LoginAttempt).filter(
+        LoginAttempt.key.like(f"{user.username}|%")).delete(synchronize_session=False)
     db.delete(user)
     db.commit()
     msg_store.add("warn", "user", f"删除账号：{user.username}",

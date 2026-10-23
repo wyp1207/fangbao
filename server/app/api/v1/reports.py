@@ -140,6 +140,27 @@ def _summary_impl(
             if a.resolution:
                 by_resolution[a.resolution] = by_resolution.get(a.resolution, 0) + 1
 
+    # 每个传感器的有效阈值（外设规则优先）——供上面的超限统计用
+    import json as _json
+
+    from app.models.peripheral import Peripheral as _Periph
+
+    sensor_thresholds: dict[int, dict] = {}
+    for p in db.query(_Periph).filter(_Periph.sensor_id.isnot(None),
+                                     _Periph.enabled.is_(True)).all():
+        try:
+            rule = (_json.loads(p.config_json or "{}") or {}).get("rule") or {}
+        except Exception:  # noqa: BLE001
+            rule = {}
+        if rule:
+            sensor_thresholds[p.sensor_id] = {
+                "enabled": rule.get("enabled", True),
+                "warn_high": rule.get("warn_high"),
+                "crit_high": rule.get("crit_high"),
+                "warn_low": rule.get("warn_low"),
+                "crit_low": rule.get("crit_low"),
+            }
+
     # 环境：区间内每条传感器的读数
     readings = db.scalars(
         select(SensorReading).where(SensorReading.ts >= start, SensorReading.ts < end)
@@ -157,10 +178,17 @@ def _summary_impl(
         st["count"] += 1
         st["min"] = min(st["min"], r.value)
         st["max"] = max(st["max"], r.value)
-        if (s.crit_high is not None and r.value >= s.crit_high) or \
-           (s.warn_high is not None and r.value >= s.warn_high) or \
-           (s.crit_low is not None and r.value <= s.crit_low) or \
-           (s.warn_low is not None and r.value <= s.warn_low):
+        # 与报警口径一致：外设规则优先，其次传感器自身阈值
+        eff = sensor_thresholds.get(s.id) or {
+            "warn_high": s.warn_high, "crit_high": s.crit_high,
+            "warn_low": s.warn_low, "crit_low": s.crit_low, "enabled": True,
+        }
+        if eff.get("enabled", True) and (
+            (eff.get("crit_high") is not None and r.value >= eff["crit_high"]) or
+            (eff.get("warn_high") is not None and r.value >= eff["warn_high"]) or
+            (eff.get("crit_low") is not None and r.value <= eff["crit_low"]) or
+            (eff.get("warn_low") is not None and r.value <= eff["warn_low"])
+        ):
             st["over"] += 1
 
     # 遥测：在线率/里程/电量
