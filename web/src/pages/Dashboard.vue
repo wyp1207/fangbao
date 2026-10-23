@@ -133,7 +133,11 @@ function onDevice(v: string) {
   timers.forEach((t) => window.clearInterval(t))
   timers = []
   timers.push(window.setInterval(loadEnv, 15000))
-  timers.push(window.setInterval(loadVideoHealth, 60000))
+  timers.push(window.setInterval(() => {
+    const anyBad = Object.values(videoHealth.value).some((h) => !h.ok)
+    void loadVideoHealth()
+    if (anyBad) window.setTimeout(() => { void loadVideoHealth() }, 2000)
+  }, 15000))
   window.clearInterval(tickTimer)
   tickTimer = window.setInterval(() => { tick.value = Date.now() }, 400)
   timers.push(window.setInterval(loadTrend, 60000))
@@ -172,8 +176,25 @@ function liveSrc(v: { id: number } | null): string {
   return v ? `/api/v1/videos/${v.id}/live.jpg?t=${tick.value}` : ''
 }
 
+const liveFails = ref<Record<number, number>>({})
+
 function onLiveError(v: { id: number } | null) {
-  if (v) videoHealth.value = { ...videoHealth.value, [v.id]: { ok: false, reason: '画面中断' } }
+  if (!v) return
+  const n = (liveFails.value[v.id] ?? 0) + 1
+  liveFails.value = { ...liveFails.value, [v.id]: n }
+  // 偶发丢一帧很常见（转码流首帧慢/网络抖），连续 3 次才认为真的断了
+  if (n >= 3) {
+    videoHealth.value = { ...videoHealth.value, [v.id]: { ok: false, reason: '画面中断' } }
+    window.setTimeout(() => { void loadVideoHealth() }, 3000)
+  } else {
+    window.setTimeout(() => { tick.value = Date.now() }, 700)
+  }
+}
+
+function onLiveLoad(v: { id: number } | null) {
+  if (v && liveFails.value[v.id]) {
+    liveFails.value = { ...liveFails.value, [v.id]: 0 }
+  }
 }
 // 换流：直接列出 go2rtc 里现有的流，选一个就改这路视频源
 const pickOpen = ref(false)
@@ -505,7 +526,11 @@ onMounted(async () => {
   timers.forEach((t) => window.clearInterval(t))
   timers = []
   timers.push(window.setInterval(loadEnv, 15000))
-  timers.push(window.setInterval(loadVideoHealth, 60000))
+  timers.push(window.setInterval(() => {
+    const anyBad = Object.values(videoHealth.value).some((h) => !h.ok)
+    void loadVideoHealth()
+    if (anyBad) window.setTimeout(() => { void loadVideoHealth() }, 2000)
+  }, 15000))
   window.clearInterval(tickTimer)
   tickTimer = window.setInterval(() => { tick.value = Date.now() }, 400)
   timers.push(window.setInterval(loadTrend, 60000))
@@ -612,8 +637,10 @@ async function logout() {
       <aside class="col left">
         <ScadaPanel title="可见光视频" tone="cyan" class="grow" body-class="no-pad">
           <div class="embed">
-            <img v-if="visibleVideo && healthOf(visibleVideo).ok" class="live-img" :src="liveSrc(visibleVideo)"
-                 alt="可见光实时画面" @error="onLiveError(visibleVideo)" />
+            <div v-if="visibleVideo && healthOf(visibleVideo).ok" class="live-box">
+              <img class="live-img" :src="liveSrc(visibleVideo)" alt="可见光实时画面"
+                   @error="onLiveError(visibleVideo)" @load="onLiveLoad(visibleVideo)" />
+            </div>
             <div v-else class="embed-empty">
               <b>视频流未接入</b>
               <span v-if="visibleVideo">原因：{{ healthOf(visibleVideo).reason }} · 相机离线或地址失效</span>
@@ -630,8 +657,10 @@ async function logout() {
 
         <ScadaPanel title="热红外视频" tone="gold" class="grow" body-class="no-pad">
           <div class="embed">
-            <img v-if="thermalVideo && healthOf(thermalVideo).ok" class="live-img" :src="liveSrc(thermalVideo)"
-                 alt="热红外实时画面" @error="onLiveError(thermalVideo)" />
+            <div v-if="thermalVideo && healthOf(thermalVideo).ok" class="live-box">
+              <img class="live-img" :src="liveSrc(thermalVideo)" alt="热红外实时画面"
+                   @error="onLiveError(thermalVideo)" @load="onLiveLoad(thermalVideo)" />
+            </div>
             <div v-else class="embed-empty">
               <b>视频流未接入</b>
               <span v-if="thermalVideo">原因：{{ healthOf(thermalVideo).reason }}</span>
@@ -1664,4 +1693,8 @@ async function logout() {
 .pick-filter { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
 .pick-filter .input { flex: 1; }
 .pick-item .reg { color: #7be08a; }
+
+/* 两个视频窗口画幅一致：16:9 容器 + contain，谁都不会被裁 */
+.live-box { width: 100%; height: 100%; display: grid; place-items: center; background: #04101f; overflow: hidden; }
+.live-box .live-img { width: 100%; height: 100%; object-fit: contain; display: block; }
 </style>
