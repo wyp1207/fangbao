@@ -264,6 +264,7 @@ watch([levelFilter, ackFilter], async () => { page.value = 1; await reload() })
             <td>{{ (page - 1) * pageSize + i + 1 }}</td>
             <td class="num dim">{{ a.started_at.replace('T', ' ').slice(0, 19) }}</td>
             <td>
+              <span class="tag p-badge">{{ a.priority ?? '—' }}</span>
               <span class="tag" :class="a.level === 'critical' ? 'danger' : 'warn'">{{ levelText[a.level] }}</span>
             </td>
             <td>{{ a.message }}</td>
@@ -375,4 +376,6 @@ watch([levelFilter, ackFilter], async () => { page.value = 1; await reload() })
 .num { font-variant-numeric: tabular-nums; }
 
 tr.flash td { background: rgba(255, 176, 46, .28) !important; box-shadow: inset 0 0 0 1px rgba(255,176,46,.7); }
+
+.p-badge { background: rgba(255, 168, 46, .18); color: #ffc355; margin-right: 4px; }
 </style>

@@ -83,6 +83,72 @@ def unshelve_alarm(
     return {"ok": True}
 
 
+@router.get("/kpi")
+def alarm_kpi(
+    hours: int = Query(24, ge=1, le=24 * 30),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> dict:
+    """告警治理 KPI（ISA-18.2 口径）：频次、洪泛、待处理、分级分布。"""
+    from datetime import datetime, timedelta
+
+    from sqlalchemy import func, select
+
+    from app.models.alarm import AlarmRecord
+
+    end = datetime.now()
+    start = end - timedelta(hours=hours)
+    rows = db.scalars(select(AlarmRecord)
+                      .where(AlarmRecord.started_at >= start)).all()
+
+    total = len(rows)
+    by_priority: dict[str, int] = {}
+    by_level: dict[str, int] = {}
+    by_metric: dict[str, int] = {}
+    for a in rows:
+        p = getattr(a, "priority", None) or "P4"
+        by_priority[p] = by_priority.get(p, 0) + 1
+        by_level[a.level] = by_level.get(a.level, 0) + 1
+        by_metric[a.metric] = by_metric.get(a.metric, 0) + 1
+
+    # 10 分钟窗口最大条数 → 判断洪泛（ISA-18.2 建议 <10 条/10 分钟）
+    buckets: dict[str, int] = {}
+    for a in rows:
+        if not a.started_at:
+            continue
+        key = a.started_at.strftime("%Y%m%d%H") + f"{a.started_at.minute // 10}"
+        buckets[key] = buckets.get(key, 0) + 1
+    peak_10min = max(buckets.values()) if buckets else 0
+    flood_windows = sum(1 for v in buckets.values() if v >= 10)
+
+    open_rows = db.scalar(select(func.count()).select_from(AlarmRecord)
+                          .where(AlarmRecord.closed_at.is_(None),
+                                 AlarmRecord.started_at >= start)) or 0
+    unacked = db.scalar(select(func.count()).select_from(AlarmRecord)
+                        .where(AlarmRecord.acked_at.is_(None),
+                               AlarmRecord.started_at >= start)) or 0
+    shelved = db.scalar(select(func.count()).select_from(AlarmRecord)
+                        .where(AlarmRecord.shelved_until.isnot(None),
+                               AlarmRecord.shelved_until > datetime.now())) or 0
+
+    per_hour = round(total / hours, 1) if hours else 0
+    return {
+        "hours": hours,
+        "total": total,
+        "per_hour": per_hour,
+        "peak_10min": peak_10min,
+        "flood_windows": flood_windows,
+        "flood_ratio": round(flood_windows / len(buckets) * 100, 1) if buckets else 0,
+        "open": open_rows,
+        "unacked": unacked,
+        "shelved": shelved,
+        "by_priority": by_priority,
+        "by_level": by_level,
+        "top_metrics": sorted(by_metric.items(), key=lambda x: -x[1])[:5],
+        "targets": {"per_hour": 6, "peak_10min": 10, "flood_ratio": 1},
+    }
+
+
 @router.get("/latest")
 def latest_alarms(
     limit: int = Query(50, le=200),
