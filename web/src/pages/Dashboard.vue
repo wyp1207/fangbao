@@ -1347,9 +1347,9 @@ async function logout() {
   border-bottom: 1px dashed rgba(48, 152, 232, .45);   /* 行分隔线 */
 }
 .rt-line:last-of-type { border-bottom: 0; }
-.rt-line span { color: #48bcff; white-space: nowrap; font-weight: 700; }
+.rt-line span { color: #71f9ff; white-space: nowrap; font-weight: 700; }
 .rt-line b {
-  color: #ffa82e; font-weight: 800; letter-spacing: .3px; text-align: right; max-width: 62%;
+  color: #f7c355; font-weight: 800; letter-spacing: .3px; text-align: right; max-width: 62%;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .rt-groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin-top: auto; flex: none;
