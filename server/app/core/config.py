@@ -59,6 +59,8 @@ class Settings(BaseSettings):
     video_relay_url: str = ""
     # go2rtc 的 HTTP 地址（如 http://127.0.0.1:1984）；配了就用它的 MSE/WebRTC 播放器
     go2rtc_base: str = ""
+    # 首页播放模式：webrtc（最低延迟）/ mse（兼容性更好）
+    video_play_mode: str = "webrtc"
 
     # 浏览器侧的 go2rtc 地址。部署时 nginx 反代 /go2rtc/ 到 go2rtc，
     # 这里填 /go2rtc，前端就用同源相对路径，不用暴露 1984 端口、也没有跨域问题

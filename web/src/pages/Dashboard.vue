@@ -1707,5 +1707,11 @@ async function logout() {
 .live-box { width: 100%; height: 100%; display: grid; place-items: center; background: #04101f; overflow: hidden; }
 .live-box .live-img { width: 100%; height: 100%; object-fit: contain; display: block; }
 
-.live-frame { width: 100%; height: 100%; border: 0; background: #04101f; display: block; }
+/* 16:9 画框：让播放器按源比例显示，避免 go2rtc 铺满导致两侧被裁 */
+/* 必须比 .embed iframe 更具体，否则 height:100% 会盖掉 16:9 */
+.embed .live-frame, .live-box .live-frame {
+  width: 100%; height: auto; aspect-ratio: 16 / 9; max-height: 100%;
+  border: 0; background: #04101f; display: block; margin: auto;
+}
+.live-box { display: flex; align-items: center; justify-content: center; }
 </style>
