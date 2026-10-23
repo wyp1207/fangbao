@@ -137,9 +137,8 @@ function onDevice(v: string) {
     const anyBad = Object.values(videoHealth.value).some((h) => !h.ok)
     void loadVideoHealth()
     if (anyBad) window.setTimeout(() => { void loadVideoHealth() }, 2000)
-  }, 15000))
+  }, 10000))
   window.clearInterval(tickTimer)
-  tickTimer = window.setInterval(() => { tick.value = Date.now() }, 400)
   timers.push(window.setInterval(loadTrend, 60000))
   timers.push(window.setInterval(loadRuns, 10000))
   timers.push(window.setInterval(loadFeed, 15000))
@@ -172,8 +171,17 @@ const videoHealth = ref<Record<number, { ok: boolean; reason: string }>>({})
 const tick = ref(0)
 let tickTimer = 0
 
+// 用 MJPEG 长连接（一条连接连续出帧）；ticket 只在重连时变，不随帧刷新
+const liveTicket = ref<Record<number, number>>({})
+
 function liveSrc(v: { id: number } | null): string {
-  return v ? `/api/v1/videos/${v.id}/live.jpg?t=${tick.value}` : ''
+  if (!v) return ''
+  const t = liveTicket.value[v.id] ?? 0
+  return `/api/v1/videos/${v.id}/mjpeg?t=${t}`
+}
+
+function reconnectLive(v: { id: number } | null) {
+  if (v) liveTicket.value = { ...liveTicket.value, [v.id]: Date.now() }
 }
 
 const liveFails = ref<Record<number, number>>({})
@@ -187,7 +195,7 @@ function onLiveError(v: { id: number } | null) {
     videoHealth.value = { ...videoHealth.value, [v.id]: { ok: false, reason: '画面中断' } }
     window.setTimeout(() => { void loadVideoHealth() }, 3000)
   } else {
-    window.setTimeout(() => { tick.value = Date.now() }, 700)
+    window.setTimeout(() => reconnectLive(v), 1200)
   }
 }
 
@@ -530,9 +538,8 @@ onMounted(async () => {
     const anyBad = Object.values(videoHealth.value).some((h) => !h.ok)
     void loadVideoHealth()
     if (anyBad) window.setTimeout(() => { void loadVideoHealth() }, 2000)
-  }, 15000))
+  }, 10000))
   window.clearInterval(tickTimer)
-  tickTimer = window.setInterval(() => { tick.value = Date.now() }, 400)
   timers.push(window.setInterval(loadTrend, 60000))
   timers.push(window.setInterval(loadRuns, 10000))
   timers.push(window.setInterval(loadFeed, 15000))
@@ -1697,4 +1704,6 @@ async function logout() {
 /* 两个视频窗口画幅一致：16:9 容器 + contain，谁都不会被裁 */
 .live-box { width: 100%; height: 100%; display: grid; place-items: center; background: #04101f; overflow: hidden; }
 .live-box .live-img { width: 100%; height: 100%; object-fit: contain; display: block; }
+
+.live-frame { width: 100%; height: 100%; border: 0; background: #04101f; display: block; }
 </style>
