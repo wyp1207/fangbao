@@ -59,11 +59,19 @@ def probe_frame(stream: str, base: str, timeout: float = 2.5) -> tuple[bool, str
         return False, "未配置视频流"
     q = urllib.parse.urlencode({"src": stream})
     url = f"{base.rstrip('/')}/api/frame.jpeg?{q}"
-    try:
-        with urllib.request.urlopen(url, timeout=timeout) as resp:
-            data = resp.read()
-    except Exception as exc:  # noqa: BLE001
-        return False, f"{exc.__class__.__name__}"
+    last = ""
+    data = b""
+    for _ in range(2):
+        try:
+            with urllib.request.urlopen(url, timeout=timeout) as resp:
+                data = resp.read()
+        except Exception as exc:  # noqa: BLE001
+            last = exc.__class__.__name__
+            data = b""
+        if len(data) >= 1024:
+            break
+    if not data:
+        return False, last or "无响应"
     if len(data) < 1024:
         return False, "相机无画面（0 字节）"
     return True, f"{len(data)}B"

@@ -134,6 +134,8 @@ function onDevice(v: string) {
   timers = []
   timers.push(window.setInterval(loadEnv, 15000))
   timers.push(window.setInterval(loadVideoHealth, 60000))
+  window.clearInterval(tickTimer)
+  tickTimer = window.setInterval(() => { tick.value = Date.now() }, 400)
   timers.push(window.setInterval(loadTrend, 60000))
   timers.push(window.setInterval(loadRuns, 10000))
   timers.push(window.setInterval(loadFeed, 15000))
@@ -162,10 +164,33 @@ function openVideo(which: string) {
 const busyMotion = ref(false)
 // 视频健康：真抓一帧判断流有没有画面；没画面就不渲染播放器，改显示"未接入"
 const videoHealth = ref<Record<number, { ok: boolean; reason: string }>>({})
+// 图片轮询：2.5 帧/秒够看现场，全幅 contain 不裁切，也不会把 go2rtc 的报错糊上来
+const tick = ref(0)
+let tickTimer = 0
+
+function liveSrc(v: { id: number } | null): string {
+  return v ? `/api/v1/videos/${v.id}/live.jpg?t=${tick.value}` : ''
+}
+
+function onLiveError(v: { id: number } | null) {
+  if (v) videoHealth.value = { ...videoHealth.value, [v.id]: { ok: false, reason: '画面中断' } }
+}
 // 换流：直接列出 go2rtc 里现有的流，选一个就改这路视频源
 const pickOpen = ref(false)
 const pickFor = ref<{ id: number; name: string; stream_name: string } | null>(null)
-const pickStreams = ref<{ name: string; source: string; web: boolean; ready: boolean }[]>([])
+const pickStreams = ref<{ name: string; source: string; web: boolean; ready: boolean; registered?: boolean }[]>([])
+const pickAll = ref(false)
+const pickQ = ref('')
+
+// 默认只列"已登记的摄像头 + 当前这路"，避免 35 路实验室流糊一脸
+const pickFiltered = computed(() => {
+  const kw = pickQ.value.trim().toLowerCase()
+  return pickStreams.value.filter((s) => {
+    if (!pickAll.value && !s.registered && s.name !== pickFor.value?.stream_name) return false
+    if (kw && !s.name.toLowerCase().includes(kw)) return false
+    return true
+  })
+})
 const pickBusy = ref(false)
 
 async function openPick(v: { id: number; name: string; stream_name: string } | null) {
@@ -481,6 +506,8 @@ onMounted(async () => {
   timers = []
   timers.push(window.setInterval(loadEnv, 15000))
   timers.push(window.setInterval(loadVideoHealth, 60000))
+  window.clearInterval(tickTimer)
+  tickTimer = window.setInterval(() => { tick.value = Date.now() }, 400)
   timers.push(window.setInterval(loadTrend, 60000))
   timers.push(window.setInterval(loadRuns, 10000))
   timers.push(window.setInterval(loadFeed, 15000))
@@ -585,7 +612,8 @@ async function logout() {
       <aside class="col left">
         <ScadaPanel title="可见光视频" tone="cyan" class="grow" body-class="no-pad">
           <div class="embed">
-            <iframe v-if="visibleStream && healthOf(visibleVideo).ok" :src="visibleStream" title="可见光" allow="autoplay; fullscreen" />
+            <img v-if="visibleVideo && healthOf(visibleVideo).ok" class="live-img" :src="liveSrc(visibleVideo)"
+                 alt="可见光实时画面" @error="onLiveError(visibleVideo)" />
             <div v-else class="embed-empty">
               <b>视频流未接入</b>
               <span v-if="visibleVideo">原因：{{ healthOf(visibleVideo).reason }} · 相机离线或地址失效</span>
@@ -602,7 +630,8 @@ async function logout() {
 
         <ScadaPanel title="热红外视频" tone="gold" class="grow" body-class="no-pad">
           <div class="embed">
-            <iframe v-if="thermalStream && healthOf(thermalVideo).ok" :src="thermalStream" title="热红外" allow="autoplay; fullscreen" />
+            <img v-if="thermalVideo && healthOf(thermalVideo).ok" class="live-img" :src="liveSrc(thermalVideo)"
+                 alt="热红外实时画面" @error="onLiveError(thermalVideo)" />
             <div v-else class="embed-empty">
               <b>视频流未接入</b>
               <span v-if="thermalVideo">原因：{{ healthOf(thermalVideo).reason }}</span>
@@ -808,14 +837,19 @@ async function logout() {
         <h4>给「{{ pickFor?.name }}」换一路视频流</h4>
         <p class="dim small">当前：{{ pickFor?.stream_name || '未设置' }} · 流来自 go2rtc，改相机 IP 只需在 go2rtc 里改</p>
         <div class="pick-list">
-          <button v-for="s in pickStreams" :key="s.name" class="pick-item"
+          <button v-for="s in pickFiltered" :key="s.name" class="pick-item"
                   :class="{ on: s.name === pickFor?.stream_name, off: !s.ready }"
                   @click="s.ready && chooseStream(s.name)">
             <b>{{ s.name }}</b>
             <span class="dim">{{ s.source || '无源' }}</span>
             <em v-if="!s.ready">无信号</em>
+            <em v-else-if="s.registered" class="reg">已登记</em>
           </button>
-          <p v-if="!pickStreams.length" class="dim small">{{ pickBusy ? '读取中…' : 'go2rtc 里没有可用的流' }}</p>
+          <div class="pick-filter">
+            <input v-model="pickQ" class="input" placeholder="搜索流名，如 train1_3f" />
+            <label class="dim small"><input type="checkbox" v-model="pickAll" /> 显示全部 {{ pickStreams.length }} 路</label>
+          </div>
+          <p v-if="!pickFiltered.length" class="dim small">{{ pickBusy ? '读取中…' : '没有匹配的流' }}</p>
         </div>
         <div class="pick-acts">
           <button class="btn btn-sm" @click="pickOpen = false">关闭</button>
@@ -1624,4 +1658,10 @@ async function logout() {
 .pick-item.on { border-color: #ffd040; box-shadow: 0 0 0 1px rgba(255,208,64,.45) inset; }
 .pick-item em { color: #ff8b8b; font-style: normal; }
 .pick-acts { display: flex; justify-content: flex-end; gap: 8px; }
+
+.live-img { width: 100%; height: 100%; object-fit: contain; background: #04101f; display: block; }
+
+.pick-filter { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+.pick-filter .input { flex: 1; }
+.pick-item .reg { color: #7be08a; }
 </style>
