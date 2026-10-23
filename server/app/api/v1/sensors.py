@@ -28,6 +28,7 @@ router = APIRouter(prefix="/sensors", tags=["sensors"])
 
 KINDS: dict[str, dict[str, Any]] = {
     "gas": {"label": "可燃气体", "unit": "%LEL"},
+    "sf6": {"label": "SF6 浓度", "unit": "ppm"},
     "smoke": {"label": "烟雾", "unit": "%obs"},
     "temperature": {"label": "温度", "unit": "℃"},
     "humidity": {"label": "湿度", "unit": "%RH"},
@@ -219,6 +220,8 @@ def _add_reading(sensor_id: int, body: ReadingIn, db: Session, store) -> dict:
 
 def _judge(s: Sensor, value: float) -> tuple[str | None, str]:
     unit = s.unit or KINDS.get(s.kind, {}).get("unit", "")
+    # 数值按有效位格式化，避免 111.80000000000001ppm 这种展示
+    value = round(float(value), 2)
     if s.crit_high is not None and value >= s.crit_high:
         return "critical", f"{s.name} 超严重上限：{value}{unit}（≥{s.crit_high}）"
     if s.crit_low is not None and value <= s.crit_low:

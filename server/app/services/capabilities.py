@@ -15,6 +15,7 @@ KIND_CAPABILITIES: dict[str, list[str]] = {
     "thermal": ["video.thermal", "thermometry"],
     "ptz": ["ptz.move", "ptz.preset"],
     "gas": ["env.read.gas", "alarm.rule.gas"],
+    "sf6": ["env.read.sf6", "alarm.rule.sf6"],
     "env": ["env.read"],
     "temp": ["env.read.temp"],
     "humidity": ["env.read.humidity"],
