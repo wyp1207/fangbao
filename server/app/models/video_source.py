@@ -25,6 +25,7 @@ class VideoSource(Base):
     url: Mapped[str] = mapped_column(String(512))
     # go2rtc 里的流名；配了就能走 go2rtc 的 MSE/WebRTC 播放（低延迟），空则退回 MJPEG
     stream_name: Mapped[str] = mapped_column(String(32), default="")
+    robot_id: Mapped[int | None] = mapped_column(Integer, index=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     # 是否在首页大屏显示。默认关：测试摄像头/临时接的流不应该自己跑到大屏上
     show_on_dashboard: Mapped[bool] = mapped_column(Boolean, default=False)

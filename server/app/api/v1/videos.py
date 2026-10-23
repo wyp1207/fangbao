@@ -17,7 +17,7 @@ import subprocess
 import time
 from urllib.parse import urlsplit
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -142,10 +142,14 @@ def _out(v: VideoSource) -> VideoOut:
 
 @router.get("", response_model=list[VideoOut])
 def list_videos(
+    robot_id: int | None = Query(None, description="只看这台设备的相机"),
     db: Session = Depends(get_db),
     _: User = Depends(require_roles("admin", "operator", "viewer")),
 ) -> list[VideoOut]:
-    rows = db.scalars(select(VideoSource).order_by(VideoSource.id)).all()
+    stmt = select(VideoSource).order_by(VideoSource.id)
+    if robot_id is not None:
+        stmt = stmt.where(VideoSource.robot_id == robot_id)
+    rows = db.scalars(stmt).all()
     return [_out(v) for v in rows]
 
 
