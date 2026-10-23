@@ -31,6 +31,7 @@ class Sensor(Base):
     crit_low: Mapped[float | None] = mapped_column(Float, nullable=True)
     crit_high: Mapped[float | None] = mapped_column(Float, nullable=True)
 
+    robot_id: Mapped[int | None] = mapped_column(Integer, index=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)

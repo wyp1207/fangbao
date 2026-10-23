@@ -83,10 +83,14 @@ def sensor_meta(_: User = Depends(get_current_user)) -> dict:
 
 @router.get("")
 def list_sensors(
+    robot_id: int | None = Query(None, description="只看这台设备的传感器"),
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ) -> list[dict]:
-    rows = db.query(Sensor).order_by(Sensor.id).all()
+    q = db.query(Sensor)
+    if robot_id is not None:
+        q = q.filter(Sensor.robot_id == robot_id)
+    rows = q.order_by(Sensor.id).all()
     latest: dict[int, SensorReading] = {}
     for r in db.query(SensorReading).order_by(SensorReading.ts.desc()).limit(500).all():
         latest.setdefault(r.sensor_id, r)

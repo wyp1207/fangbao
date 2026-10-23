@@ -105,7 +105,7 @@ function onSite(v: string) {
   if (hit) {
     deviceId.value = String(hit.id)
     robot.setDevice(hit.id)          // 真切数据源，别只改个名字
-    void api.videos().then((rows) => { videoRows.value = rows as never }).catch(() => undefined)
+    void api.videos(Number(deviceId.value)).then((rows) => { videoRows.value = rows as never }).catch(() => undefined)
     void loadMap()
     toast('已切换到场站 ' + v + '（设备 ' + hit.name + '）', 'ok')
   } else {
@@ -118,9 +118,10 @@ function onDevice(v: string) {
   robot.setDevice(Number(v))
   toast('已切换到 ' + (hit?.name ?? v), 'ok')
   // 换设备就刷新视频与地图，避免还显示上一台的画面
-  void api.videos().then((rows) => { videoRows.value = rows as never }).catch(() => undefined)
+  void api.videos(Number(deviceId.value)).then((rows) => { videoRows.value = rows as never }).catch(() => undefined)
   void loadEnv()
   void loadTrend()
+  void loadCaps()
   // 切设备时重建定时器：先清掉旧的，否则每切一次就多 3 个轮询
   timers.forEach((t) => window.clearInterval(t))
   timers = []
@@ -148,6 +149,17 @@ function openVideo(which: string) {
   toast(`${which}通道未接入：真机联调后按 RTSP / WebRTC 接入`, 'warn', 3000)
 }
 const busyMotion = ref(false)
+const caps = ref<{ actions?: string[] }>({})
+
+async function loadCaps() {
+  try {
+    const id = Number(deviceId.value)
+    caps.value = Number.isFinite(id) ? await api.robotCapabilities(id) : {}
+  } catch {
+    caps.value = {}
+  }
+}
+const canStand = computed(() => (caps.value.actions ?? []).includes("stand_up"))
 
 /** X30 的起立/趴下是切换指令；写开关没开会直接 403，提示原因 */
 async function doMotion(action: 'stand' | 'lie') {
@@ -205,16 +217,18 @@ const donut = computed(() => {
 type EnvSummary = Record<string, { name: string; unit: string; value: number | null; ts: string | null; calibrated: boolean }>
 const env = ref<EnvSummary>({})
 
-const envCells = computed(() => [
-  { label: '温度', unit: '℃', kind: 'temperature' },
-  { label: '湿度', unit: '%RH', kind: 'humidity' },
-  { label: '可燃气体', unit: '%LEL', kind: 'gas' },
-  { label: '烟雾', unit: '%obs', kind: 'smoke' },
-  { label: 'PM2.5', unit: 'μg/m³', kind: 'pm' },
-  { label: '噪声', unit: 'dB', kind: 'noise' },
-].map((c) => ({ ...c, hit: env.value[c.kind] })))
+// 环境面板只显示"这台设备上真有"的传感器（X30 有 SF6/温湿度，JCROB 可能是噪声）
+const envSensors = ref<{ name: string; unit: string; value: number | null }[]>([])
 
-const envCount = computed(() => Object.keys(env.value).length)
+const envCells = computed(() =>
+  envSensors.value.map((s) => ({
+    label: s.name,
+    unit: s.unit,
+    value: s.value,
+  })),
+)
+
+const envCount = computed(() => envSensors.value.length)
 
 // 近 7 日告警趋势（真实统计）
 type TrendDay = { date: string; warn: number; critical: number; total: number }
@@ -234,8 +248,17 @@ async function loadTrend() {
 
 async function loadEnv() {
   try {
-    env.value = (await api.sensorSummary()).items
-  } catch { /* 环境没接不影响大屏 */ }
+    const id = Number(deviceId.value)
+    // 按设备取：切换设备后这里拿到的就是那台设备自己的传感器
+    const rows = await api.sensors(Number.isFinite(id) ? id : undefined)
+    envSensors.value = rows.map((s) => ({
+      name: s.name,
+      unit: s.unit,
+      value: s.latest?.value ?? null,
+    }))
+  } catch {
+    envSensors.value = []   // 该设备没接传感器就空着，不显示别人的数据
+  }
 }
 
 function num(v: unknown, digits = 2): string {
@@ -256,9 +279,10 @@ async function loadMap() {
 let timers: number[] = []
 onMounted(async () => {
   robot.start()
-  void api.videos().then((rows) => { videoRows.value = rows as never }).catch(() => undefined)
+  void api.videos(Number(deviceId.value)).then((rows) => { videoRows.value = rows as never }).catch(() => undefined)
   void loadEnv()
   void loadTrend()
+  void loadCaps()
   // 切设备时重建定时器：先清掉旧的，否则每切一次就多 3 个轮询
   timers.forEach((t) => window.clearInterval(t))
   timers = []
@@ -374,7 +398,7 @@ async function logout() {
           </div>
         </ScadaPanel>
 
-        <ScadaPanel title="热红外视频" tone="gold" class="grow" body-class="no-pad">
+        <ScadaPanel v-if="thermalVideo" title="热红外视频" tone="gold" class="grow" body-class="no-pad">
           <div class="embed">
             <iframe v-if="thermalStream" :src="thermalStream" title="热红外" allow="autoplay; fullscreen" />
             <div v-else class="embed-empty">
@@ -394,10 +418,11 @@ async function logout() {
           <div class="ctrl-body">
             <div class="stick" title="点击查看为什么不能操作" @click="tryControl"><span class="knob" /></div>
             <div class="ctrl-meta">
-              <div class="pose-actions">
+              <div v-if="canStand" class="pose-actions">
                 <button class="btn" :disabled="busyMotion" @click="doMotion('stand')">起立</button>
                 <button class="btn" :disabled="busyMotion" @click="doMotion('lie')">趴下</button>
               </div>
+              <p v-else class="dim small">这台设备不支持起立/趴下</p>
               <div><span>电压</span><b>{{ num(galileo.power, 1) }} V</b></div>
               <div><span>速度</span><b>{{ num(galileo.currentSpeedX) }} m/s</b></div>
               <div><span>角速度</span><b>{{ num(galileo.currentSpeedTheta, 3) }} rad/s</b></div>
@@ -481,16 +506,16 @@ async function logout() {
           <div class="env-grid">
             <div v-for="e in envCells" :key="e.label" class="env-cell">
               <span class="env-label">{{ e.label }}</span>
-              <span class="env-value" v-if="e.hit && e.hit.value !== null">
-                {{ e.hit.value }}<small>{{ e.hit.unit || e.unit }}</small>
+              <span class="env-value" v-if="e.value !== null">
+                {{ e.value }}<small>{{ e.unit }}</small>
               </span>
               <span class="env-value dim" v-else>--<small>{{ e.unit }}</small></span>
             </div>
           </div>
           <p v-if="envCount" class="dim small">
-            来自 {{ envCount }} 台传感器；未标定阈值的只记录不告警
+            本机 {{ envCount }} 个传感器；未标定阈值的只记录不告警
           </p>
-          <p v-else class="dim small">环境传感器未接入，到「设备管理 → 环境传感器」登记后自动呈现</p>
+          <p v-else class="dim small">这台设备没有登记传感器</p>
         </ScadaPanel>
 
         <ScadaPanel title="巡检点位" class="h-points" :right="`${points.length} 点`">

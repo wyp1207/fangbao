@@ -232,7 +232,8 @@ export const api = {
   testDevice: (id: number) =>
     request<{ tcp: boolean; http: boolean; detail: string }>(`/devices/${id}/test`, { method: 'POST' }),
 
-  videos: () => request<VideoRow[]>('/videos'),
+  videos: (robotId?: number) =>
+    request<VideoRow[]>(robotId ? `/videos?robot_id=${robotId}` : '/videos'),
   registerGo2rtc: (id: number) =>
     request<{ ok: boolean; stream: string; web_stream: string; video: VideoRow }>(`/videos/${id}/register-go2rtc`, { method: 'POST' }),
   go2rtcStreams: () => request<{ ok: boolean; reason?: string; streams: { name: string; source: string; web: boolean; ready: boolean }[] }>('/videos/go2rtc-streams'),
@@ -343,6 +344,8 @@ export const api = {
   cancelCruise: (id: number) =>
     request<{ ok: boolean }>(`/task-runs/${id}/cruise/cancel`, { method: 'POST' }),
   cruiseStatus: () => request<{ running: number[] }>('/task-runs/cruise/status'),
+  robotCapabilities: (id: number) =>
+    request<{ probed: boolean; actions?: string[]; video?: string[]; env?: string[] }>(`/robots/${id}/capabilities`),
   robotMotion: (id: number, action: 'stand' | 'lie') =>
     request<{ ok: boolean }>(`/robots/${id}/motion`, { method: 'POST', body: { action } }),
   pauseTaskRun: (id: number) =>
@@ -473,7 +476,8 @@ export const api = {
   testSensorGateway: (id: number) =>
     request<{ ok: boolean; raw?: number; value?: number; error?: string }>(`/sensor-gateways/${id}/test`, { method: 'POST' }),
   sensorGatewayRuntime: () => request<Record<string, unknown>[]>('/sensor-gateways/runtime'),
-  sensors: () => request<SensorItem[]>('/sensors'),
+  sensors: (robotId?: number) =>
+    request<SensorItem[]>(robotId ? `/sensors?robot_id=${robotId}` : '/sensors'),
   sensorMeta: () => request<{ kinds: SensorKind[] }>('/sensors/meta'),
   createSensor: (body: Record<string, unknown>) =>
     request<SensorItem>('/sensors', { method: 'POST', body }),
