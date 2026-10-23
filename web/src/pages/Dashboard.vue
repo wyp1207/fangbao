@@ -538,17 +538,23 @@ async function logout() {
               <div class="rt-line"><span>当前任务预估剩余时间</span><b>{{ runEta }}</b></div>
 
               <div class="rt-groups">
-                <div class="rt-group">
-                  <div class="nums"><i class="r">{{ runStats.total }}</i><em>/</em><i class="w">{{ runStats.planned }}</i><em>/</em><i class="g">{{ runStats.done }}</i></div>
-                  <div class="caps"><span>总数</span><span>待执行</span><span>已</span></div>
+                <div class="rt-grow">
+                  <b class="gl">巡检任务</b>
+                  <span class="gv"><i class="r">{{ runStats.total }}</i><em>总数</em></span>
+                  <span class="gv"><i class="w">{{ runStats.planned }}</i><em>待执行</em></span>
+                  <span class="gv"><i class="g">{{ runStats.done }}</i><em>已完成</em></span>
                 </div>
-                <div class="rt-group">
-                  <div class="nums"><i class="r">{{ runStats.cancelled }}</i><em>/</em><i class="w">{{ runStats.failed }}</i><em>/</em><i class="g">{{ runStats.done }}</i></div>
-                  <div class="caps"><span>终止</span><span>异常</span><span>正常</span></div>
+                <div class="rt-grow">
+                  <b class="gl">执行结果</b>
+                  <span class="gv"><i class="r">{{ runStats.cancelled }}</i><em>终止</em></span>
+                  <span class="gv"><i class="w">{{ runStats.failed }}</i><em>异常</em></span>
+                  <span class="gv"><i class="g">{{ runStats.done }}</i><em>正常</em></span>
                 </div>
-                <div class="rt-group">
-                  <div class="nums"><i class="r">{{ alarmUnacked }}</i><em>/</em><i class="w">{{ alarmCritical }}</i><em>/</em><i class="g">{{ alarmAcked }}</i></div>
-                  <div class="caps"><span>告警</span><span>异常</span><span>正常</span></div>
+                <div class="rt-grow">
+                  <b class="gl">告警</b>
+                  <span class="gv"><i class="r">{{ alarmUnacked }}</i><em>未确认</em></span>
+                  <span class="gv"><i class="w">{{ alarmCritical }}</i><em>严重</em></span>
+                  <span class="gv"><i class="g">{{ alarmAcked }}</i><em>已确认</em></span>
                 </div>
               </div>
             </aside>
@@ -1353,17 +1359,17 @@ async function logout() {
   color: #f7c355; font-weight: 800; letter-spacing: .3px; text-align: right; max-width: 62%;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.rt-groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin-top: auto; flex: none;
-  border-top: 1px solid #3098e8; padding-top: 4px; }
-.rt-group { padding: 0 4px; border-left: 1px solid #3098e8; min-width: 0; }
-.rt-group:first-child { border-left: 0; padding-left: 0; }
-.rt-group .nums { text-align: center; font-size: 13px; font-weight: 700; white-space: nowrap; letter-spacing: -.2px; }
-.rt-group .nums i { font-style: normal; }
-.rt-group .nums em { font-style: normal; color: #7fb6dd; margin: 0 1px; }
-.rt-group .nums .r { color: #ff3333; text-shadow: 0 0 8px rgba(255, 51, 51, .45); }
-.rt-group .nums .w { color: #ffffff; }
-.rt-group .nums .g { color: #30d040; text-shadow: 0 0 8px rgba(48, 208, 64, .45); }
-.rt-group .caps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; font-size: 7px; color: #9fc4e8; }
-.rt-group .caps span { text-align: center; white-space: nowrap; }
+.rt-groups {
+  display: flex; flex-direction: column; gap: 2px; margin-top: auto; flex: none;
+  border-top: 1px solid #3098e8; padding-top: 5px;
+}
+.rt-grow { display: grid; grid-template-columns: 60px repeat(3, 1fr); align-items: baseline; white-space: nowrap; }
+.rt-grow .gl { color: #71f9ff; font-size: 11px; font-weight: 700; }
+.rt-grow .gv { display: inline-flex; align-items: baseline; gap: 3px; justify-content: flex-start; }
+.rt-grow .gv i { font-style: normal; font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.rt-grow .gv em { font-style: normal; color: #9fc4e8; font-size: 8.5px; }
+.rt-grow .gv i.r { color: #ff3333; text-shadow: 0 0 8px rgba(255, 51, 51, .4); }
+.rt-grow .gv i.w { color: #ffffff; }
+.rt-grow .gv i.g { color: #30d040; text-shadow: 0 0 8px rgba(48, 208, 64, .4); }
 
 </style>
