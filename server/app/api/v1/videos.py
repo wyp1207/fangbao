@@ -248,6 +248,26 @@ def test_video(
         return {"ok": False, "target": f"{host}:{port}", "message": f"连不上：{exc.__class__.__name__}"}
 
 
+@router.get("/health")
+def videos_health(
+    robot_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles("admin", "operator", "viewer")),
+) -> dict:
+    """每路流实际能不能出画面（不是"配置了没有"，是真抓一帧）。"""
+    from app.services.snapshot import probe_frame
+
+    base = getattr(get_settings(), "go2rtc_base", "") or ""
+    q = db.query(VideoSource)
+    if robot_id is not None:
+        q = q.filter(VideoSource.robot_id == robot_id)
+    out = []
+    for v in q.all():
+        ok, reason = probe_frame(v.stream_name or "", base)
+        out.append({"id": v.id, "name": v.name, "stream": v.stream_name, "ok": ok, "reason": reason})
+    return {"ok": True, "videos": out}
+
+
 @router.get("/{video_id}/mjpeg")
 def mjpeg(
     video_id: int,

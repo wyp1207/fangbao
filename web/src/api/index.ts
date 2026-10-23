@@ -245,6 +245,9 @@ export const api = {
   dashboardFeed: (kind: 'patrol' | 'alarm' | 'control', limit = 20) =>
     request<{ kind: string; items: { id: number; ts: string; text: string; level: string; badge: string; link: string }[] }>(
       `/dashboard/feed?kind=${kind}&limit=${limit}`),
+  videoHealth: (robotId?: number) =>
+    request<{ ok: boolean; videos: { id: number; name: string; stream: string; ok: boolean; reason: string }[] }>(
+      `/videos/health${robotId ? `?robot_id=${robotId}` : ''}`),
   videos: (robotId?: number) =>
     request<VideoRow[]>(robotId ? `/videos?robot_id=${robotId}` : '/videos'),
   registerGo2rtc: (id: number) =>
