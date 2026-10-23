@@ -86,7 +86,7 @@ async function refreshMsgUnread() {
     msgUnread.value = res.items.filter((m) => m.ts > readTs).length
   } catch { /* 消息拿不到不影响大屏 */ }
 }
-const devices = ref<{ id: number; name: string; station: string }[]>([])
+const devices = ref<{ id: number; name: string; station: string; adapter?: string; version?: string | null }[]>([])
 const site = ref('')
 const deviceId = ref('1')
 
@@ -158,6 +158,12 @@ function openVideo(which: string) {
   toast(`${which}通道未接入：真机联调后按 RTSP / WebRTC 接入`, 'warn', 3000)
 }
 const busyMotion = ref(false)
+const located = computed(() => {
+  const st = (robot.snapshot?.status ?? {}) as Record<string, unknown>
+  return Boolean(st.located ?? st.Location)
+})
+const currentDevice = computed(() =>
+  devices.value.find((d) => String(d.id) === deviceId.value) ?? null)
 type FeedRow = { id: number; ts: string; text: string; level: string; badge: string; link: string }
 const msgTab = ref<'patrol' | 'alarm' | 'control'>('alarm')
 const tabTitle = computed(() => ({ patrol: '巡检消息', alarm: '告警内容', control: '控制指令' }[msgTab.value]))
@@ -391,7 +397,7 @@ onMounted(async () => {
   timers.push(window.setInterval(loadFeed, 15000))
   timers.push(window.setInterval(pollUnread, 30000))
   void api.devices().then((rows) => {
-    devices.value = rows.map((d) => ({ id: d.id, name: d.name, station: d.station }))
+    devices.value = rows.map((d) => ({ id: d.id, name: d.name, station: d.station, adapter: d.adapter, version: d.version }))
     site.value = rows[0]?.station ?? '未分场站'
   }).catch(() => undefined)
   await loadMap()
@@ -668,6 +674,19 @@ async function logout() {
             本机 {{ envCount }} 个传感器；未标定阈值的只记录不告警
           </p>
           <p v-else class="dim small">这台设备没有登记传感器</p>
+        </ScadaPanel>
+
+        <ScadaPanel title="设备状态摘要" class="grow" tone="cyan">
+          <table class="tbl mini">
+            <tbody>
+              <tr><td class="dim">适配器</td><td>{{ currentDevice?.adapter ?? '—' }}</td></tr>
+              <tr><td class="dim">固件版本</td><td>{{ currentDevice?.adapter === 'deeprobotics_x30' ? 'X30 固件见设备台账' : '—' }}</td></tr>
+              <tr><td class="dim">当前地图</td><td>{{ robot.currentMap || '—' }}</td></tr>
+              <tr><td class="dim">定位状态</td><td>{{ located ? '已定位' : '未定位' }}</td></tr>
+              <tr><td class="dim">数据年龄</td><td>{{ robot.snapshot?.online ? Math.round(robot.snapshot?.age_s ?? 0) + ' 秒前' : '离线' }}</td></tr>
+              <tr><td class="dim">写操作</td><td>{{ auth.canWrite ? '已授权' : '未开放' }}</td></tr>
+            </tbody>
+          </table>
         </ScadaPanel>
 
         <ScadaPanel title="巡检点位" class="h-points" :right="`${points.length} 点`">
@@ -951,8 +970,8 @@ async function logout() {
 .body {
   position: relative;
   display: grid;
-  /* 中栏比原来窄 8%，让左侧视频/控制更大一些 */
-  grid-template-columns: clamp(330px, 24.4vw, 440px) minmax(0, 0.92fr) clamp(320px, 24vw, 430px);
+  /* 左栏宽 1.2 倍（视频更大），中栏吃掉剩余，右栏固定居右 */
+  grid-template-columns: clamp(396px, 29.3vw, 528px) minmax(0, 1fr) clamp(320px, 24vw, 430px);
   grid-template-rows: minmax(0, 1fr);
   gap: 10px;
   padding: 10px 12px;
@@ -965,7 +984,10 @@ async function logout() {
 .col.center { display: grid; grid-template-rows: minmax(0, 1fr) auto; }
 .h-ctrl { height: 172px; flex: none; }
 .h-donut { height: 208px; flex: none; }
-.h-points { height: 176px; flex: none; }
+.h-points { flex: 0 0 auto; height: auto; min-height: 0; padding-bottom: 6px; }
+/* 右栏：环境面板吃掉剩余高度（内容居中），点位列表按内容高，底部不留大片空白 */
+.col.right > .grow { flex: 1 1 auto; }
+.col.right .points { overflow-y: auto; }
 .h-msg { height: 244px; flex: none; }
 .h-msg :deep(.panel-body) { padding: 0; }
 .msg-split { display: grid; grid-template-columns: 5.8fr 4.2fr; height: 100%; min-height: 0; }
@@ -1453,4 +1475,10 @@ async function logout() {
   display: inline-block; width: 6px; height: 6px; margin-left: 4px; border-radius: 50%;
   background: #ff3b3b; box-shadow: 0 0 6px #ff3b3b; vertical-align: middle;
 }
+
+.tbl.mini td { padding: 4px 8px; font-size: 12px; }
+.tbl.mini td:first-child { width: 78px; }
+/* 右栏：告警固定、设备摘要吃掉剩余、环境与点位按内容高 */
+.col.right > .grow { flex: 1 1 auto; min-height: 0; }
+.col.right > .h-points { flex: 0 0 auto; }
 </style>
