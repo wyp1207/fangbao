@@ -364,6 +364,7 @@ def live_jpg(
 @router.get("/health")
 def videos_health(
     robot_id: int | None = Query(None),
+    ids: str | None = Query(None, description="只探这几路，逗号分隔（首页只探显示的两路）"),
     _: User = Depends(require_roles("admin", "operator", "viewer")),
 ) -> dict:
     """每路流实际能不能出画面（不是"配置了没有"，是真抓一帧）。"""
@@ -376,6 +377,10 @@ def videos_health(
         q = db.query(VideoSource).filter(VideoSource.show_on_dashboard.is_(True))
         if robot_id is not None:
             q = q.filter(VideoSource.robot_id == robot_id)
+        if ids:
+            want = [int(x) for x in ids.split(",") if x.strip().isdigit()]
+            if want:
+                q = q.filter(VideoSource.id.in_(want))
         rows = [(v.id, v.name, v.stream_name or "") for v in q.all()]
 
     # 探测在会话外做（每路最多 2 次 × 2.5s，不能占连接）
