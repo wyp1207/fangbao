@@ -22,6 +22,13 @@ interface Summary {
   points?: { total: number; by_group: { group: string; points: number; maps: number }[]; covered_by_templates: number; uncovered: number }
   templates?: { total: number; actions: number; maps: number }
   alarms_by_robot?: { robot_id: number; count: number }[]
+  response_metrics?: {
+    alarms: number; alarms_acked: number; alarms_closed: number
+    ack_avg_min: number | null; alarm_close_avg_min: number | null
+    orders: number; orders_from_alarm: number
+    alarm_to_order_avg_min: number | null; order_close_avg_min: number | null
+    order_close_rate: number | null
+  }
   inspection_performance?: { user_id: number; username: string; tasks: number; done: number; overdue: number; items: number; abnormal: number; orders: number; closed: number; done_rate: number | null }[]
   operations: {
     samples: number
@@ -37,6 +44,20 @@ const preset = ref('7d')
 const dateFrom = ref('')
 const dateTo = ref('')
 const data = ref<Summary | null>(null)
+
+// 「响应与闭环」统计（毫秒没有，统一分钟；空值显示 —）
+const rm = computed(() => data.value?.response_metrics ?? {
+  alarms: 0, alarms_acked: 0, alarms_closed: 0, ack_avg_min: null,
+  alarm_close_avg_min: null, orders: 0, orders_from_alarm: 0,
+  alarm_to_order_avg_min: null, order_close_avg_min: null, order_close_rate: null,
+})
+
+function fmtMin(v: number | null | undefined): string {
+  if (v === null || v === undefined) return '—'
+  if (v < 1) return `${Math.round(v * 60)} 秒`
+  if (v < 60) return `${v.toFixed(1)} 分钟`
+  return `${(v / 60).toFixed(1)} 小时`
+}
 const loading = ref(false)
 const printUrl = computed(() => {
   const q: string[] = []
@@ -196,6 +217,29 @@ onMounted(() => applyPreset('7d'))
                 <tr v-for="r in data.alarms_by_robot ?? []" :key="r.robot_id">
                   <td>告警 · 设备 #{{ r.robot_id }}</td><td class="num">{{ r.count }}</td>
                 </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="block">
+            <div class="block-title">响应与闭环（告警 → 工单 → 销号）</div>
+            <table class="grid">
+              <thead><tr><th>环节</th><th style="width: 100px">数值</th><th>说明</th></tr></thead>
+              <tbody>
+                <tr><td>告警总数</td><td class="num">{{ rm.alarms }}</td>
+                  <td class="muted small">已确认 {{ rm.alarms_acked }} · 已关闭 {{ rm.alarms_closed }}</td></tr>
+                <tr><td>平均确认时长</td><td class="num">{{ fmtMin(rm.ack_avg_min) }}</td>
+                  <td class="muted small">告警产生 → 有人点确认</td></tr>
+                <tr><td>平均关闭时长</td><td class="num">{{ fmtMin(rm.alarm_close_avg_min) }}</td>
+                  <td class="muted small">告警产生 → 给出结论关闭</td></tr>
+                <tr><td>转工单数</td><td class="num">{{ rm.orders_from_alarm }}</td>
+                  <td class="muted small">期间共 {{ rm.orders }} 张工单</td></tr>
+                <tr><td>告警→建单时长</td><td class="num">{{ fmtMin(rm.alarm_to_order_avg_min) }}</td>
+                  <td class="muted small">发现到有人接手</td></tr>
+                <tr><td>工单闭环时长</td><td class="num">{{ fmtMin(rm.order_close_avg_min) }}</td>
+                  <td class="muted small">建单 → 销号</td></tr>
+                <tr><td>工单闭环率</td><td class="num">{{ rm.order_close_rate === null ? '—' : rm.order_close_rate + '%' }}</td>
+                  <td class="muted small">来源告警的工单里已销号的比例</td></tr>
               </tbody>
             </table>
           </div>
