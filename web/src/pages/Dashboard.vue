@@ -1335,27 +1335,34 @@ async function logout() {
 .rt-tbl tbody tr:hover td { background: rgba(84, 184, 245, .14); }
 
 .rt-sep { background: #3098e8; }
-.rt-right { padding: 5px 8px 6px; display: flex; flex-direction: column; gap: 3px; min-height: 0; overflow: hidden; }
+.rt-right { padding: 5px 8px 6px; display: flex; flex-direction: column; gap: 4px; min-height: 0; overflow: hidden; }
 .rt-tag {
   align-self: flex-end; background: #54b8f5; color: #ffffff; font-weight: 700;
   font-size: 11.5px; padding: 2px 10px; border-radius: 3px; letter-spacing: 1px;
 }
-.rt-line { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; font-size: 11px; line-height: 1.35; }
-.rt-line span { color: #48bcff; white-space: nowrap; }
+.rt-line {
+  display: flex; justify-content: space-between; gap: 10px; align-items: baseline;
+  font-size: 11.5px; line-height: 1.4;
+  padding: 5px 0;                      /* 行间留白 */
+  border-bottom: 1px dashed rgba(48, 152, 232, .45);   /* 行分隔线 */
+}
+.rt-line:last-of-type { border-bottom: 0; }
+.rt-line span { color: #48bcff; white-space: nowrap; font-weight: 700; }
 .rt-line b {
-  color: #ffa82e; font-weight: 700; text-align: right; max-width: 62%;
+  color: #ffa82e; font-weight: 800; letter-spacing: .3px; text-align: right; max-width: 62%;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.rt-groups { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin-top: auto; flex: none;
+.rt-groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin-top: auto; flex: none;
   border-top: 1px solid #3098e8; padding-top: 4px; }
 .rt-group { padding: 0 4px; border-left: 1px solid #3098e8; min-width: 0; }
 .rt-group:first-child { border-left: 0; padding-left: 0; }
-.rt-group .nums { text-align: center; font-size: 16px; font-weight: 700; }
+.rt-group .nums { text-align: center; font-size: 13px; font-weight: 700; white-space: nowrap; letter-spacing: -.2px; }
 .rt-group .nums i { font-style: normal; }
 .rt-group .nums em { font-style: normal; color: #7fb6dd; margin: 0 1px; }
 .rt-group .nums .r { color: #ff3333; text-shadow: 0 0 8px rgba(255, 51, 51, .45); }
 .rt-group .nums .w { color: #ffffff; }
 .rt-group .nums .g { color: #30d040; text-shadow: 0 0 8px rgba(48, 208, 64, .45); }
-.rt-group .caps { display: flex; justify-content: space-between; gap: 2px; font-size: 8.5px; color: #9fc4e8; white-space: nowrap; }
-.rt-group .caps span { transform: scale(.95); transform-origin: center; }
+.rt-group .caps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; font-size: 7px; color: #9fc4e8; }
+.rt-group .caps span { text-align: center; white-space: nowrap; }
+
 </style>
