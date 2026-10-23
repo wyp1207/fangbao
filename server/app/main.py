@@ -136,7 +136,7 @@ async def lifespan(app: FastAPI):
     record_janitor.start()
 
     from app.db.session import SessionLocal as _SL
-    from app.api.v1.telemetry import TelemetryCollector, purge as telemetry_purge
+    from app.api.v1.telemetry import TelemetryCollector, purge as telemetry_purge, rollup as telemetry_rollup
 
     collector = TelemetryCollector(
         lambda: [(rt.robot_id, rt.cache.snapshot) for rt in robot_registry.runtimes.values()],
@@ -159,6 +159,12 @@ async def lifespan(app: FastAPI):
             try:
                 from app.api.v1.settings import load_all
                 cfg = load_all()
+                try:
+                    n = telemetry_rollup(_SL, hours=26)
+                    if n:
+                        log.info("遥测聚合：写入 %s 个分钟桶", n)
+                except Exception:  # noqa: BLE001
+                    pass
                 telemetry_purge(_SL, keep_days=int(cfg.get("telemetry.keep_days", 7)))
                 # 环境读数单独保留期：10 测点 5s 采样一年 6300 万行，不清会先 OOM 再爆盘
                 try:

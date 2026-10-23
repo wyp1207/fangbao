@@ -34,3 +34,22 @@ class TelemetrySample(Base):
 
     online: Mapped[bool] = mapped_column(Boolean, default=False)
     estop: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class TelemetryRollup(Base):
+    """分钟级聚合：原始 10s 数据保留 7 天，聚合保留 180 天。
+
+    为什么这样做：MySQL 存 10s 原始数据，一年 6300 万行，
+    报表按 180 天查会扫全表；先聚合再查，量级降到 1/60。
+    """
+
+    __tablename__ = "telemetry_rollup"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    bucket: Mapped[datetime] = mapped_column(DateTime, index=True)
+    robot_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    samples: Mapped[int] = mapped_column(Integer, default=0)
+    battery_avg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    battery_min: Mapped[float | None] = mapped_column(Float, nullable=True)
+    speed_avg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    online_ratio: Mapped[float | None] = mapped_column(Float, nullable=True)

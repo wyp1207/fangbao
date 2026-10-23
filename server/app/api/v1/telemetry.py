@@ -98,12 +98,76 @@ def _num(v: Any) -> float | None:
     return None
 
 
+def rollup(session_factory: Callable[[], _Session], hours: int = 26) -> int:
+    """把最近 N 小时的原始采样聚合成分钟桶（幂等：同分钟先删后插）。
+
+    报表查长区间时读聚合表，避免扫 10s 原始数据（1 天 8640 行/台）。
+    """
+    from collections import defaultdict
+
+    from sqlalchemy import func
+
+    from app.models.telemetry import TelemetryRollup, TelemetrySample
+
+    end = datetime.now().replace(second=0, microsecond=0)
+    start = end - timedelta(hours=hours)
+    written = 0
+    with session_factory() as db:  # type: ignore[misc]
+        rows = db.scalars(select(TelemetrySample).where(
+            TelemetrySample.ts >= start, TelemetrySample.ts < end)).all()
+        buckets: dict[tuple, list] = defaultdict(list)
+        for r in rows:
+            key = (r.ts.replace(second=0, microsecond=0), r.robot_id or 0)
+            buckets[key].append(r)
+
+        for (bucket, rid), items in buckets.items():
+            db.query(TelemetryRollup).filter(
+                TelemetryRollup.bucket == bucket,
+                TelemetryRollup.robot_id == rid,
+            ).delete(synchronize_session=False)
+            batteries = [i.battery for i in items if i.battery is not None]
+            speeds = [i.speed for i in items if i.speed is not None]
+            db.add(TelemetryRollup(
+                bucket=bucket, robot_id=rid, samples=len(items),
+                battery_avg=round(sum(batteries) / len(batteries), 2) if batteries else None,
+                battery_min=min(batteries) if batteries else None,
+                speed_avg=round(sum(speeds) / len(speeds), 2) if speeds else None,
+                online_ratio=round(sum(1 for i in items if i.online) / len(items), 3),
+            ))
+            written += 1
+        db.commit()
+    return written
+
+
 def purge(session_factory: Callable[[], _Session], keep_days: int = KEEP_DAYS) -> int:
     cutoff = datetime.now() - timedelta(days=keep_days)
     with session_factory() as db:  # type: ignore[misc]
         res = db.execute(delete(TelemetrySample).where(TelemetrySample.ts < cutoff))
         db.commit()
         return res.rowcount or 0
+
+
+@router.get("/rollup")
+def query_rollup(
+    hours: int = Query(180 * 24, ge=1, le=24 * 365),
+    robot_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> dict:
+    """分钟级聚合（保留 180 天），长区间报表用这个。"""
+    from app.models.telemetry import TelemetryRollup
+
+    start = datetime.now() - timedelta(hours=hours)
+    q = select(TelemetryRollup).where(TelemetryRollup.bucket >= start)
+    if robot_id is not None:
+        q = q.where(TelemetryRollup.robot_id == robot_id)
+    rows = db.scalars(q.order_by(TelemetryRollup.bucket)).all()
+    return {"rows": [
+        {"bucket": r.bucket.isoformat(timespec="minutes"), "robot_id": r.robot_id,
+         "samples": r.samples, "battery_avg": r.battery_avg, "battery_min": r.battery_min,
+         "speed_avg": r.speed_avg, "online_ratio": r.online_ratio}
+        for r in rows
+    ]}
 
 
 @router.get("")

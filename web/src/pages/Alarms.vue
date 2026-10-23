@@ -31,6 +31,14 @@ const page = ref(1)
 const focusRow = ref<number | null>(null)
 const pageSize = 10
 
+function fmtVal(v: unknown): string {
+  if (typeof v !== 'number') return ''
+  const a = Math.abs(v)
+  if (a >= 100) return v.toFixed(1)
+  if (a >= 10) return v.toFixed(1)
+  return v.toFixed(2)
+}
+
 const levelText: Record<string, string> = { critical: '严重', warn: '提醒' }
 const levelOptions = [
   { value: '', label: '全部' },

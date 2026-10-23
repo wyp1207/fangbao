@@ -29,7 +29,7 @@ const caps = ref<string[]>([])
 const loading = ref(false)
 
 const KIND_LABEL: Record<string, string> = {
-  camera: '云台可见光', thermal: '热像仪', ptz: '云台控制', gas: '气体传感器',
+  camera: '云台可见光', thermal: '热像仪', ptz: '云台控制', gas: '气体传感器', sf6: 'SF6 传感器',
   env: '环境传感器', temp: '温度', humidity: '湿度', noise: '噪声', dust: '粉尘', speaker: '喊话器',
 }
 
