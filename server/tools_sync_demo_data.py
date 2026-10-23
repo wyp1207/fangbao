@@ -18,7 +18,7 @@ import argparse
 import json
 from datetime import datetime
 
-TABLES = ("alarm_record", "work_order", "message_record", "inspection_task",
+TABLES = ("robot", "alarm_record", "work_order", "message_record", "inspection_task",
           "inspection_item", "task_run", "task_run_step")
 
 
@@ -40,6 +40,7 @@ def _load(db, table: str, rows: list[dict]) -> int:
     from sqlalchemy import text
 
     model = {
+        "robot": "app.models.robot:Robot",
         "alarm_record": "app.models.alarm:AlarmRecord",
         "work_order": "app.models.inspection:WorkOrder",
         "message_record": "app.models.message:MessageRecord",
