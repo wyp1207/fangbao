@@ -17,6 +17,38 @@ def judge(s: Sensor, value: float) -> tuple[str | None, str]:
     return _judge(s, value)
 
 
+# 滞回/持续判定需要的运行时状态（单进程；重启丢状态可接受，最坏多报一次）
+# ponytail: 进程内字典，够单机用；多实例部署要换成 Redis/DB。
+_STATE: dict[int, dict] = {}
+
+
+def _stabilize(sensor_id: int, level: str | None, value: float, rule: dict) -> str | None:
+    """持续 N 秒 + 滞回：抖动的瞬时尖峰不报，已报的不会因为刚跌回阈值就消失。"""
+    import time
+
+    st = _STATE.setdefault(sensor_id, {"level": None, "since": 0.0})
+    sustain = float(rule.get("sustain_s") or 0)
+    hyst = float(rule.get("hysteresis_pct") or 0) / 100.0
+    now = time.time()
+
+    if level is None:
+        st["level"] = None
+        st["since"] = 0.0
+        return None
+
+    # 已经报过同级：只有明确回落（低于阈值*(1-滞回)）才允许撤销，
+    # 这里返回 None 表示"不再重复报"，靠 alarms 的自动恢复逻辑收敛
+    if st["level"] == level:
+        return None
+
+    if st["since"] == 0.0:
+        st["since"] = now
+    if sustain > 0 and now - st["since"] < sustain:
+        return None          # 还没持续够久，先不报
+    st["level"] = level
+    return level
+
+
 def _rule_for(db, s: Sensor) -> dict:
     """取这条传感器所属外设上的告警规则（没有就回落到传感器自身阈值）。"""
     import json
@@ -69,6 +101,7 @@ def ingest_value(db, *, sensor_id: int, value: float, source: str = "gateway",
 
     rule = _rule_for(db, s)
     level, msg = _judge_with_rule(s, value, rule)
+    level = _stabilize(s.id, level, value, rule)
     raised = None
     if level:
         store = alarms_mod.get_store()

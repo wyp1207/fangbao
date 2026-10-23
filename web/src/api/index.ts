@@ -378,6 +378,7 @@ export const api = {
     request<{ ok: boolean }>(`/task-templates/${id}`, { method: 'DELETE' }),
   dispatchTaskTemplate: (id: number) =>
     request<{ ok: boolean }>(`/task-templates/${id}/dispatch`, { method: 'POST' }),
+  markAllRead: () => request<{ ok: boolean; read_ts: number }>('/messages/read-all', { method: 'POST' }),
   messages: () => request<{ items: { id: number; ts: number; level: string; source: string; title: string; body: string; link: Record<string, unknown> }[]; unread: number }>('/messages'),
 
   // 录像

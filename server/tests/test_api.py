@@ -1235,17 +1235,20 @@ def test_peripheral_rule_overrides(auth_client):
     from app.services import alarms as alarms_mod
     from app.services.sensor_io import ingest_value
 
+    # 自己造一个传感器，别依赖别的用例留下的数据
+    created = auth_client.post("/api/v1/sensors", json={
+        "name": "规则验证传感器", "kind": "gas", "warn_high": 1000, "crit_high": 2000})
+    assert created.status_code == 200, created.text
+    sid = created.json()["id"]
+
     with SessionLocal() as db:
-        sensor = db.query(Sensor).first()
-        assert sensor is not None
+        sensor = db.get(Sensor, sid)
         sensor.warn_high = 1000.0
         periph = Peripheral(robot_id=1, kind=sensor.kind, sensor_id=sensor.id,
                             config_json='{"rule": {"enabled": true, "warn_high": 100, "crit_high": 200}}')
         db.add(periph)
         db.commit()
         db.refresh(periph)
-        sid = sensor.id
-
         # 1000 以下按默认规则不报，但外设规则把上限压到 100 → 150 应该报 warn
         res = ingest_value(db, sensor_id=sid, value=150)
         assert res["level"] == "warn", res
