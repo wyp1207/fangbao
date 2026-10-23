@@ -215,7 +215,7 @@ const pickQ = ref('')
 const pickFiltered = computed(() => {
   const kw = pickQ.value.trim().toLowerCase()
   return pickStreams.value.filter((s) => {
-    if (!pickAll.value && !s.registered && s.name !== pickFor.value?.stream_name) return false
+    if (!s.registered && s.name !== pickFor.value?.stream_name) return false
     if (kw && !s.name.toLowerCase().includes(kw)) return false
     return true
   })
@@ -883,7 +883,7 @@ async function logout() {
           </button>
           <div class="pick-filter">
             <input v-model="pickQ" class="input" placeholder="搜索流名，如 train1_3f" />
-            <label class="dim small"><input type="checkbox" v-model="pickAll" /> 显示全部 {{ pickStreams.length }} 路</label>
+            <span class="dim small">{{ pickStreams.length }} 路已登记</span>
           </div>
           <p v-if="!pickFiltered.length" class="dim small">{{ pickBusy ? '读取中…' : '没有匹配的流' }}</p>
         </div>
