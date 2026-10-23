@@ -512,7 +512,7 @@ async function logout() {
               <span class="env-value" v-if="e.value !== null">
                 {{ e.value }}<small>{{ e.unit }}</small>
               </span>
-              <span class="env-value dim" v-else>--<small>{{ e.unit }}</small></span>
+              <span class="env-value empty" v-else>--<small>{{ e.unit }}</small></span>
             </div>
           </div>
           <p v-if="envCount" class="dim small">
@@ -915,9 +915,10 @@ async function logout() {
   background: linear-gradient(180deg, rgba(0, 110, 190, 0.45), rgba(0, 70, 140, 0.55));
   border: 1px solid rgba(111, 227, 255, 0.22);
 }
-.env-label { font-size: 11.5px; color: #9fd2ff; }
-.env-value { font-size: 15px; color: #5d8fc4; font-variant-numeric: tabular-nums; }
-.env-value small { font-size: 10px; margin-left: 2px; }
+.env-label { font-size: 11.5px; color: #cfeaff; }
+.env-value { font-size: 16px; color: #f2fbff; font-weight: 600; text-shadow: 0 0 8px rgba(120, 225, 255, 0.45); font-variant-numeric: tabular-nums; }
+.env-value small { font-size: 10px; margin-left: 2px; color: #9fe0ff; font-weight: 400; text-shadow: none; }
+.env-value.empty { color: #7fb6dd; font-weight: 400; text-shadow: none; }
 
 /* 点位 */
 .points { list-style: none; margin: 0; padding: 0; }
