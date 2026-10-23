@@ -48,6 +48,44 @@ const videoOptions = computed(() => [
 const form = ref({ kind: 'camera', vendor: 'hikvision', model: '', channel: '', sensor_id: '', video_id: '' })
 const adding = ref(false)
 
+// 告警规则编辑（按外设配置：不同传感器阈值/开关不同）
+const ruleFor = ref<Periph | null>(null)
+const rule = ref({ enabled: true, warn_high: '', crit_high: '', warn_low: '', crit_low: '' })
+
+function openRule(p: Periph) {
+  ruleFor.value = p
+  const r = (p.config?.rule ?? {}) as Record<string, unknown>
+  rule.value = {
+    enabled: r.enabled !== false,
+    warn_high: r.warn_high != null ? String(r.warn_high) : '',
+    crit_high: r.crit_high != null ? String(r.crit_high) : '',
+    warn_low: r.warn_low != null ? String(r.warn_low) : '',
+    crit_low: r.crit_low != null ? String(r.crit_low) : '',
+  }
+}
+
+async function saveRule() {
+  const p = ruleFor.value
+  if (!p) return
+  const num = (v: string) => (v.trim() === '' ? null : Number(v))
+  const cfg = { ...(p.config ?? {}) }
+  cfg.rule = {
+    enabled: rule.value.enabled,
+    warn_high: num(rule.value.warn_high),
+    crit_high: num(rule.value.crit_high),
+    warn_low: num(rule.value.warn_low),
+    crit_low: num(rule.value.crit_low),
+  }
+  try {
+    await api.updatePeripheral(p.id, { config: cfg })
+    toast('告警规则已保存，下一次读数即生效', 'ok', 4000)
+    ruleFor.value = null
+    await load()
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : '保存失败', 'danger')
+  }
+}
+
 async function load() {
   if (!deviceId.value) return
   loading.value = true
@@ -141,7 +179,7 @@ onMounted(async () => {
         <thead>
           <tr><th style="width:60px">ID</th><th style="width:130px">类型</th><th>厂商/型号</th>
             <th style="width:150px">通道</th><th style="width:150px">关联</th>
-            <th style="width:80px">启用</th><th style="width:150px">操作</th></tr>
+            <th style="width:150px">告警规则</th><th style="width:80px">启用</th><th style="width:210px">操作</th></tr>
         </thead>
         <tbody>
           <tr v-for="p in rows" :key="p.id">
@@ -154,10 +192,18 @@ onMounted(async () => {
               <template v-else-if="p.video_id">视频 #{{ p.video_id }}</template>
               <template v-else>—</template>
             </td>
+            <td class="dim small">
+              <template v-if="p.config?.rule">
+                {{ (p.config.rule as any).enabled === false ? '已关闭' :
+                   `提醒≥${(p.config.rule as any).warn_high ?? '—'} 严重≥${(p.config.rule as any).crit_high ?? '—'}` }}
+              </template>
+              <template v-else>默认阈值</template>
+            </td>
             <td>
               <span class="tag" :class="p.enabled ? 'ok' : 'warn'">{{ p.enabled ? '是' : '否' }}</span>
             </td>
             <td>
+              <button class="btn btn-xs" :disabled="!auth.canWrite || !p.sensor_id" @click="openRule(p)">规则</button>
               <button class="btn btn-xs" :disabled="!auth.canWrite" @click="toggle(p)">
                 {{ p.enabled ? '停用' : '启用' }}
               </button>
@@ -185,6 +231,24 @@ onMounted(async () => {
         粉尘仪选「粉尘」并关联一个传感器 → 环境面板多一项。
       </p>
     </section>
+
+    <div v-if="ruleFor" class="mask" @click.self="ruleFor = null">
+      <div class="dlg">
+        <h3>告警规则 · {{ KIND_LABEL[ruleFor.kind] ?? ruleFor.kind }}</h3>
+        <label class="row"><input type="checkbox" v-model="rule.enabled" /> 启用告警</label>
+        <div class="grid2">
+          <label>提醒上限<input v-model="rule.warn_high" class="input" placeholder="留空用默认" /></label>
+          <label>严重上限<input v-model="rule.crit_high" class="input" placeholder="留空用默认" /></label>
+          <label>提醒下限<input v-model="rule.warn_low" class="input" /></label>
+          <label>严重下限<input v-model="rule.crit_low" class="input" /></label>
+        </div>
+        <p class="dim small">留空表示用传感器默认阈值；关闭后这条外设不再产生告警（仍记录读数）。</p>
+        <div class="acts">
+          <button class="btn" @click="ruleFor = null">取消</button>
+          <button class="btn primary" @click="saveRule">保存</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -199,4 +263,13 @@ onMounted(async () => {
 .form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; gap: 8px 12px; align-items: end; }
 .form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #9fd2ff; }
 .input { width: 100%; box-sizing: border-box; }
+
+.mask { position: fixed; inset: 0; z-index: 120; background: rgba(2, 14, 30, .66); display: grid; place-items: center; }
+.dlg { width: 520px; padding: 14px 16px; background: linear-gradient(180deg, rgba(6, 46, 92, .98), rgba(4, 26, 54, .99));
+  border: 1px solid rgba(111, 227, 255, .55); border-radius: 4px; }
+.dlg h3 { margin: 0 0 10px; font-size: 14px; color: #ffd040; }
+.dlg .row { display: flex; align-items: center; gap: 6px; font-size: 12px; margin-bottom: 8px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+.grid2 label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: #9fd2ff; }
+.acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 </style>

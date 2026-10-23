@@ -17,6 +17,42 @@ def judge(s: Sensor, value: float) -> tuple[str | None, str]:
     return _judge(s, value)
 
 
+def _rule_for(db, s: Sensor) -> dict:
+    """取这条传感器所属外设上的告警规则（没有就回落到传感器自身阈值）。"""
+    import json
+
+    from app.models.peripheral import Peripheral
+
+    p = (db.query(Peripheral)
+         .filter(Peripheral.sensor_id == s.id, Peripheral.enabled.is_(True))
+         .first())
+    if p is None or not p.config_json:
+        return {"robot_id": p.robot_id if p else None}
+    try:
+        cfg = json.loads(p.config_json or "{}")
+    except Exception:  # noqa: BLE001
+        cfg = {}
+    rule = cfg.get("rule") or {}
+    rule["robot_id"] = p.robot_id
+    return rule
+
+
+def _judge_with_rule(s: Sensor, value: float, rule: dict) -> tuple[str | None, str]:
+    """外设规则优先：enabled=false 不报；阈值覆盖传感器默认值。"""
+    if rule.get("enabled") is False:
+        return None, "该外设已关闭告警"
+
+    class _Tmp:
+        pass
+
+    t = _Tmp()
+    for f in ("warn_high", "crit_high", "warn_low", "crit_low", "name", "unit", "kind"):
+        setattr(t, f, rule.get(f) if rule.get(f) is not None else getattr(s, f))
+    from app.api.v1.sensors import _judge
+
+    return _judge(t, value)
+
+
 def ingest_value(db, *, sensor_id: int, value: float, source: str = "gateway",
                  ts: datetime | None = None) -> dict:
     from app.api.v1.sensors import KINDS
@@ -31,11 +67,13 @@ def ingest_value(db, *, sensor_id: int, value: float, source: str = "gateway",
     db.commit()
     db.refresh(row)
 
-    level, msg = judge(s, value)
+    rule = _rule_for(db, s)
+    level, msg = _judge_with_rule(s, value, rule)
     raised = None
     if level:
         store = alarms_mod.get_store()
         if store is not None:
             raised = store.raise_external(
-                metric=f"env_{s.kind}_{s.id}_{level}", level=level, message=msg, value=value)
+                metric=f"env_{s.kind}_{s.id}_{level}", level=level, message=msg,
+                value=value, robot_id=rule.get("robot_id"))
     return {"ok": True, "id": row.id, "level": level, "message": msg, "raised": raised is not None}
