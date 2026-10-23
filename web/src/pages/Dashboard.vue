@@ -154,6 +154,11 @@ function openVideo(which: string) {
   toast(`${which}通道未接入：真机联调后按 RTSP / WebRTC 接入`, 'warn', 3000)
 }
 const busyMotion = ref(false)
+const msgTab = ref<'patrol' | 'alarm' | 'ctrl'>('patrol')
+const msgRows = computed(() => robot.alarms.slice(0, 6))
+const alarmUnacked = computed(() => robot.alarms.filter((a) => !a.acked_at).length)
+const alarmAcked = computed(() => robot.alarms.filter((a) => !!a.acked_at).length)
+const alarmCritical = computed(() => robot.alarms.filter((a) => a.level === 'critical').length)
 
 // 今日任务状态（右半边）
 type RunRow = { id: number; name: string; status: string; steps?: number; ok?: number }
@@ -497,47 +502,58 @@ async function logout() {
           <p v-if="mapError" class="red small">{{ mapError }}</p>
         </ScadaPanel>
 
-        <ScadaPanel title="实时消息" tone="violet" class="h-msg" right="查看全部 →" right-to="alarms">
-          <div class="msg-split">
-          <div class="msg-main">
-          <table class="tbl">
-            <thead><tr><th>时间</th><th>级别</th><th>内容</th><th>状态</th></tr></thead>
-            <tbody>
-              <tr
-                v-for="a in robot.alarms.slice(0, 6)" :key="a.id"
-                class="clickable-row" title="点击查看告警" @click="goAlarms('unacked')"
-              >
-                <td>{{ a.started_at.slice(11, 19) }}</td>
-                <td><i class="dot" :class="a.level === 'critical' ? 'red' : 'gold'" />{{ a.level === 'critical' ? '严重' : '提醒' }}</td>
-                <td class="strong">{{ a.message }}</td>
-                <td :class="a.acked_at ? 'green' : 'red'">{{ a.acked_at ? '已确认' : '未确认' }}</td>
-              </tr>
-              <tr v-if="!robot.alarms.length">
-                <td colspan="4" class="dim">暂无消息 · 环境类阈值未标定，不会产生环境告警</td>
-              </tr>
-            </tbody>
-          </table>
-          </div>
+        <section class="rt">
+          <header class="rt-head"><span>实时消息</span></header>
+          <div class="rt-body">
+            <div class="rt-left">
+              <div class="rt-tabs">
+                <button :class="{ on: msgTab === 'patrol' }" @click="msgTab = 'patrol'">巡检消息</button>
+                <button :class="{ on: msgTab === 'alarm' }" @click="msgTab = 'alarm'">告警消息</button>
+                <button :class="{ on: msgTab === 'ctrl' }" @click="msgTab = 'ctrl'">控制消息</button>
+              </div>
+              <div class="rt-scroll">
+                <table class="rt-tbl">
+                  <thead><tr><th>时间</th><th>巡检消息</th></tr></thead>
+                  <tbody>
+                    <tr v-for="a in msgRows" :key="a.id" class="clickable-row"
+                        title="点击查看告警" @click="goAlarms('unacked')">
+                      <td class="c-time">{{ a.started_at.slice(0, 16).replace('T', ' ') }}</td>
+                      <td class="c-text">
+                        {{ a.message }}
+                        <i class="st" :class="a.acked_at ? 'g' : 'r'">{{ a.acked_at ? '正常' : '异常' }}</i>
+                      </td>
+                    </tr>
+                    <tr v-if="!msgRows.length"><td colspan="2" class="dim">暂无消息</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
 
-          <div class="msg-side">
-            <div class="ms-head">今日任务状态</div>
-            <div class="ms-row"><span>任务名称</span><b>{{ currentRun?.name || '—' }}</b></div>
-            <div class="ms-row"><span>任务状态</span>
-              <b :class="currentRun?.status === 'running' ? 'green' : currentRun ? 'gold' : 'dim'">
-                {{ runStatusText }}
-              </b>
-            </div>
-            <div class="ms-row"><span>预估剩余</span><b>{{ runEta }}</b></div>
-            <div class="ms-counts">
-              <div><b class="c-total">{{ runStats.total }}</b><span>总数</span></div>
-              <div><b class="c-plan">{{ runStats.planned }}</b><span>待执行</span></div>
-              <div><b class="c-cancel">{{ runStats.cancelled }}</b><span>已取消</span></div>
-              <div><b class="c-done">{{ runStats.done }}</b><span>正常</span></div>
-              <div><b class="c-fail">{{ runStats.failed }}</b><span>异常</span></div>
-            </div>
+            <div class="rt-sep" />
+
+            <aside class="rt-right">
+              <div class="rt-tag">今日任务状态</div>
+              <div class="rt-line"><span>任务名称</span><b>{{ currentRun?.name || '—' }}</b></div>
+              <div class="rt-line"><span>任务状态</span><b>{{ runStatusText }}</b></div>
+              <div class="rt-line"><span>当前任务预估剩余时间</span><b>{{ runEta }}</b></div>
+
+              <div class="rt-groups">
+                <div class="rt-group">
+                  <div class="nums"><i class="r">{{ runStats.total }}</i><em>/</em><i class="w">{{ runStats.planned }}</i><em>/</em><i class="g">{{ runStats.done }}</i></div>
+                  <div class="caps"><span>总数</span><span>待执行</span><span>已</span></div>
+                </div>
+                <div class="rt-group">
+                  <div class="nums"><i class="r">{{ runStats.cancelled }}</i><em>/</em><i class="w">{{ runStats.failed }}</i><em>/</em><i class="g">{{ runStats.done }}</i></div>
+                  <div class="caps"><span>终止</span><span>异常</span><span>正常</span></div>
+                </div>
+                <div class="rt-group">
+                  <div class="nums"><i class="r">{{ alarmUnacked }}</i><em>/</em><i class="w">{{ alarmCritical }}</i><em>/</em><i class="g">{{ alarmAcked }}</i></div>
+                  <div class="caps"><span>告警</span><span>异常</span><span>正常</span></div>
+                </div>
+              </div>
+            </aside>
           </div>
-          </div>
-        </ScadaPanel>
+        </section>
       </main>
 
       <aside class="col right">
@@ -1214,4 +1230,132 @@ async function logout() {
 .ms-counts b.c-done { color: #4dff46; }
 .ms-counts b.c-fail { color: #ff4b45; }
 .ms-counts span { color: #8fb7d8; font-size: 9.5px; }
+
+/* ===== 实时消息：按参考图重做（豆包视觉说明） ===== */
+.h-msg { position: relative; }
+.h-msg :deep(.panel-body) { padding: 0; overflow: hidden; }
+.h-msg :deep(.panel-title) {
+  background: linear-gradient(180deg, #1e6fae 0%, #0b2b55 100%);
+  box-shadow: inset 0 1px 0 rgba(160, 240, 255, .55);
+}
+.msg-split { display: grid; grid-template-columns: 6fr 4fr; height: 100%; min-height: 0; }
+.msg-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+
+/* 三个 tab：选中亮青底深字，未选深蓝底浅字 */
+.msg-tabs { display: flex; gap: 3px; padding: 5px 6px 3px; flex: none; }
+.msg-tabs button {
+  flex: 1; padding: 4px 6px; font-size: 11.5px; font-weight: 600; cursor: pointer;
+  color: #bfd9ef; background: #0a2247; border: 1px solid rgba(37, 116, 187, .7);
+  border-radius: 2px; letter-spacing: .5px;
+}
+.msg-tabs button.on { background: #2fe0f0; color: #06253f; border-color: #7ff0ff; }
+
+.h-msg .tbl { table-layout: fixed; width: 100%; }
+.h-msg .tbl th {
+  background: #0a244b; color: #eaf3ff; font-size: 12px; font-weight: 700;
+  border: 1px solid rgba(37, 116, 187, .75); padding: 5px 8px;
+}
+.h-msg .tbl th:nth-child(1) { width: 108px; }
+.h-msg .tbl td {
+  border: 1px solid rgba(37, 116, 187, .55); padding: 6px 8px;
+  color: #eaf3ff; font-size: 12px; white-space: normal; line-height: 1.45;
+}
+.h-msg .tbl tbody tr:nth-child(even) td { background: transparent; }
+.h-msg .tbl tbody tr:hover td { background: rgba(47, 224, 240, .12); }
+.h-msg .tbl .t-time { color: #cfe6ff; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.h-msg .tbl .t-state { font-style: normal; font-size: 10.5px; margin-left: 6px; padding: 0 4px; border-radius: 2px; }
+.h-msg .tbl .t-state.ok { color: #4dff46; border: 1px solid rgba(77, 255, 70, .5); }
+.h-msg .tbl .t-state.bad { color: #ff6a6e; border: 1px solid rgba(255, 106, 110, .5); }
+
+/* 右侧任务区：浅青标签 + 橙黄数值 + 三组红/绿计数 */
+.msg-side {
+  padding: 6px 10px 8px; border-left: 2px solid rgba(37, 116, 187, .85);
+  background: linear-gradient(180deg, rgba(10, 36, 75, .75), rgba(7, 25, 50, .55));
+  display: flex; flex-direction: column; gap: 4px; min-height: 0; overflow: hidden;
+}
+.ms-tag {
+  align-self: flex-end; background: #36cbe6; color: #06264a; font-weight: 700;
+  font-size: 11.5px; padding: 3px 9px; border-radius: 2px;
+  box-shadow: 0 0 10px rgba(54, 203, 230, .55); letter-spacing: 1px;
+}
+.ms-line { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; font-size: 11.5px; }
+.ms-line span { color: #7fd8ff; }
+.ms-line b {
+  color: #ffb62e; font-weight: 700; max-width: 58%; text-align: right;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ms-groups { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: auto; }
+.ms-group { border: 1px solid rgba(37, 116, 187, .55); border-radius: 2px; padding: 3px 4px; }
+.ms-group .nums { text-align: center; font-size: 15px; font-weight: 700; letter-spacing: 1px; color: #8fb7d8; }
+.ms-group .nums i { font-style: normal; text-shadow: 0 0 8px currentColor; }
+.ms-group .nums .r { color: #ff6a6e; }
+.ms-group .nums .g { color: #4dff46; }
+.ms-group .caps { display: flex; justify-content: space-around; font-size: 9px; color: #8fb7d8; }
+
+/* ===== 实时消息：1:1 复刻参考（配色用豆包给出的精确值） ===== */
+.rt {
+  height: 262px; flex: none; display: flex; flex-direction: column;
+  background: #0f2b52; border: 1px solid #3098e8; border-radius: 3px;
+  box-shadow: 0 0 0 1px rgba(48, 152, 232, .25), 0 0 12px rgba(48, 152, 232, .18);
+  overflow: hidden;
+}
+.rt-head {
+  height: 26px; flex: none; display: grid; place-items: center;
+  background: linear-gradient(180deg, #1760a8, #0d335f);
+  border-bottom: 1px solid #3098e8;
+}
+.rt-head span {
+  color: #ffd040; font-weight: 700; font-size: 14px; letter-spacing: 3px;
+  text-shadow: 0 0 8px rgba(255, 208, 64, .35);
+}
+.rt-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 7fr 1px 3fr; }
+.rt-left { min-width: 0; display: flex; flex-direction: column; }
+.rt-tabs { display: flex; gap: 0; padding: 6px 8px 5px; flex: none; }
+.rt-tabs button {
+  padding: 4px 14px; font-size: 12px; font-weight: 600; cursor: pointer;
+  color: #ffffff; background: #0b2344; border: 1px solid #3098e8; border-radius: 3px;
+  margin-right: 4px;
+}
+.rt-tabs button.on { background: #54b8f5; color: #ffffff; border-color: #7fd0ff; }
+.rt-scroll { flex: 1; min-height: 0; overflow: auto; }
+.rt-tbl { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.rt-tbl th {
+  color: #ffffff; font-size: 12px; font-weight: 700; text-align: left;
+  background: #0b2344; border: 1px solid #3098e8; padding: 5px 8px;
+}
+.rt-tbl th:first-child { width: 132px; }
+.rt-tbl td {
+  color: #ffffff; font-size: 11.5px; line-height: 1.45; padding: 5px 8px;
+  border: 1px solid rgba(48, 152, 232, .6); word-break: break-all;
+}
+.rt-tbl .c-time { color: #ffffff; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rt-tbl .st { font-style: normal; margin-left: 6px; font-size: 11px; }
+.rt-tbl .st.g { color: #30d040; }
+.rt-tbl .st.r { color: #ff3333; }
+.rt-tbl tbody tr:hover td { background: rgba(84, 184, 245, .14); }
+
+.rt-sep { background: #3098e8; }
+.rt-right { padding: 5px 8px 6px; display: flex; flex-direction: column; gap: 3px; min-height: 0; overflow: hidden; }
+.rt-tag {
+  align-self: flex-end; background: #54b8f5; color: #ffffff; font-weight: 700;
+  font-size: 11.5px; padding: 2px 10px; border-radius: 3px; letter-spacing: 1px;
+}
+.rt-line { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; font-size: 11px; line-height: 1.35; }
+.rt-line span { color: #48bcff; white-space: nowrap; }
+.rt-line b {
+  color: #ffa82e; font-weight: 700; text-align: right; max-width: 62%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.rt-groups { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin-top: auto; flex: none;
+  border-top: 1px solid #3098e8; padding-top: 4px; }
+.rt-group { padding: 0 4px; border-left: 1px solid #3098e8; min-width: 0; }
+.rt-group:first-child { border-left: 0; padding-left: 0; }
+.rt-group .nums { text-align: center; font-size: 16px; font-weight: 700; }
+.rt-group .nums i { font-style: normal; }
+.rt-group .nums em { font-style: normal; color: #7fb6dd; margin: 0 1px; }
+.rt-group .nums .r { color: #ff3333; text-shadow: 0 0 8px rgba(255, 51, 51, .45); }
+.rt-group .nums .w { color: #ffffff; }
+.rt-group .nums .g { color: #30d040; text-shadow: 0 0 8px rgba(48, 208, 64, .45); }
+.rt-group .caps { display: flex; justify-content: space-between; gap: 2px; font-size: 8.5px; color: #9fc4e8; white-space: nowrap; }
+.rt-group .caps span { transform: scale(.95); transform-origin: center; }
 </style>
