@@ -252,10 +252,12 @@ def test_video(
         return {"ok": False, "target": f"{host}:{port}", "message": f"连不上：{exc.__class__.__name__}"}
 
 
+_LIVE_CACHE: dict[int, tuple[bytes, float]] = {}
+
+
 @router.get("/{video_id}/live.jpg")
 def live_jpg(
     video_id: int,
-    db: Session = Depends(get_db),
     _: User = Depends(require_roles("admin", "operator", "viewer")),
 ):
     """代理 go2rtc 的一帧。
@@ -270,20 +272,33 @@ def live_jpg(
 
     from app.core.errors import ExternalUnavailable
 
-    v = db.get(VideoSource, video_id)
-    if not v or not v.stream_name:
+    # 查库要快拿快放：抓帧可能阻塞 3.5 秒，占着会话会把连接池抽干
+    from app.db.session import SessionLocal
+
+    with SessionLocal() as db:
+        v = db.get(VideoSource, video_id)
+        stream_name = v.stream_name if v else ""
+    if not stream_name:
         raise NotFound("视频源不存在或未设置流名")
     base = getattr(get_settings(), "go2rtc_base", "") or ""
     if not base:
         raise ExternalUnavailable("未配置 go2rtc", code="NO_GO2RTC")
-    url = f"{base.rstrip('/')}/api/frame.jpeg?src={v.stream_name}"
+    url = f"{base.rstrip('/')}/api/frame.jpeg?src={stream_name}"
+    import time as _time
+
     try:
-        with _req.urlopen(url, timeout=4) as resp:
+        with _req.urlopen(url, timeout=3.5) as resp:
             data = resp.read()
+        if len(data) < 1024:
+            raise RuntimeError("空帧")
+        _LIVE_CACHE[video_id] = (data, _time.time())
     except Exception as exc:  # noqa: BLE001
+        cached = _LIVE_CACHE.get(video_id)
+        # 30 秒内有过画面：先返回旧帧（标 X-Frame-Stale），前端不闪断
+        if cached and _time.time() - cached[1] < 30:
+            return Response(content=cached[0], media_type="image/jpeg",
+                            headers={"Cache-Control": "no-store", "X-Frame-Stale": "1"})
         raise ExternalUnavailable(f"抓帧失败：{exc.__class__.__name__}", code="FRAME_FAIL") from exc
-    if len(data) < 1024:
-        raise ExternalUnavailable("相机无画面", code="FRAME_EMPTY")
     return Response(content=data, media_type="image/jpeg",
                     headers={"Cache-Control": "no-store"})
 
@@ -291,20 +306,25 @@ def live_jpg(
 @router.get("/health")
 def videos_health(
     robot_id: int | None = Query(None),
-    db: Session = Depends(get_db),
     _: User = Depends(require_roles("admin", "operator", "viewer")),
 ) -> dict:
     """每路流实际能不能出画面（不是"配置了没有"，是真抓一帧）。"""
     from app.services.snapshot import probe_frame
 
+    from app.db.session import SessionLocal
+
     base = getattr(get_settings(), "go2rtc_base", "") or ""
-    q = db.query(VideoSource)
-    if robot_id is not None:
-        q = q.filter(VideoSource.robot_id == robot_id)
+    with SessionLocal() as db:
+        q = db.query(VideoSource)
+        if robot_id is not None:
+            q = q.filter(VideoSource.robot_id == robot_id)
+        rows = [(v.id, v.name, v.stream_name or "") for v in q.all()]
+
+    # 探测在会话外做（每路最多 2 次 × 2.5s，不能占连接）
     out = []
-    for v in q.all():
-        ok, reason = probe_frame(v.stream_name or "", base)
-        out.append({"id": v.id, "name": v.name, "stream": v.stream_name, "ok": ok, "reason": reason})
+    for vid, name, stream in rows:
+        ok, reason = probe_frame(stream, base)
+        out.append({"id": vid, "name": name, "stream": stream, "ok": ok, "reason": reason})
     return {"ok": True, "videos": out}
 
 

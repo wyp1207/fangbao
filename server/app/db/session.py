@@ -30,7 +30,7 @@ def _engine():
         # SQLite 并发写会互相锁：给 busy timeout，并开 WAL（读不挡写）
         kwargs["connect_args"] = {"check_same_thread": False, "timeout": 30}
     else:
-        kwargs.update(pool_recycle=1800, pool_size=5, max_overflow=5)
+        kwargs.update(pool_recycle=1800, pool_size=10, max_overflow=20)
     return create_engine(url, **kwargs)
 
 
