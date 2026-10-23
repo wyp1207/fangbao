@@ -63,7 +63,10 @@ const videoRows = ref<{
 const dashVideos = computed(() => videoRows.value.filter((v) => v.show_on_dashboard && v.go2rtc_url))
 const visibleVideo = computed(() => {
   const pool = dashVideos.value
-  return pool.find((x) => /充电房|可见光|车体/.test(x.group_name + x.name)) ?? pool[0] ?? null
+  // 优先云台/球机：机载广角画面畸变，不能当大屏主画面
+  return pool.find((x) => /云台|PTZ|球机/i.test(x.name)) ??
+    pool.find((x) => !/机载|广角|鱼眼/.test(x.name)) ??
+    pool[0] ?? null
 })
 const thermalVideo = computed(() =>
   dashVideos.value.find((x) => /热|红外|thermal/i.test(x.name + x.group_name)) ?? null)
@@ -398,7 +401,7 @@ async function logout() {
           </div>
         </ScadaPanel>
 
-        <ScadaPanel v-if="thermalVideo" title="热红外视频" tone="gold" class="grow" body-class="no-pad">
+        <ScadaPanel title="热红外视频" tone="gold" class="grow" body-class="no-pad">
           <div class="embed">
             <iframe v-if="thermalStream" :src="thermalStream" title="热红外" allow="autoplay; fullscreen" />
             <div v-else class="embed-empty">
