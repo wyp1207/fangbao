@@ -66,6 +66,7 @@ export const NAV: NavGroup[] = [
     key: 'device', label: '设备管理',
     items: [
       { name: 'robots', real: true, label: '机器人' },
+      { name: 'peripherals', real: true, label: '外设管理' },
       { name: 'cameras', real: true, label: '摄像头' },
       { name: 'env-device', real: true, label: '环境传感器' },
           { name: 'sensor-gateways', real: true, label: '采集网关' },
