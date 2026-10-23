@@ -986,7 +986,7 @@ def test_cruise_runner_state_machine(auth_client, monkeypatch):
         def cancel(self):
             self.cancelled = True
 
-        def capture(self, step):
+        def capture(self, step, stream=None):
             # 到点动作：真实适配器会调机器人抓拍接口，这里返回假 URL
             return {"url": f"/fake/{step.seq}.jpg", "action": step.action}
 

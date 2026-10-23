@@ -110,7 +110,7 @@ class CruiseRunner:
                 continue
 
             # 到点后执行这个点位配的动作（拍照/测温/停留），不是只记坐标
-            action_result, action_err = self._do_action(adapter, step)
+            action_result, action_err = self._do_action(adapter, step, run.robot_id)
             if action_err:
                 self._mark(step.id, "failed",
                            error=f"到点但动作失败：{action_err}",
@@ -158,14 +158,38 @@ class CruiseRunner:
             import asyncio
             asyncio.run(res)
 
-    def _do_action(self, adapter, step) -> tuple[dict | None, str | None]:
+    def _camera_stream(self, robot_id: int | None) -> str | None:
+        """从外设表里挑这台车的相机流（优先 camera，其次 thermal）。"""
+        try:
+            import json
+
+            from app.models.peripheral import Peripheral
+            from app.models.video_source import VideoSource
+
+            with self._sf() as db:
+                q = db.query(Peripheral).filter(Peripheral.enabled.is_(True),
+                                                Peripheral.video_id.isnot(None))
+                if robot_id is not None:
+                    q = q.filter(Peripheral.robot_id == robot_id)
+                rows = q.all()
+                rows.sort(key=lambda p: 0 if p.kind == "camera" else 1)
+                for p in rows:
+                    v = db.get(VideoSource, p.video_id)
+                    if v is not None and v.stream_name:
+                        return v.stream_name
+        except Exception:  # noqa: BLE001
+            return None
+        return None
+
+    def _do_action(self, adapter, step, robot_id: int | None = None) -> tuple[dict | None, str | None]:
         """到点动作：能做的做，做不了的明确报"需要什么"，不假装成功。"""
         action = (step.action or "photo").lower()
         fn = getattr(adapter, "capture", None)
         if action in ("photo", "video", "thermal"):
             if fn is None:
                 return None, f"适配器还没有取图接口（{action} 需要真机确认抓拍 API）"
-            res = fn(step)
+            stream = self._camera_stream(robot_id)
+            res = fn(step, stream)
             if hasattr(res, "__await__"):
                 import asyncio
                 res = asyncio.run(res)

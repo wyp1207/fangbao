@@ -161,6 +161,16 @@ class DeepRoboticsX30Adapter:
         state = {"0": "FINISHED", "1": "RUNNING", "-1": "FAILED"}.get(st, "UNKNOWN")
         return {"state": state, "raw": r}
 
+    # ---- 到点抓拍（证据）----
+    async def capture(self, step=None, stream: str | None = None) -> dict:
+        """到点抓一张图存本地。stream 由调用方从外设里挑（camera kind）。"""
+        from app.core.config import get_settings
+        from app.services.snapshot import capture_frame
+
+        if not stream:
+            raise RuntimeError("这台设备没有配置相机外设（camera）")
+        return await self._call(capture_frame, stream, get_settings().go2rtc_base)
+
     # ---- 现场动作 ----
     async def stand(self) -> dict:
         """起立/趴下是切换指令：趴下时发起立，站立时发就是趴下。"""

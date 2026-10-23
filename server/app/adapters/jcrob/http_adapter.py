@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import logging
 from typing import Any
 
@@ -165,6 +167,14 @@ class HttpJcrobAdapter:
         if isinstance(res, list) and res:
             return {"id": res[0].get("id", ""), "state": "RUNNING", "raw": res[0]}
         return {"id": "", "state": "FAILED", "raw": res}
+
+    async def capture(self, step=None, stream: str | None = None) -> dict:
+        from app.core.config import get_settings
+        from app.services.snapshot import capture_frame
+
+        if not stream:
+            raise RuntimeError("这台设备没有配置相机外设（camera）")
+        return await asyncio.to_thread(capture_frame, stream, get_settings().go2rtc_base)
 
     async def pause(self) -> dict:
         raise jerr.NotSupported("JCROB 没有独立的暂停接口（只能取消任务）")
