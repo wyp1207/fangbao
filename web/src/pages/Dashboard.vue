@@ -251,7 +251,9 @@ async function chooseStream(name: string) {
 
 async function loadVideoHealth() {
   try {
-    const res = await api.videoHealth(Number(deviceId.value) || undefined)
+    // 只探首页真正显示的那两路，别把没上大屏的也跑一遍
+    const ids = [visibleVideo.value?.id, thermalVideo.value?.id].filter(Boolean) as number[]
+    const res = await api.videoHealth(Number(deviceId.value) || undefined, ids.length ? ids : undefined)
     const map: Record<number, { ok: boolean; reason: string }> = {}
     for (const v of res.videos) map[v.id] = { ok: v.ok, reason: v.reason }
     videoHealth.value = map
