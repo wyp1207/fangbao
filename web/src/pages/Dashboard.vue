@@ -221,32 +221,73 @@ const pickFiltered = computed(() => {
   })
 })
 const pickBusy = ref(false)
+const pickErr = ref('')
+// 直接改 RTSP 地址（不用跳去摄像头页，现场找不到入口）
+const urlOpen = ref(false)
+const urlFor = ref<{ id: number; name: string; url: string } | null>(null)
+const urlDraft = ref('')
+
+function openUrl(v: { id: number; name: string; url?: string } | null) {
+  urlFor.value = { id: v?.id ?? 0, name: v?.name ?? '这路视频', url: v?.url ?? '' }
+  urlDraft.value = v?.url ?? ''
+  urlOpen.value = true
+}
+
+async function saveUrl() {
+  const t = urlFor.value
+  if (!t || !urlDraft.value.trim()) return
+  try {
+    await api.updateVideo(t.id, { url: urlDraft.value.trim() })
+    toast('地址已保存，正在重连…', 'ok')
+    urlOpen.value = false
+    const rows = await api.videos(Number(deviceId.value))
+    videoRows.value = rows as never
+    await loadVideoHealth()
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : '保存失败', 'danger')
+  }
+}
 
 async function openPick(v: { id: number; name: string; stream_name: string } | null) {
   if (!v) return
   pickFor.value = v
   pickOpen.value = true
   pickBusy.value = true
+  pickErr.value = ''
+  pickStreams.value = []
   try {
     const res = await api.go2rtcStreams()
     pickStreams.value = res.streams ?? []
+    if (!res.ok) pickErr.value = res.reason || 'go2rtc 不可达'
+    else if (!pickStreams.value.length) pickErr.value = 'go2rtc 里还没有已登记的流'
+  } catch (e) {
+    pickErr.value = e instanceof ApiError ? e.message : '读取流列表失败'
   } finally {
     pickBusy.value = false
   }
 }
 
 async function chooseStream(name: string) {
-  if (!pickFor.value) return
+  const target = pickFor.value
+  if (!target) return
+  pickOpen.value = false                 // 先关掉，别让用户以为"没反应"
+  const before = target.stream_name
+  target.stream_name = name              // 乐观更新：标题立刻变
+  toast(`正在切到 ${name}…`, 'info')
   try {
-    await api.updateVideo(pickFor.value.id, { stream_name: name })
+    await api.updateVideo(target.id, { stream_name: name })
     toast(`已切到 ${name}`, 'ok')
-    pickOpen.value = false
+  } catch (e) {
+    target.stream_name = before          // 失败回滚
+    toast(e instanceof ApiError ? e.message : '切换失败（看控制台）', 'danger', 6000)
+    console.error('[换流失败]', e)
+    return
+  }
+  try {
     const rows = await api.videos(Number(deviceId.value))
     videoRows.value = rows as never
     await loadVideoHealth()
-  } catch (e) {
-    toast(e instanceof ApiError ? e.message : '切换失败', 'danger')
-  }
+  } catch { /* 刷新失败不影响已成事实的切换 */ }
 }
 
 async function loadVideoHealth() {
@@ -656,7 +697,7 @@ async function logout() {
               <span v-else>真机联调后，在「设备管理 → 摄像头」勾选「首页显示」即自动呈现</span>
               <div class="embed-acts">
                 <button v-if="visibleVideo" class="btn btn-sm" @click="loadVideoHealth">重新探测</button>
-                <button class="btn btn-sm" @click="router.push({ name: 'cameras' })">更换地址</button>
+                <button class="btn btn-sm" @click="openUrl(visibleVideo)">更换地址</button>
               </div>
             </div>
             <button class="embed-pick" title="从视频流里选一路" @click="openPick(visibleVideo)">换流</button>
@@ -676,7 +717,7 @@ async function logout() {
               <span v-else>热像仪接上后，勾选「首页显示」即自动呈现</span>
               <div class="embed-acts">
                 <button v-if="thermalVideo" class="btn btn-sm" @click="loadVideoHealth">重新探测</button>
-                <button class="btn btn-sm" @click="router.push({ name: 'cameras' })">更换地址</button>
+                <button class="btn btn-sm" @click="openUrl(visibleVideo)">更换地址</button>
               </div>
             </div>
             <button class="embed-expand" title="打开视频监控" :disabled="!thermalVideo"
@@ -870,6 +911,19 @@ async function logout() {
       </aside>
     </div>
 
+    <div v-if="urlOpen" class="mask" @click.self="urlOpen = false">
+      <div class="pick">
+        <h4>改「{{ urlFor?.name }}」的地址</h4>
+        <p class="dim small">填 RTSP 地址（rtsp://用户:密码@IP:554/...）；改完立即重连。</p>
+        <input v-model="urlDraft" class="input" placeholder="rtsp://admin:密码@192.168.1.64:554/h264/ch1/main/av_stream" />
+        <p class="dim small">如果只是想换一路流，用「换流」更省事；这里适合相机换了 IP / 换了设备。</p>
+        <div class="pick-acts">
+          <button class="btn btn-sm" @click="urlOpen = false">取消</button>
+          <button class="btn btn-sm primary" @click="saveUrl">保存</button>
+        </div>
+      </div>
+    </div>
+
     <div v-if="pickOpen" class="mask" @click.self="pickOpen = false">
       <div class="pick">
         <h4>给「{{ pickFor?.name }}」换一路视频流</h4>
@@ -887,11 +941,17 @@ async function logout() {
             <input v-model="pickQ" class="input" placeholder="搜索流名，如 train1_3f" />
             <span class="dim small">{{ pickStreams.length }} 路已登记</span>
           </div>
-          <p v-if="!pickFiltered.length" class="dim small">{{ pickBusy ? '读取中…' : '没有匹配的流' }}</p>
+          <p v-if="!pickFiltered.length" class="dim small">
+            {{ pickBusy ? '读取中…' : (pickErr || '没有匹配的流') }}
+          </p>
+          <p v-if="pickErr" class="dim small">
+            go2rtc 在 {{ '192.168.8.40:1984' }}，连不上时换流不可用；可用「改地址」绕过。
+            <button class="btn btn-sm" style="margin-left:6px" @click="openPick(pickFor)">重试</button>
+          </p>
         </div>
         <div class="pick-acts">
           <button class="btn btn-sm" @click="pickOpen = false">关闭</button>
-          <button class="btn btn-sm" @click="router.push({ name: 'cameras' })">改地址</button>
+          <button class="btn btn-sm" @click="openUrl(pickFor)">改地址</button>
         </div>
       </div>
     </div>
