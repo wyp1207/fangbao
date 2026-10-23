@@ -207,6 +207,9 @@ def list_videos(
 
 
 @router.get("/go2rtc-streams")
+_STREAMS_CACHE: dict[str, tuple[dict, float]] = {}
+
+
 def list_go2rtc_streams(
     all: bool = Query(False, description="true 时列出 go2rtc 全部流（排障用）"),
     db: Session = Depends(get_db),
@@ -222,11 +225,18 @@ def list_go2rtc_streams(
     base = getattr(get_settings(), "go2rtc_base", "") or ""
     if not base:
         return {"ok": False, "reason": "未配置 JC_GO2RTC_BASE", "streams": []}
-    try:
-        with _req.urlopen(f"{base.rstrip('/')}/api/streams", timeout=5) as r:
-            data = _json.loads(r.read().decode("utf-8", "replace"))
-    except Exception as exc:  # noqa: BLE001 - 中继不可达只影响这个下拉
-        return {"ok": False, "reason": f"go2rtc 不可达：{exc.__class__.__name__}", "streams": []}
+    import time as _time
+
+    hit = _STREAMS_CACHE.get(base)
+    if hit and _time.time() - hit[1] < 20:
+        data = hit[0]
+    else:
+        try:
+            with _req.urlopen(f"{base.rstrip('/')}/api/streams", timeout=5) as r:
+                data = _json.loads(r.read().decode("utf-8", "replace"))
+            _STREAMS_CACHE[base] = (data, _time.time())
+        except Exception as exc:  # noqa: BLE001 - 中继不可达只影响这个下拉
+            return {"ok": False, "reason": f"go2rtc 不可达：{exc.__class__.__name__}", "streams": []}
 
     registered = {v.stream_name for v in db.query(VideoSource).all() if v.stream_name}
 
