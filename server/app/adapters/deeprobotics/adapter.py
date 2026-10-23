@@ -35,8 +35,10 @@ class DeepRoboticsX30Adapter:
     # 30000 单次响应 0.2~8s，所以判离线的时间也要放宽，否则会频繁误报
     offline_after_s = 30.0
 
-    def __init__(self, host: str, port: int = 30000, timeout: float = 5.0) -> None:
+    def __init__(self, host: str, port: int = 30000, timeout: float = 5.0,
+                 motion_host: str = "192.168.1.103") -> None:
         self.client = X30Client(host, port, timeout)
+        self.motion_host = motion_host
         # 30000 是短连接请求/响应，一次轮询里 4 个方法各开一条连接会被机器人拖垮
         # （实测：第二、三条经常超时）。这里加 0.8s 缓存，一轮只打一次。
         self._status_cache: tuple[float, dict] | None = None
@@ -135,7 +137,12 @@ class DeepRoboticsX30Adapter:
         return {"id": order.get("orderId", ""), "state": "RUNNING" if ok else "FAILED", "raw": r}
 
     async def goto(self, x: float, y: float, yaw: float = 0.0) -> dict:
-        r = await self._call(self.client.nav_goal, x, y, yaw)
+        # 1003 的响应要等任务跑完才回（官方文档 2.2 的【注意】）。
+        # 这里用短超时发出去就算"已受理"，进度靠 1007 轮询。
+        try:
+            r = await self._call(self.client.nav_goal, x, y, yaw)
+        except (TimeoutError, OSError):
+            return {"id": "x30-nav", "state": "RUNNING", "raw": {"accepted": True}}
         return {"id": "x30-nav", "state": "FAILED" if "_error" in r else "RUNNING", "raw": r}
 
     async def pause(self) -> dict:
@@ -156,7 +163,10 @@ class DeepRoboticsX30Adapter:
 
     # ---- 现场动作 ----
     async def stand(self) -> dict:
-        return await self._call(self.client.motion, MOTION_STAND)
+        """起立/趴下是切换指令：趴下时发起立，站立时发就是趴下。"""
+        from app.adapters.deeprobotics.protocol import CMD_STAND_LIE, send_motion
+
+        return await self._call(send_motion, CMD_STAND_LIE, self.motion_host)
 
     async def lie(self) -> dict:
-        return await self._call(self.client.motion, MOTION_LIE)
+        return await self.stand()

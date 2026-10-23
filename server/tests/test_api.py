@@ -1175,3 +1175,23 @@ def test_failure_paths(auth_client, monkeypatch):
     # 适配器没有 capture 时，重试要明确报"需要真机接口"，不能假装成功
     r2 = auth_client.post(f"/api/v1/task-runs/{rid}/steps/1/retry")
     assert r2.status_code in (400, 403)
+
+
+def test_x30_motion_udp():
+    """X30 起立/趴下走 UDP 43893：三个 uint32 小端 = code / 值 / 类型=0。"""
+    import socket
+
+    from app.adapters.deeprobotics.protocol import CMD_STAND_LIE, send_motion
+
+    srv = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    srv.bind(("127.0.0.1", 0))
+    port = srv.getsockname()[1]
+    res = send_motion(CMD_STAND_LIE, host="127.0.0.1", port=port)
+    payload, _ = srv.recvfrom(64)
+    srv.close()
+
+    assert res["ok"] is True
+    assert len(payload) == 12
+    code, value, typ = (int.from_bytes(payload[i:i + 4], "little") for i in (0, 4, 8))
+    assert code == 0x31010202          # 0x31 = 来自导航模块
+    assert value == 0 and typ == 0

@@ -2,16 +2,18 @@ from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Body, Depends, Query
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.adapters.jcrob.units import parse_nav_points
 from app.api.deps import get_adapter, get_cache, get_current_user, require_csrf, require_roles
+from app.core.errors import BadRequest, NotFound
 from app.db.session import get_db
 from app.models.robot import Robot
 from app.models.user import User
 from app.services.command_gateway import precheck as run_precheck
+from app.services.messages import audit
 
 router = APIRouter(prefix="/robots", tags=["robots"])
 
@@ -29,6 +31,38 @@ def list_robots(db: Session = Depends(get_db), _user: User = Depends(get_current
          "last_seen": r.last_seen.isoformat() if r.last_seen else None}
         for r in db.query(Robot).all()
     ]
+
+
+@router.post("/{robot_id}/motion", dependencies=[Depends(require_csrf)])
+def motion(
+    robot_id: int,
+    body: dict = Body(...),
+    db: Session = Depends(get_db),
+    me: User = Depends(require_roles("admin", "operator")),
+) -> dict:
+    """起立 / 趴下（X30 是切换指令；JCROB 暂不支持）。写开关保护。"""
+    from app.services.task_dispatch import _require_write
+
+    _require_write()
+    action = str(body.get("action") or "").lower()
+    if action not in ("stand", "lie"):
+        raise BadRequest("action 只能是 stand / lie", code="BAD_ACTION")
+    robot = db.get(Robot, robot_id)
+    if not robot:
+        raise NotFound("设备不存在")
+
+    from app.adapters.registry import build_for
+    import asyncio
+
+    adapter, _ = build_for(robot)
+    fn = getattr(adapter, action, None)
+    if fn is None:
+        raise BadRequest(f"适配器 {robot.adapter} 不支持 {action}", code="NOT_SUPPORTED")
+    res = fn()
+    if hasattr(res, "__await__"):
+        res = asyncio.run(res)
+    audit(db=db, action=f"robot.{action}", target=robot.name, user=me)
+    return {"ok": True, "result": res}
 
 
 @router.get("/{robot_id}/status")
