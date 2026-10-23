@@ -1225,3 +1225,35 @@ def test_peripheral_derives_capabilities(auth_client):
 
     final = auth_client.get("/api/v1/robots/1/capabilities").json()
     assert "video.thermal" not in final["capabilities"]
+
+
+def test_peripheral_rule_overrides(auth_client):
+    """外设规则优先于传感器默认阈值：可关闭告警、可改阈值，且告警绑定设备。"""
+    from app.db.session import SessionLocal
+    from app.models.peripheral import Peripheral
+    from app.models.sensor import Sensor
+    from app.services import alarms as alarms_mod
+    from app.services.sensor_io import ingest_value
+
+    with SessionLocal() as db:
+        sensor = db.query(Sensor).first()
+        assert sensor is not None
+        sensor.warn_high = 1000.0
+        periph = Peripheral(robot_id=1, kind=sensor.kind, sensor_id=sensor.id,
+                            config_json='{"rule": {"enabled": true, "warn_high": 100, "crit_high": 200}}')
+        db.add(periph)
+        db.commit()
+        db.refresh(periph)
+        sid = sensor.id
+
+        # 1000 以下按默认规则不报，但外设规则把上限压到 100 → 150 应该报 warn
+        res = ingest_value(db, sensor_id=sid, value=150)
+        assert res["level"] == "warn", res
+
+        periph.config_json = '{"rule": {"enabled": false}}'
+        db.commit()
+        res2 = ingest_value(db, sensor_id=sid, value=999)
+        assert res2["level"] is None, res2
+
+        db.delete(periph)
+        db.commit()
