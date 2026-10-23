@@ -28,6 +28,7 @@ interface Summary {
     orders: number; orders_from_alarm: number
     alarm_to_order_avg_min: number | null; order_close_avg_min: number | null
     order_close_rate: number | null
+    sla_on_time?: number; sla_closed?: number; sla_on_time_rate?: number | null
   }
   inspection_performance?: { user_id: number; username: string; tasks: number; done: number; overdue: number; items: number; abnormal: number; orders: number; closed: number; done_rate: number | null }[]
   operations: {
@@ -249,6 +250,8 @@ onMounted(() => applyPreset('7d'))
                   <td class="muted small">发现到有人接手</td></tr>
                 <tr><td>工单闭环时长</td><td class="num">{{ fmtMin(rm.order_close_avg_min) }}</td>
                   <td class="muted small">建单 → 销号</td></tr>
+                <tr><td>SLA 按期销号</td><td class="num">{{ rm.sla_on_time_rate === null ? '—' : rm.sla_on_time_rate + '%' }}</td>
+                  <td class="muted small">{{ rm.sla_on_time ?? 0 }} / {{ rm.sla_closed ?? 0 }} 张在时限内</td></tr>
                 <tr><td>工单闭环率</td><td class="num">{{ rm.order_close_rate === null ? '—' : rm.order_close_rate + '%' }}</td>
                   <td class="muted small">来源告警的工单里已销号的比例</td></tr>
               </tbody>

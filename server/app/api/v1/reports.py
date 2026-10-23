@@ -246,6 +246,10 @@ def _summary_impl(
         if o.closed_at and o.created_at:
             order_close.append((o.closed_at - o.created_at).total_seconds() / 60)
 
+    closed_orders = [o for o in orders if o.closed_at]
+    on_time = [o for o in closed_orders if o.due_at and o.closed_at <= o.due_at]
+    sla_on_time_rate = round(len(on_time) / len(closed_orders) * 100, 1) if closed_orders else None
+
     response_metrics = {
         "alarms": len(alarms),
         "alarms_acked": sum(1 for a in alarms if a.acked_at),
@@ -258,6 +262,9 @@ def _summary_impl(
         "order_close_avg_min": _avg(order_close),
         "order_close_rate": round(len([o for o in from_alarm if o.closed_at]) / len(from_alarm) * 100, 1)
         if from_alarm else None,
+        "sla_on_time": len(on_time),
+        "sla_closed": len(closed_orders),
+        "sla_on_time_rate": sla_on_time_rate,
     }
 
     # ---- 考核：按人/班组统计人工巡检与工单 ----

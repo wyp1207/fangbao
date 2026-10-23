@@ -12,6 +12,12 @@ from typing import Any, Callable
 # type: int | float | bool | str | choice
 SCHEMA: dict[str, dict[str, Any]] = {
     # ---- 告警阈值 ----
+    "alarm.sla_minutes": {
+        "label": "SLA 响应时限（分钟，按 P1–P4）", "type": "json",
+        "default": {"P1": 30, "P2": 120, "P3": 480, "P4": 1440},
+        "group": "告警", "effect": "告警转工单时按优先级算 due_at；改完立即生效",
+    },
+
     "alarm.battery_warn": {
         "label": "电量提醒阈值（%）", "type": "int", "default": 20, "min": 5, "max": 90,
         "group": "告警", "effect": "电量低于此值产生 warn 告警",
@@ -126,6 +132,15 @@ def cast(key: str, raw: Any) -> Any:
     """按 schema 把值转成正确类型并校验范围。"""
     spec = SCHEMA[key]
     t = spec["type"]
+    if t == "json":
+        import json as _json
+
+        if isinstance(raw, (dict, list)):
+            return raw
+        try:
+            return _json.loads(str(raw))
+        except Exception as exc:  # noqa: BLE001
+            raise ValueError(f"{spec['label']} 需要合法 JSON") from exc
     if t == "bool":
         if isinstance(raw, bool):
             return raw

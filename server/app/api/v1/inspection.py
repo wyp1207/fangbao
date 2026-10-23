@@ -194,7 +194,7 @@ def generate_tasks(
     task = InspectionTask(
         plan_id=plan.id, title=title[:64],
         assignee_id=body.assignee_id or plan.assignee_id,
-        due_at=datetime.now() + timedelta(hours=body.due_hours),
+        due_at=(datetime.now() + timedelta(hours=body.due_hours)),
         status="pending",
     )
     db.add(task)
@@ -489,11 +489,23 @@ def create_order(
     if body.level not in LEVELS:
         raise BadRequest(f"等级只能是 {LEVELS}", code="BAD_LEVEL")
     seq = (db.scalar(select(func.count()).select_from(WorkOrder)) or 0) + 1
+
+    # SLA：来源告警的工单按告警优先级定时限；没有优先级就用请求里的 due_hours
+    from app.services import sla as _sla
+
+    prio = None
+    if body.source == "alarm" and body.source_id:
+        from app.models.alarm import AlarmRecord as _AR
+
+        a = db.get(_AR, body.source_id)
+        prio = getattr(a, "priority", None) if a else None
+    due = _sla.due_at(prio, body.level)
+
     o = WorkOrder(
         code=f"WO-{datetime.now().strftime('%Y%m%d')}-{seq:03d}",
         title=body.title.strip()[:120], source=body.source, source_id=body.source_id,
         level=body.level, assignee_id=body.assignee_id,
-        due_at=datetime.now() + timedelta(hours=body.due_hours),
+        due_at=due if prio else (datetime.now() + timedelta(hours=body.due_hours)),
         description=body.description,
         photos_json=json.dumps(body.photos, ensure_ascii=False),
         status="assigned" if body.assignee_id else "open",
