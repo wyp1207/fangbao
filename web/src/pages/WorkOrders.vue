@@ -22,6 +22,7 @@ interface Order {
   created_at: string | null
   closed_at: string | null
   mobile_url?: string | null
+  alarm?: { id: number; metric: string; level: string; message: string; started_at: string | null; acked: boolean } | null
 }
 
 const auth = useAuthStore()
@@ -147,7 +148,11 @@ onMounted(async () => {
               <span v-if="overdue(o)" class="tag danger" title="超过期限">超期</span>
               <span v-if="o.escalated_at" class="tag warn" title="已升级">已升级</span>
             </td>
-            <td><span class="tag" :class="LEVEL_TONE[o.level]">{{ LEVEL[o.level] ?? o.level }}</span></td>
+            <td>
+              <span class="tag" :class="LEVEL_TONE[o.level]">{{ LEVEL[o.level] ?? o.level }}</span>
+              <button v-if="o.alarm" class="link" :title="`来源告警 #${o.alarm.id}：${o.alarm.message}`"
+                      @click="$router.push({ name: 'alarms', query: { focus: o.alarm.id } })">告警#{{ o.alarm.id }}</button>
+            </td>
             <td><span class="tag" :class="o.status === 'closed' ? 'ok' : o.status === 'review' ? '' : 'warn'">{{ o.status_label }}</span></td>
             <td class="dim">
               {{ o.assignee_id ? '#' + o.assignee_id : '未派' }}

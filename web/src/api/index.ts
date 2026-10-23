@@ -184,6 +184,7 @@ export interface AlarmPage {
 }
 
 export interface AlarmItem {
+  work_order_id?: number | null
   status?: 'new' | 'acked' | 'handled' | 'closed'
   handled_at?: string | null
   handled_by?: string | null
