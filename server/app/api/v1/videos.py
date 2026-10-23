@@ -118,6 +118,56 @@ def _play_url(name: str) -> str | None:
     return f"{base.rstrip('/')}/{name}.m3u8"
 
 
+def _rtsp_for_stream(stream: str, base: str) -> str:
+    """从 go2rtc 反查这路流的 RTSP 源，保证截图/转码和"选中的流"是同一个画面。
+
+    没有 go2rtc 或查不到就返回空串，调用方回落到数据库里的 url。
+    """
+    import json as _json
+    import urllib.request as _req
+
+    if not base or not stream:
+        return ""
+    name = stream[:-4] if stream.endswith("_web") else stream
+    try:
+        with _req.urlopen(f"{base.rstrip('/')}/api/streams", timeout=2.5) as r:
+            data = _json.loads(r.read().decode("utf-8", "replace"))
+        prod = ((data.get(name) or {}).get("producers") or [{}])[0]
+        url = prod.get("url") or ""
+        if url.startswith("ffmpeg:") or not url.startswith("rtsp"):
+            # ffmpeg:xxx 是指向另一路流的别名，顺着找一层
+            alias = url.split(":", 1)[1].split("#")[0] if url.startswith("ffmpeg:") else ""
+            prod2 = ((data.get(alias) or {}).get("producers") or [{}])[0]
+            url = prod2.get("url") or ""
+        return url if url.startswith("rtsp") else ""
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+_WEB_CACHE: dict[str, tuple[bool, float]] = {}
+
+
+def _has_web_variant(stream: str, base: str) -> bool:
+    """go2rtc 里有没有 <stream>_web（H265→H264 的转码变体）。结果缓存 60 秒。"""
+    import json as _json
+    import time as _time
+    import urllib.request as _req
+
+    key = f"{base}|{stream}"
+    hit = _WEB_CACHE.get(key)
+    if hit and _time.time() - hit[1] < 60:
+        return hit[0]
+    ok = False
+    try:
+        with _req.urlopen(f"{base.rstrip('/')}/api/streams", timeout=2.5) as r:
+            names = set(_json.loads(r.read().decode("utf-8", "replace")))
+        ok = f"{stream}_web" in names
+    except Exception:  # noqa: BLE001
+        ok = False
+    _WEB_CACHE[key] = (ok, _time.time())
+    return ok
+
+
 def _go2rtc_url(stream_name: str) -> str | None:
     settings = get_settings()
     if not stream_name:
@@ -126,7 +176,9 @@ def _go2rtc_url(stream_name: str) -> str | None:
     base = getattr(settings, "go2rtc_public_base", "") or getattr(settings, "go2rtc_base", "") or ""
     if not base:
         return None
-    return f"{base.rstrip('/')}/stream.html?src={stream_name}&mode=mse"
+    # 和 detask(8123) 一致：H265 相机走 _web 变体（约 0.5s 延迟、每路约 0.3 核）
+    name = f"{stream_name}_web" if _has_web_variant(stream_name, base) else stream_name
+    return f"{base.rstrip('/')}/stream.html?src={name}&mode=mse"
 
 
 def _out(v: VideoSource) -> VideoOut:
@@ -283,7 +335,9 @@ def live_jpg(
     base = getattr(get_settings(), "go2rtc_base", "") or ""
     if not base:
         raise ExternalUnavailable("未配置 go2rtc", code="NO_GO2RTC")
-    url = f"{base.rstrip('/')}/api/frame.jpeg?src={stream_name}"
+    # 与实时预览一致：优先用 _web 转码变体抓帧
+    frame_src = f"{stream_name}_web" if _has_web_variant(stream_name, base) else stream_name
+    url = f"{base.rstrip('/')}/api/frame.jpeg?src={frame_src}"
     import time as _time
 
     try:
@@ -331,7 +385,6 @@ def videos_health(
 @router.get("/{video_id}/mjpeg")
 def mjpeg(
     video_id: int,
-    db: Session = Depends(get_db),
     _: User = Depends(require_roles("admin", "operator", "viewer")),
 ):
     """低延迟预览：共享一条上游转码流，浏览器 <img> 直接显示。
@@ -344,11 +397,22 @@ def mjpeg(
 
     if not FFMPEG:
         raise ExternalUnavailable("服务端没有 ffmpeg，无法转码", code="FFMPEG_MISSING")
-    v = db.get(VideoSource, video_id)
-    if not v:
-        raise NotFound("视频源不存在")
+    # 查库不占流式会话：长连接期间不能一直攥着连接
+    from app.db.session import SessionLocal
 
-    stream = registry.acquire(video_id, _upstream(v.url))
+    with SessionLocal() as db:
+        v = db.get(VideoSource, video_id)
+        src = v.url if v else None
+        stream_name = (v.stream_name or "") if v else ""
+    if not src:
+        raise NotFound("视频源不存在")
+    # 面板显示哪路流，转码就用哪路流的源（否则会出现"选的培训室、看到的走廊"）
+    from app.core.config import get_settings as _gs
+
+    _base = getattr(_gs(), "go2rtc_base", "") or ""
+    src = _rtsp_for_stream(stream_name, _base) or src
+
+    stream = registry.acquire(video_id, _upstream(src))
     boundary = "frame"
 
     def gen():
