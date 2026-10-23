@@ -124,6 +124,7 @@ function onDevice(v: string) {
   // 换设备就刷新视频与地图，避免还显示上一台的画面
   void api.videos(Number(deviceId.value)).then((rows) => { videoRows.value = rows as never }).catch(() => undefined)
   void loadEnv()
+  void loadVideoHealth()
   void loadTrend()
   void loadCaps()
   void loadRuns()
@@ -132,6 +133,7 @@ function onDevice(v: string) {
   timers.forEach((t) => window.clearInterval(t))
   timers = []
   timers.push(window.setInterval(loadEnv, 15000))
+  timers.push(window.setInterval(loadVideoHealth, 60000))
   timers.push(window.setInterval(loadTrend, 60000))
   timers.push(window.setInterval(loadRuns, 10000))
   timers.push(window.setInterval(loadFeed, 15000))
@@ -158,6 +160,54 @@ function openVideo(which: string) {
   toast(`${which}通道未接入：真机联调后按 RTSP / WebRTC 接入`, 'warn', 3000)
 }
 const busyMotion = ref(false)
+// 视频健康：真抓一帧判断流有没有画面；没画面就不渲染播放器，改显示"未接入"
+const videoHealth = ref<Record<number, { ok: boolean; reason: string }>>({})
+// 换流：直接列出 go2rtc 里现有的流，选一个就改这路视频源
+const pickOpen = ref(false)
+const pickFor = ref<{ id: number; name: string; stream_name: string } | null>(null)
+const pickStreams = ref<{ name: string; source: string; web: boolean; ready: boolean }[]>([])
+const pickBusy = ref(false)
+
+async function openPick(v: { id: number; name: string; stream_name: string } | null) {
+  if (!v) return
+  pickFor.value = v
+  pickOpen.value = true
+  pickBusy.value = true
+  try {
+    const res = await api.go2rtcStreams()
+    pickStreams.value = res.streams ?? []
+  } finally {
+    pickBusy.value = false
+  }
+}
+
+async function chooseStream(name: string) {
+  if (!pickFor.value) return
+  try {
+    await api.updateVideo(pickFor.value.id, { stream_name: name })
+    toast(`已切到 ${name}`, 'ok')
+    pickOpen.value = false
+    const rows = await api.videos(Number(deviceId.value))
+    videoRows.value = rows as never
+    await loadVideoHealth()
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : '切换失败', 'danger')
+  }
+}
+
+async function loadVideoHealth() {
+  try {
+    const res = await api.videoHealth(Number(deviceId.value) || undefined)
+    const map: Record<number, { ok: boolean; reason: string }> = {}
+    for (const v of res.videos) map[v.id] = { ok: v.ok, reason: v.reason }
+    videoHealth.value = map
+  } catch { /* 探测失败按未知处理，不拦视频 */ }
+}
+
+function healthOf(v: { id: number } | null): { ok: boolean; reason: string } {
+  if (!v) return { ok: false, reason: '未配置视频源' }
+  return videoHealth.value[v.id] ?? { ok: true, reason: '' }
+}
 // 环境趋势：取第一台传感器的近 1 小时读数画折线（面板空白用它填上）
 const spark = ref<number[]>([])
 const sparkWindow = ref('近 1 小时')
@@ -421,6 +471,7 @@ onMounted(async () => {
   robot.start()
   void api.videos(Number(deviceId.value)).then((rows) => { videoRows.value = rows as never }).catch(() => undefined)
   void loadEnv()
+  void loadVideoHealth()
   void loadTrend()
   void loadCaps()
   void loadRuns()
@@ -429,6 +480,7 @@ onMounted(async () => {
   timers.forEach((t) => window.clearInterval(t))
   timers = []
   timers.push(window.setInterval(loadEnv, 15000))
+  timers.push(window.setInterval(loadVideoHealth, 60000))
   timers.push(window.setInterval(loadTrend, 60000))
   timers.push(window.setInterval(loadRuns, 10000))
   timers.push(window.setInterval(loadFeed, 15000))
@@ -533,22 +585,32 @@ async function logout() {
       <aside class="col left">
         <ScadaPanel title="可见光视频" tone="cyan" class="grow" body-class="no-pad">
           <div class="embed">
-            <iframe v-if="visibleStream" :src="visibleStream" title="可见光" allow="autoplay; fullscreen" />
+            <iframe v-if="visibleStream && healthOf(visibleVideo).ok" :src="visibleStream" title="可见光" allow="autoplay; fullscreen" />
             <div v-else class="embed-empty">
-              <b>视频通道未接入</b>
-              <span>真机联调后，在「设备管理 → 摄像头」勾选「首页显示」即自动呈现</span>
-              <button class="btn btn-sm" @click="router.push({ name: 'cameras' })">去配置</button>
+              <b>视频流未接入</b>
+              <span v-if="visibleVideo">原因：{{ healthOf(visibleVideo).reason }} · 相机离线或地址失效</span>
+              <span v-else>真机联调后，在「设备管理 → 摄像头」勾选「首页显示」即自动呈现</span>
+              <div class="embed-acts">
+                <button v-if="visibleVideo" class="btn btn-sm" @click="loadVideoHealth">重新探测</button>
+                <button class="btn btn-sm" @click="router.push({ name: 'cameras' })">更换地址</button>
+              </div>
             </div>
+            <button class="embed-pick" title="从视频流里选一路" @click="openPick(visibleVideo)">换流</button>
             <button class="embed-expand" title="打开视频监控" @click="goVideo(visibleVideo)">打开全屏页 ↗</button>
           </div>
         </ScadaPanel>
 
         <ScadaPanel title="热红外视频" tone="gold" class="grow" body-class="no-pad">
           <div class="embed">
-            <iframe v-if="thermalStream" :src="thermalStream" title="热红外" allow="autoplay; fullscreen" />
+            <iframe v-if="thermalStream && healthOf(thermalVideo).ok" :src="thermalStream" title="热红外" allow="autoplay; fullscreen" />
             <div v-else class="embed-empty">
-              <b>视频通道未接入</b>
-              <span>热像仪接上后，勾选「首页显示」即自动呈现</span>
+              <b>视频流未接入</b>
+              <span v-if="thermalVideo">原因：{{ healthOf(thermalVideo).reason }}</span>
+              <span v-else>热像仪接上后，勾选「首页显示」即自动呈现</span>
+              <div class="embed-acts">
+                <button v-if="thermalVideo" class="btn btn-sm" @click="loadVideoHealth">重新探测</button>
+                <button class="btn btn-sm" @click="router.push({ name: 'cameras' })">更换地址</button>
+              </div>
             </div>
             <button class="embed-expand" title="打开视频监控" :disabled="!thermalVideo"
                     @click="goVideo(thermalVideo)">打开全屏页 ↗</button>
@@ -739,6 +801,27 @@ async function logout() {
           </ul>
         </ScadaPanel>
       </aside>
+    </div>
+
+    <div v-if="pickOpen" class="mask" @click.self="pickOpen = false">
+      <div class="pick">
+        <h4>给「{{ pickFor?.name }}」换一路视频流</h4>
+        <p class="dim small">当前：{{ pickFor?.stream_name || '未设置' }} · 流来自 go2rtc，改相机 IP 只需在 go2rtc 里改</p>
+        <div class="pick-list">
+          <button v-for="s in pickStreams" :key="s.name" class="pick-item"
+                  :class="{ on: s.name === pickFor?.stream_name, off: !s.ready }"
+                  @click="s.ready && chooseStream(s.name)">
+            <b>{{ s.name }}</b>
+            <span class="dim">{{ s.source || '无源' }}</span>
+            <em v-if="!s.ready">无信号</em>
+          </button>
+          <p v-if="!pickStreams.length" class="dim small">{{ pickBusy ? '读取中…' : 'go2rtc 里没有可用的流' }}</p>
+        </div>
+        <div class="pick-acts">
+          <button class="btn btn-sm" @click="pickOpen = false">关闭</button>
+          <button class="btn btn-sm" @click="router.push({ name: 'cameras' })">改地址</button>
+        </div>
+      </div>
     </div>
 
     <footer class="footbar">
@@ -1522,4 +1605,23 @@ async function logout() {
 .spark { width: 100%; height: 92px; display: block; }
 .spark polyline { stroke: #54d8ff; stroke-width: 1.4; vector-effect: non-scaling-stroke;
   filter: drop-shadow(0 0 4px rgba(84,216,255,.55)); }
+
+.embed-acts { display: flex; gap: 8px; margin-top: 8px; }
+
+.embed-pick { position: absolute; top: 6px; right: 96px; height: 22px; padding: 0 8px; font-size: 11px;
+  background: rgba(6,32,64,.82); border: 1px solid rgba(90,200,255,.5); color: #9fe8ff; border-radius: 3px; cursor: pointer; }
+.mask { position: fixed; inset: 0; z-index: 200; background: rgba(2,12,26,.7); display: grid; place-items: center; }
+.pick { width: 460px; max-height: 70vh; overflow: auto; padding: 14px 16px;
+  background: linear-gradient(180deg, rgba(6,46,92,.98), rgba(4,26,54,.99));
+  border: 1px solid rgba(111,227,255,.55); border-radius: 4px; }
+.pick h4 { margin: 0 0 6px; font-size: 14px; color: #ffd040; }
+.pick-list { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+.pick-item { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; text-align: left;
+  padding: 7px 10px; background: rgba(10,44,84,.7); border: 1px solid rgba(80,170,255,.35);
+  color: #d6ecff; border-radius: 3px; cursor: pointer; font-size: 12px; }
+.pick-item b { color: #71f9ff; }
+.pick-item.off { opacity: .55; cursor: not-allowed; }
+.pick-item.on { border-color: #ffd040; box-shadow: 0 0 0 1px rgba(255,208,64,.45) inset; }
+.pick-item em { color: #ff8b8b; font-style: normal; }
+.pick-acts { display: flex; justify-content: flex-end; gap: 8px; }
 </style>

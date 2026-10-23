@@ -51,3 +51,19 @@ def capture_frame(stream: str, base: str, timeout: float = 6.0) -> dict:
         "bytes": len(data),
         "stream": stream,
     }
+
+
+def probe_frame(stream: str, base: str, timeout: float = 2.5) -> tuple[bool, str]:
+    """只探测流是否出帧，不落盘（首页用它决定显示视频还是"未接入"）。"""
+    if not stream or not base:
+        return False, "未配置视频流"
+    q = urllib.parse.urlencode({"src": stream})
+    url = f"{base.rstrip('/')}/api/frame.jpeg?{q}"
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as resp:
+            data = resp.read()
+    except Exception as exc:  # noqa: BLE001
+        return False, f"{exc.__class__.__name__}"
+    if len(data) < 1024:
+        return False, "相机无画面（0 字节）"
+    return True, f"{len(data)}B"
