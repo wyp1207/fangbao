@@ -40,6 +40,8 @@ FIELD_KIND: dict[str, str] = {
     "co2": "co2",
     "h2s": "h2s",
     "co": "co",
+    "illuminance": "lux",
+    "lux": "lux",
 }
 
 # 运行状态给 /robots/{id}/status 用，前端能看到"环境流有没有连上"
@@ -127,20 +129,22 @@ async def _ingest(robot_id: int, robot_name: str, values: dict[str, float]) -> i
     return written
 
 
-async def _run_one(robot_id: int, name: str, host: str, port: int, token: str = "") -> None:
+async def _run_one(robot_id: int, name: str, host: str, port: int, token: str = "",
+                   topic: str = ENV_TOPIC) -> None:
     import websockets
 
     st = STATE.setdefault(robot_id, {"connected": False, "last_msg_ts": 0.0,
                                      "fields": 0, "last_error": ""})
+    key = "connected" if topic == ENV_TOPIC else "air_connected"
     backoff = 1.0
     while True:
         url_base = f"ws://{host}:{port}"
         q = f"?token={token}" if token else ""
         try:
-            async with websockets.connect(f"{url_base}{ENV_TOPIC}{q}", open_timeout=5,
+            async with websockets.connect(f"{url_base}{topic}{q}", open_timeout=5,
                                           ping_interval=None, max_size=2 ** 20) as ws:
-                st.update(connected=True, last_error="", since=time.time())
-                log.info("环境流已连接 %s %s", name, f"{host}:{port}")
+                st.update({key: True, "last_error": "", "since": time.time()})
+                log.info("环境流已连接 %s %s%s", name, f"{host}:{port}", topic)
                 backoff = 1.0
                 last_ping = 0.0
                 while True:
@@ -159,12 +163,12 @@ async def _run_one(robot_id: int, name: str, host: str, port: int, token: str = 
                     if not values:
                         continue
                     n = await _ingest(robot_id, name, values)
-                    st.update(last_msg_ts=time.time(), fields=n)
+                    st.update(last_msg_ts=time.time(), fields=st.get("fields", 0) + n)
         except asyncio.CancelledError:
-            st.update(connected=False)
+            st.update({key: False})
             raise
         except Exception as exc:  # noqa: BLE001
-            st.update(connected=False, last_error=f"{exc.__class__.__name__}: {exc}")
+            st.update({key: False, "last_error": f"{exc.__class__.__name__}: {exc}"})
             log.warning("环境流断开 %s（%s），%.0fs 后重连", name, exc.__class__.__name__, backoff)
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2, 30)
@@ -172,7 +176,7 @@ async def _run_one(robot_id: int, name: str, host: str, port: int, token: str = 
 
 class EnvWsRunner:
     def __init__(self) -> None:
-        self._tasks: dict[int, asyncio.Task] = {}
+        self._tasks: dict[str, asyncio.Task] = {}
 
     async def start(self, robots: list) -> None:
         await self.stop()
@@ -185,11 +189,15 @@ class EnvWsRunner:
             if "no_env_ws" in (getattr(r, "note", "") or ""):
                 continue
             token = ""
-            self._tasks[r.id] = asyncio.create_task(
-                _run_one(r.id, r.name, r.ip, getattr(r, "ws_port", 3547) or 3547, token))
-            log.info("环境流任务已登记：%s（ws://%s:%s）", r.name, r.ip, r.ws_port)
+            port = getattr(r, "ws_port", 3547) or 3547
+            # 两路主题都要：EnvSensorData(气体/温湿度/粉尘/噪声) + AirSensorData(CO₂/照度)
+            for topic in (ENV_TOPIC, AIR_TOPIC):
+                key = f"{r.id}{topic}"
+                self._tasks[key] = asyncio.create_task(
+                    _run_one(r.id, r.name, r.ip, port, token, topic))
+            log.info("环境流任务已登记：%s（ws://%s:%s，2 路主题）", r.name, r.ip, port)
         if self._tasks:
-            log.info("环境流共 %s 路", len(self._tasks))
+            log.info("环境流共 %s 路连接", len(self._tasks))
 
     async def stop(self) -> None:
         for t in self._tasks.values():
@@ -212,6 +220,7 @@ def state_for(robot_id: int) -> dict[str, Any]:
     return {
         "supported": True,
         "connected": bool(st.get("connected")),
+        "air_connected": bool(st.get("air_connected")),
         "age_s": round(time.time() - st["last_msg_ts"], 1) if st.get("last_msg_ts") else None,
         "fields": st.get("fields", 0),
         "last_error": st.get("last_error", ""),

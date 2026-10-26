@@ -35,6 +35,8 @@ KINDS: dict[str, dict[str, Any]] = {
     "pm": {"label": "PM2.5", "unit": "μg/m³"},
     "noise": {"label": "噪声", "unit": "dB"},
     "co2": {"label": "CO₂", "unit": "ppm"},
+    "lux": {"label": "光照度", "unit": "lux"},
+    "ir_temp": {"label": "热像仪测温", "unit": "℃"},
     "o2": {"label": "氧气", "unit": "%VOL"},
     "h2s": {"label": "硫化氢", "unit": "ppm"},
     "co": {"label": "一氧化碳", "unit": "ppm"},

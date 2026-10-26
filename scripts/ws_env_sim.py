@@ -16,7 +16,14 @@ import random
 import websockets
 
 
-def frame(seq: int) -> str:
+def frame(seq: int, air: bool = False) -> str:
+    if air:
+        return json.dumps({
+            "topic": "/bw_env_sensors/AirSensorData",
+            "seq": seq,
+            "data": {"co2": round(620 + random.uniform(-40, 60), 1),
+                     "illuminance": round(320 + random.uniform(-30, 30), 1)},
+        }, ensure_ascii=False)
     return json.dumps({
         "topic": "/bw_env_sensors/EnvSensorData",
         "seq": seq,
@@ -32,14 +39,16 @@ def frame(seq: int) -> str:
 
 
 async def handler(ws) -> None:
-    print("client connected:", getattr(ws, "remote_address", "?"), flush=True)
+    path = getattr(getattr(ws, "request", None), "path", "") or ""
+    air = "AirSensorData" in path
+    print("client connected:", path or "?", flush=True)
     seq = 0
 
     async def sender() -> None:
         nonlocal seq
         while True:
             seq += 1
-            await ws.send(frame(seq))
+            await ws.send(frame(seq, air))
             await asyncio.sleep(interval)
 
     task = asyncio.create_task(sender())
