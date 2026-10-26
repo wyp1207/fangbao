@@ -121,6 +121,11 @@ class StreamRegistry:
     def acquire(self, video_id: int, url: str) -> VideoStream:
         with self._lock:
             stream = self._streams.get(video_id)
+            # 源变了（换流/改地址）必须重启：只按 video_id 复用会让画面停在旧相机上
+            if stream is not None and stream.url != url:
+                stream.stop()
+                self._streams.pop(video_id, None)
+                stream = None
             if stream is None or not stream.running:
                 stream = VideoStream(video_id, url)
                 stream.start()
