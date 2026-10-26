@@ -29,6 +29,7 @@ ACTIONS = {
     "wait": "停留",
     "ptz": "云台转向",
     "thermal": "热成像采集",
+    "thermal_temp": "测温（红外点温）",
 }
 
 

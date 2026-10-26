@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import MapCanvas from '@/components/MapCanvas.vue'
@@ -475,7 +475,14 @@ type EnvSummary = Record<string, { name: string; unit: string; value: number | n
 const env = ref<EnvSummary>({})
 
 // 环境面板只显示"这台设备上真有"的传感器（X30 有 SF6/温湿度，JCROB 可能是噪声）
-const envSensors = ref<{ id: number; name: string; unit: string; value: number | null }[]>([])
+const envSensors = ref<{ id: number; name: string; kind: string; unit: string; value: number | null }[]>([])
+
+// 传感器类型 → 卡片上的短标签（自动建的传感器名字带设备前缀，太长）
+const KIND_TEXT: Record<string, string> = {
+  temperature: '温度', humidity: '湿度', smoke: '烟雾', pm: 'PM2.5',
+  gas: '可燃气体', sf6: 'SF6', noise: '噪声', co2: 'CO₂', lux: '照度',
+  ir_temp: '红外测温', o2: '氧气', h2s: 'H₂S', co: 'CO',
+}
 
 function fmtEnv(v: number | null): string {
   if (v === null || v === undefined) return '--'
@@ -487,7 +494,7 @@ function fmtEnv(v: number | null): string {
 
 const envCells = computed(() =>
   envSensors.value.map((s) => ({
-    label: s.name,
+    label: KIND_TEXT[s.kind] ?? s.name,
     unit: s.unit,
     value: s.value === null ? null : fmtEnv(s.value),
   })),
@@ -519,6 +526,7 @@ async function loadEnv() {
     envSensors.value = rows.map((s) => ({
       id: s.id,
       name: s.name,
+      kind: s.kind,
       unit: s.unit,
       value: s.latest?.value ?? null,
     }))

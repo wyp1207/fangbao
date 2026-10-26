@@ -26,6 +26,8 @@ KIND_CAPABILITIES: dict[str, list[str]] = {
     "pm": ["env.read.dust"],
     "smoke": ["env.read.smoke", "alarm.rule.smoke"],
     "co2": ["env.read.co2"],
+    "lux": ["env.read.lux"],
+    "ir_temp": ["thermometry", "env.read.temp"],
     "o2": ["env.read.o2"],
     "h2s": ["env.read.h2s", "alarm.rule.h2s"],
     "co": ["env.read.co", "alarm.rule.co"],
