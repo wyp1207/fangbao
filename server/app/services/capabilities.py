@@ -18,9 +18,17 @@ KIND_CAPABILITIES: dict[str, list[str]] = {
     "sf6": ["env.read.sf6", "alarm.rule.sf6"],
     "env": ["env.read"],
     "temp": ["env.read.temp"],
+    # 传感器类型名（sensors.KINDS 用的是 temperature/pm/smoke…），两套名字都要认
+    "temperature": ["env.read.temp"],
     "humidity": ["env.read.humidity"],
     "noise": ["env.read.noise"],
     "dust": ["env.read.dust"],
+    "pm": ["env.read.dust"],
+    "smoke": ["env.read.smoke", "alarm.rule.smoke"],
+    "co2": ["env.read.co2"],
+    "o2": ["env.read.o2"],
+    "h2s": ["env.read.h2s", "alarm.rule.h2s"],
+    "co": ["env.read.co", "alarm.rule.co"],
     "speaker": ["audio.tts"],
 }
 
