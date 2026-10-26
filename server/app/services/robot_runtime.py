@@ -112,6 +112,16 @@ class RobotRegistry:
                     for i, k in enumerate(keys)
                 }
                 fresh = not any(isinstance(r, Exception) for r in results)
+                # 自检（SDK p16–17）不用每轮都问：10 轮一次（默认 5s 轮询 → 约 50s）
+                rt.tick = getattr(rt, "tick", 0) + 1
+                if rt.tick % 10 == 1 and hasattr(rt.adapter, "get_self_test"):
+                    try:
+                        self_test = await rt.adapter.get_self_test()
+                        if isinstance(self_test, dict):
+                            merged["info"] = {**(merged.get("info") or {}),
+                                              "self_test": self_test}
+                    except Exception:  # noqa: BLE001
+                        pass   # 自检失败不该把"在线"判成离线
                 rt.cache.update(**merged, fresh=fresh)
                 status, info, galileo = merged["status"], merged["info"], merged["galileo"]
                 rt.error = None

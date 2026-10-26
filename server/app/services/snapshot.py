@@ -53,6 +53,22 @@ def capture_frame(stream: str, base: str, timeout: float = 6.0) -> dict:
     }
 
 
+def save_photo_bytes(data: bytes, source: str = "sdk") -> dict:
+    """把已经拿到的 JPEG 字节落盘（SDK 抓拍用，不用再走 go2rtc）。"""
+    if len(data) < 1024:
+        raise RuntimeError(f"抓拍内容过小（{len(data)}B）")
+    day = datetime.now().strftime("%Y%m%d")
+    name = f"shot-{day}/{int(time.time())}-{uuid4().hex[:8]}.jpg"
+    (PHOTO_ROOT / f"shot-{day}").mkdir(parents=True, exist_ok=True)
+    (PHOTO_ROOT / name).write_bytes(data)
+    return {
+        "path": f"inspection_photos/{name}",
+        "url": f"/api/v1/inspection/photos/{name}",
+        "bytes": len(data),
+        "source": source,
+    }
+
+
 def probe_frame(stream: str, base: str, timeout: float = 2.5) -> tuple[bool, str]:
     """只探测流是否出帧，不落盘（首页用它决定显示视频还是"未接入"）。"""
     if not stream or not base:

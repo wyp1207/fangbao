@@ -97,6 +97,30 @@ class JcrobHttpClient:
     async def get_bytes(self, path: str, params: dict[str, Any] | None = None) -> bytes:
         return await self._request("GET", path, params=params, raw=True)
 
+    async def get_bytes_url(self, url: str) -> bytes:
+        """抓拍返回的是完整 URL（可能不带 token）：直接 GET 一次。"""
+        try:
+            resp = await self._client.get(url)
+        except (httpx.TimeoutException, httpx.ConnectError) as exc:
+            raise jerr.Unreachable(f"抓拍下载不可达: {exc}") from exc
+        if resp.status_code >= 400:
+            raise jerr.HttpError(f"抓拍下载 HTTP {resp.status_code}")
+        return resp.content
+
+    async def get_bytes_path(self, path: str) -> bytes:
+        """抓拍返回的是机器人本地文件路径：走后端文件读取接口。"""
+        params = {"path": path}
+        if self.token:
+            params["token"] = self.token
+        url = f"{self.base_url}{API_PREFIX}/file"
+        try:
+            resp = await self._client.get(url, params=params)
+        except (httpx.TimeoutException, httpx.ConnectError) as exc:
+            raise jerr.Unreachable(f"文件读取不可达: {exc}") from exc
+        if resp.status_code >= 400:
+            raise jerr.HttpError(f"文件读取 HTTP {resp.status_code}", details=resp.text[:120])
+        return resp.content
+
     async def fetch_token(self, username: str, password: str) -> str:
         """GET /token?username=&password=（PDF p8）。
 

@@ -39,6 +39,11 @@ PATHS = {
     "loop_task": "/navigation/loop_task",
     "task": "/task",
     "action": "/action",
+    # ONVIF 相机（PDF p42–48）
+    "cameras": "/system/onvif_cameras",
+    "camera_temperature": "/system/onvif_camera/temperature",
+    "camera_snapshot": "/system/onvif_camera/snapshot",
+    "camera_pose": "/system/onvif_camera/pose",
 }
 
 
@@ -76,6 +81,53 @@ class HttpJcrobAdapter:
 
     async def get_self_test(self) -> dict[str, Any]:
         return await self.client.get(PATHS["self_test"])
+
+    # ---- ONVIF 相机（p42–48）：测温/抓拍/云台 ----
+    async def get_camera_temperature(self) -> dict[str, Any]:
+        """红外测温。返回 {max, min, avg, raw}；字段名按实际响应做兼容。"""
+        raw = await self.client.get(PATHS["camera_temperature"])
+        out: dict[str, Any] = {"raw": raw}
+        if isinstance(raw, dict):
+            for key in ("max", "maxTemp", "max_temperature", "highest"):
+                if isinstance(raw.get(key), (int, float)):
+                    out["max"] = float(raw[key])
+                    break
+            for key in ("min", "minTemp", "min_temperature", "lowest"):
+                if isinstance(raw.get(key), (int, float)):
+                    out["min"] = float(raw[key])
+                    break
+            for key in ("avg", "average", "avgTemp", "mean"):
+                if isinstance(raw.get(key), (int, float)):
+                    out["avg"] = float(raw[key])
+                    break
+            # 有的固件返回 points 列表：取最高温点
+            pts = raw.get("points") or raw.get("data")
+            if isinstance(pts, list) and pts:
+                temps = [p.get("temp") for p in pts
+                         if isinstance(p, dict) and isinstance(p.get("temp"), (int, float))]
+                if temps and "max" not in out:
+                    out["max"] = float(max(temps))
+                    out["min"] = float(min(temps))
+        return out
+
+    async def camera_snapshot(self) -> bytes:
+        """到点抓拍优先走 SDK（p46）。返回 JPEG 字节。"""
+        res = await self.client.get(PATHS["camera_snapshot"])
+        # 文档说"返回文件位置"：可能是路径/URL，也可能是 base64
+        loc = ""
+        if isinstance(res, dict):
+            loc = str(res.get("path") or res.get("url") or res.get("file") or "")
+        elif isinstance(res, str):
+            loc = res
+        if not loc:
+            raise jerr.NotSupported("抓拍接口没返回文件位置")
+        import base64
+
+        if loc.startswith("data:image") and "," in loc:
+            return base64.b64decode(loc.split(",", 1)[1])
+        if loc.startswith("http"):
+            return await self.client.get_bytes_url(loc)
+        return await self.client.get_bytes_path(loc)
 
     async def get_config_view(self) -> dict[str, Any]:
         raw = await self.client.get(PATHS["config"])
@@ -169,11 +221,18 @@ class HttpJcrobAdapter:
         return {"id": "", "state": "FAILED", "raw": res}
 
     async def capture(self, step=None, stream: str | None = None) -> dict:
+        """到点抓拍：优先走 SDK 的 onvif_camera/snapshot（p46），失败再回落到 go2rtc 抓帧。"""
         from app.core.config import get_settings
-        from app.services.snapshot import capture_frame
+        from app.services.snapshot import capture_frame, save_photo_bytes
 
+        try:
+            data = await self.camera_snapshot()
+            if len(data) > 1024:
+                return save_photo_bytes(data, source="sdk_snapshot")
+        except Exception as exc:  # noqa: BLE001
+            log.info("SDK 抓拍不可用（%s），回落到 go2rtc", exc.__class__.__name__)
         if not stream:
-            raise RuntimeError("这台设备没有配置相机外设（camera）")
+            raise RuntimeError("SDK 抓拍失败，且这台设备没有配置相机外设（camera）")
         return await asyncio.to_thread(capture_frame, stream, get_settings().go2rtc_base)
 
     async def pause(self) -> dict:

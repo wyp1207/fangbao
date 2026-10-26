@@ -158,6 +158,23 @@ class CruiseRunner:
             import asyncio
             asyncio.run(res)
 
+    def _ensure_sensor(self, robot_id: int | None, kind: str, label: str) -> int | None:
+        """按（设备, 类型）找传感器，没有就建（测温/环境流共用）。"""
+        from app.models.sensor import Sensor
+
+        with self._sf() as db:
+            q = db.query(Sensor).filter(Sensor.kind == kind)
+            if robot_id is not None:
+                q = q.filter(Sensor.robot_id == robot_id)
+            row = q.first()
+            if row is not None:
+                return row.id
+            row = Sensor(name=label, kind=kind, unit="℃", robot_id=robot_id, enabled=True)
+            db.add(row)
+            db.commit()
+            db.refresh(row)
+            return row.id
+
     def _camera_stream(self, robot_id: int | None) -> str | None:
         """从外设表里挑这台车的相机流（优先 camera，其次 thermal）。"""
         try:
@@ -184,6 +201,28 @@ class CruiseRunner:
     def _do_action(self, adapter, step, robot_id: int | None = None) -> tuple[dict | None, str | None]:
         """到点动作：能做的做，做不了的明确报"需要什么"，不假装成功。"""
         action = (step.action or "photo").lower()
+
+        # 测温：SDK p47 onvif_camera/temperature —— 存一条读数，超温自动告警
+        if action in ("thermal_temp", "thermometry", "measure"):
+            getter = getattr(adapter, "get_camera_temperature", None)
+            if getter is None:
+                return None, "这台设备没有测温接口（需要红外热像仪 + 海康 ISAPI）"
+            import asyncio
+
+            res = getter()
+            if hasattr(res, "__await__"):
+                res = asyncio.run(res)
+            tmax = (res or {}).get("max")
+            if tmax is None:
+                return {"thermal": res}, "测温接口没有返回温度值"
+            sid = self._ensure_sensor(robot_id, "ir_temp", "热像仪测温")
+            if sid:
+                from app.services.sensor_io import ingest_value
+
+                with self._sf() as db:
+                    ingest_value(db, sensor_id=sid, value=float(tmax), source="cruise_thermal")
+            return {"thermal": res}, None
+
         fn = getattr(adapter, "capture", None)
         if action in ("photo", "video", "thermal"):
             if fn is None:

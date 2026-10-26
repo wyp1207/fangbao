@@ -121,6 +121,22 @@ class AlarmStore:
         if info.get("driver_port") is True:
             found.append(("estop", "critical", "硬件急停被按下", True))
 
+        # 自检（SDK p16–17）：motor_driver/camera/charge/lidar/bluetooth/battery
+        # 任一路报错就算严重；全部恢复后由 _resolve_gone 自动解除
+        st = info.get("self_test")
+        if isinstance(st, dict):
+            bad = []
+            for k, v in st.items():
+                if isinstance(v, bool) and not v:
+                    bad.append(k)
+                elif isinstance(v, str) and v.lower() in ("error", "fail", "failed", "ng", "false"):
+                    bad.append(k)
+                elif isinstance(v, (int, float)) and not isinstance(v, bool) and v != 0:
+                    bad.append(k)
+            if bad:
+                found.append(("selftest", "critical",
+                              f"自检异常：{'、'.join(bad[:4])}", bad[:4]))
+
         offline_limit = float(offline_after_s or cfg["offline"])
         if age_s < 0 or age_s > offline_limit:
             # 抖动只报提醒，持续断线才升级成严重（默认 3 倍判定时间）
