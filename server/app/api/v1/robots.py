@@ -80,6 +80,13 @@ def robot_status(robot_id: int, cache=Depends(get_cache),
     data["robot_name"] = rt.name
     if rt.error:
         data["runtime_error"] = rt.error
+    # 环境传感器是机器人推的 WS，状态单独给一份（前端能看出"流断没断"）
+    try:
+        from app.services.env_ws import state_for
+
+        data["env_ws"] = state_for(robot_id)
+    except Exception:  # noqa: BLE001
+        data["env_ws"] = {"supported": False}
     return data
 
 

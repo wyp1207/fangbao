@@ -213,6 +213,15 @@ async def lifespan(app: FastAPI):
     with _SL2() as _db:
         _robots = _db.query(_Robot).filter(_Robot.is_active.is_(True)).all()
     await robot_registry.start(_robots)
+
+    # 环境传感器走机器人推的 WS（SDK p107），与 HTTP 轮询是两套机制
+    try:
+        from app.services.env_ws import runner as env_ws_runner
+
+        await env_ws_runner.start(_robots)
+    except Exception:  # noqa: BLE001
+        log.exception("环境流启动失败（不影响主流程）")
+
     lag.start()
     try:
         yield
@@ -247,6 +256,12 @@ async def lifespan(app: FastAPI):
         except Exception:  # noqa: BLE001
             pass
         await robot_registry.stop()
+        try:
+            from app.services.env_ws import runner as env_ws_runner
+
+            await env_ws_runner.stop()
+        except Exception:  # noqa: BLE001
+            pass
         await lag.stop()
         await adapter.aclose()
         log.info("已停止")

@@ -18,7 +18,8 @@ from app.services.messages import audit
 
 router = APIRouter(tags=["peripherals"])
 
-KINDS = ("camera", "thermal", "ptz", "gas", "sf6", "env", "temp", "humidity", "noise", "dust", "speaker")
+KINDS = ("camera", "thermal", "ptz", "gas", "sf6", "env", "temp", "humidity",
+         "noise", "dust", "smoke", "pm", "temperature", "co2", "o2", "h2s", "co", "speaker")
 
 
 def _out(p: Peripheral) -> dict:
