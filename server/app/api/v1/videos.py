@@ -35,6 +35,7 @@ router = APIRouter(prefix="/videos", tags=["videos"])
 
 # 抓帧缓存：id -> (时间戳, jpeg bytes)。摄像头多路时避免每次刷新都拉一遍流。
 _SNAP_CACHE: dict[int, tuple[float, bytes]] = {}
+_STREAMS_CACHE: dict[str, tuple[dict, float]] = {}
 _SNAP_TTL = 2.0
 _FFMPEG = shutil.which("ffmpeg")
 def _alive(video_id: int) -> list[subprocess.Popen]:
@@ -207,9 +208,6 @@ def list_videos(
 
 
 @router.get("/go2rtc-streams")
-_STREAMS_CACHE: dict[str, tuple[dict, float]] = {}
-
-
 def list_go2rtc_streams(
     all: bool = Query(False, description="true 时列出 go2rtc 全部流（排障用）"),
     db: Session = Depends(get_db),
