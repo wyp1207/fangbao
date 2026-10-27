@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { api, type AuditItem } from '@/api'
 import DarkSelect from '@/components/DarkSelect.vue'
+import { toast } from '@/composables/useToast'
 
 const rows = ref<AuditItem[]>([])
 const total = ref(0)
@@ -42,6 +43,22 @@ async function goto(p: number) {
   await reload()
 }
 
+// 审计链自检：任何一行被改过，这里的哈希校验就会失败
+const verifying = ref(false)
+const verifyResult = ref<{ ok: boolean; checked: number; broken_at?: number; legacy_rows?: number } | null>(null)
+
+async function verifyChain() {
+  verifying.value = true
+  try {
+    verifyResult.value = await api.auditVerify()
+  } catch (e) {
+    verifyResult.value = { ok: false, checked: 0, broken_at: -1 }
+    toast(e instanceof Error ? e.message : '校验失败', 'danger')
+  } finally {
+    verifying.value = false
+  }
+}
+
 onMounted(reload)
 </script>
 
@@ -58,9 +75,22 @@ onMounted(reload)
         <DarkSelect v-model="action" :options="actionOptions" width="170px" />
         <button class="btn btn-sm ok" :disabled="loading" @click="page = 1; reload()">查询</button>
         <button class="btn btn-sm warn" @click="action = ''; page = 1; reload()">重置</button>
+        <button class="btn btn-sm" :disabled="verifying" @click="verifyChain">
+          {{ verifying ? '校验中…' : '校验审计链' }}
+        </button>
         <span class="grow" />
         <span class="muted small">共 {{ total }} 条</span>
       </div>
+
+      <p v-if="verifyResult" class="verify-bar" :class="verifyResult.ok ? 'ok' : 'bad'">
+        <template v-if="verifyResult.ok">
+          审计链完整：已校验 {{ verifyResult.checked }} 条，哈希全部对得上
+          <span v-if="verifyResult.legacy_rows">（其中 {{ verifyResult.legacy_rows }} 条为早期无哈希记录）</span>
+        </template>
+        <template v-else>
+          审计链异常：第 {{ verifyResult.broken_at }} 条开始对不上，可能被改动过
+        </template>
+      </p>
 
       <table class="grid">
         <thead>
@@ -108,4 +138,8 @@ onMounted(reload)
 .page > .panel { flex: 1; min-height: 0; }
 .num { font-variant-numeric: tabular-nums; }
 .small { font-size: 12px; }
+
+.verify-bar { margin: 8px 0; padding: 8px 10px; border-radius: 3px; font-size: 12px; }
+.verify-bar.ok { background: rgba(48, 208, 64, .12); border: 1px solid rgba(48, 208, 64, .5); color: #8ef0a0; }
+.verify-bar.bad { background: rgba(255, 64, 64, .12); border: 1px solid rgba(255, 64, 64, .55); color: #ff9a9a; }
 </style>

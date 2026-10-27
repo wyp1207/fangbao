@@ -186,6 +186,8 @@ export interface AlarmPage {
 export interface AlarmItem {
   work_order_id?: number | null
   priority?: string | null
+  shelved_until?: string | null
+  shelve_reason?: string | null
   status?: 'new' | 'acked' | 'handled' | 'closed'
   handled_at?: string | null
   handled_by?: string | null
@@ -477,6 +479,11 @@ export const api = {
       .join('&')
     return request<AlarmPage>(`/alarms${qs ? `?${qs}` : ''}`)
   },
+  shelveAlarm: (id: number, minutes: number, reason: string) =>
+    request<{ ok: boolean; shelved_until: string }>(`/alarms/${id}/shelve`, { method: 'POST', body: { minutes, reason } }),
+  unshelveAlarm: (id: number) =>
+    request<{ ok: boolean }>(`/alarms/${id}/shelve`, { method: 'DELETE' }),
+  auditVerify: () => request<{ ok: boolean; checked: number; broken_at?: number; legacy_rows?: number }>('/audit-logs/verify'),
   ackAlarm: (alarmId: number) =>
     request<AlarmItem>(`/alarms/${alarmId}/ack`, { method: 'POST' }),
   capabilities: (id = 1) => request<Record<string, unknown>>(`/robots/${id}/capabilities`),
