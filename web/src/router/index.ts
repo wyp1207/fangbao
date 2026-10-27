@@ -59,6 +59,7 @@ const router = createRouter({
         // 系统管理
         { path: 'messages', name: 'messages', component: () => import('@/pages/Messages.vue') },
         { path: 'users', name: 'users', component: () => import('@/pages/Users.vue'), meta: { roles: ['admin', 'sysadmin'] } },
+        { path: 'system-status', name: 'system-status', component: () => import('@/pages/SystemStatus.vue'), meta: { roles: ['admin', 'sysadmin'] } },
         { path: 'settings', name: 'settings', component: () => import('@/pages/Settings.vue'), meta: { roles: ['admin', 'sysadmin', 'secadmin'] } },
         { path: 'notify', name: 'notify', component: () => import('@/pages/NotifyChannels.vue'), meta: { roles: ['admin', 'sysadmin', 'secadmin'] } },
         { path: 'oplog', name: 'oplog', component: () => import('@/pages/AuditLogs.vue'), meta: { roles: ['admin', 'auditor'] } },

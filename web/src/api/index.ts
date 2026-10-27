@@ -510,6 +510,8 @@ export const api = {
     request<{ ok: boolean }>(`/sensor-gateways/${id}`, { method: 'DELETE' }),
   testSensorGateway: (id: number) =>
     request<{ ok: boolean; raw?: number; value?: number; error?: string }>(`/sensor-gateways/${id}/test`, { method: 'POST' }),
+  robotRuntime: () => request<Record<string, unknown>[]>('/robots/runtime'),
+  videoStreamStats: () => request<Record<string, unknown>[]>('/videos/streams/stats'),
   sensorGatewayRuntime: () => request<Record<string, unknown>[]>('/sensor-gateways/runtime'),
   sensorRule: (id: number) => request<Record<string, unknown>>(`/sensors/${id}/rule`),
   sensors: (robotId?: number) =>
