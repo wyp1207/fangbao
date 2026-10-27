@@ -22,6 +22,7 @@ const meta = ref<{ device_types: { value: string; label: string }[]; adapters: R
 })
 const loading = ref(false)
 const testing = ref<number | null>(null)
+const probing = ref<number | null>(null)
 
 const editing = ref<DeviceItem | null>(null)
 const creating = ref(false)
@@ -125,6 +126,32 @@ async function test(d: DeviceItem) {
   }
 }
 
+// 读一次真实状态（不是 ping 端口）：非主设备按需建适配器查一次
+async function probeStatus(d: DeviceItem) {
+  probing.value = d.id
+  try {
+    const res = await api.probeDeviceStatus(d.id)
+    if (res.source === 'error' || res.source === 'unsupported') {
+      toast(`${d.name}：读取失败（${res.reason ?? '适配器未实现或设备不可达'}）`, 'warn', 6000)
+      return
+    }
+    const data = (res.data ?? {}) as Record<string, any>
+    const battery = data.info?.battery ?? data.battery
+    const offline = data.online === false
+    const age = data.age_s
+    const bits = [
+      battery !== undefined ? `电量 ${battery}%` : '',
+      age !== undefined ? `${Math.round(Number(age))} 秒前` : '',
+      offline ? '离线' : '在线',
+    ].filter(Boolean)
+    toast(`${d.name}：${bits.join(' · ') || '已返回状态'}`, offline ? 'warn' : 'ok', 5000)
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : '读取状态失败', 'danger')
+  } finally {
+    probing.value = null
+  }
+}
+
 async function remove(d: DeviceItem) {
   if (!window.confirm(`删除设备「${d.name}」？只删台账，不影响机器人本体。`)) return
   try {
@@ -187,7 +214,8 @@ onMounted(async () => {
             </td>
             <td>
               <div class="row-actions">
-                <button class="act" title="测试连接" :disabled="testing === d.id" @click="test(d)">⇄</button>
+                <button class="act" title="测试连接（端口）" :disabled="testing === d.id" @click="test(d)">⇄</button>
+                <button class="act" title="读一次状态" :disabled="probing === d.id" @click="probeStatus(d)">◎</button>
                 <button class="act" title="编辑" @click="openEdit(d)">✎</button>
                 <button class="act danger" title="删除" :disabled="d.id === 1" @click="remove(d)">🗑</button>
               </div>

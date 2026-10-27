@@ -233,6 +233,13 @@ export const api = {
   updateDevice: (id: number, body: Record<string, unknown>) =>
     request<DeviceItem>(`/devices/${id}`, { method: 'PATCH', body }),
   deleteDevice: (id: number) => request<{ ok: boolean }>(`/devices/${id}`, { method: 'DELETE' }),
+  probeDeviceStatus: (id: number) =>
+    request<{ source: string; data?: Record<string, unknown>; reason?: string }>(
+      `/devices/${id}/status-probe`, { method: 'POST' }),
+  updateInspectionPlan: (id: number, body: Record<string, unknown>) =>
+    request<Record<string, unknown>>(`/inspection/plans/${id}`, { method: 'PATCH', body }),
+  deleteInspectionPlan: (id: number) =>
+    request<{ ok: boolean }>(`/inspection/plans/${id}`, { method: 'DELETE' }),
   testDevice: (id: number) =>
     request<{ tcp: boolean; http: boolean; detail: string }>(`/devices/${id}/test`, { method: 'POST' }),
 
