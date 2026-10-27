@@ -1,15 +1,21 @@
-feat(auth): 全局 401 拦截——会话过期就地退回登录页，不再"假装还活着"
+feat: 空闲自动退出可在系统设置里改（默认 5 分钟）+ 接上两个"假开关"
 
-之前只有路由守卫会检查登录态：停在大屏时不点菜单，Token 过期后
-每 5 秒一次的轮询一直 401，界面还显示旧数据，看不出已经掉线。
+一、空闲退出（security.idle_minutes）
+- 系统设置新增「空闲多久自动退出（分钟）」：默认 5，范围 1–240，分组"平台"
+- 前端守卫不再写死 30 分钟：启动时读设置，每 10 分钟刷新一次
+  读不到就用 5 分钟兜底（设置接口挂了也不能永不退出）
+- localStorage 的 jc_idle_minutes 只作为本地调试覆盖，不再作为主配置
 
-实现：
-- api/client.ts 增加 onUnauthorized 回调与 3 秒去重；
-  401 时先排除三个"业务上的 401"：/auth/login（密码错）、/auth/me（判登录态）、/auth/logout
-- main.ts 注册处理：清 auth.user + sessionStorage 标记 → push /login?redirect=<当前页>&expired=1
-  已在登录页则不重复跳
-- 登录页收到 expired=1 清空账号密码并提示（上一提交已做）
+二、顺手修两个"界面上有、代码里没人读"的假开关
+- video.mjpeg_fps（首页视频帧率）：之前 UI 显示 8，实际是代码常量；
+  现在 VideoStream 启动时读设置，默认改成 20（8fps 就是一卡一卡）
+- video.transcode_width（转码宽度）：之前读的是环境变量 video_scale_width，
+  改设置没用；现在同样走设置
 
-实测（Playwright）：登录后清 Cookie，停留在大屏不做任何点击
-  9 秒后 URL 自动变 /login?redirect=/dashboard&expired=1
-  账号/密码均为空，提示"会话已过期，请重新登录（账号密码已清空）"
+三、实测
+- /settings schema 出现 security.idle_minutes，默认 5，PUT 改成 8 生效
+- 视频：设置 20 → 5 秒收到 83 帧 ≈ 16.6fps（之前 8fps）
+- 空闲守卫：保持会话、3 秒阈值、不动鼠标，70 秒后仍停在 /dashboard，
+  期间只多发 1 次 /auth/me（说明是"空闲才探一次"，不是定时心跳）
+
+验证：86 用例通过

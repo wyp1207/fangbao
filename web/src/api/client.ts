@@ -26,6 +26,11 @@ export function onUnauthorized(fn: UnauthorizedHandler): void {
   unauthorizedHandler = fn
 }
 
+/** 主动触发"会话失效"流程（空闲守卫查到 401 时用，/auth/me 本身不在拦截名单里）。 */
+export function triggerUnauthorized(): void {
+  if (unauthorizedHandler) unauthorizedHandler()
+}
+
 // 这些接口的 401 是"业务答案"，不是会话过期：
 // /auth/login 密码错、/auth/me 用来判断有没有登录、/auth/logout 本来就可能没会话
 const AUTH_PATHS = new Set(['/auth/login', '/auth/me', '/auth/logout'])

@@ -411,7 +411,7 @@ def mjpeg(
     观众只是从「最新一帧」缓存里取，首帧只付一次握手成本。
     """
     from app.core.errors import ExternalUnavailable
-    from app.services.video_stream import FPS, FFMPEG, registry
+    from app.services.video_stream import FFMPEG, registry
 
     if not FFMPEG:
         raise ExternalUnavailable("服务端没有 ffmpeg，无法转码", code="FFMPEG_MISSING")
@@ -453,7 +453,7 @@ def mjpeg(
                 yield (f"--{boundary}\r\n"
                        f"Content-Type: image/jpeg\r\n"
                        f"Content-Length: {len(frame)}\r\n\r\n").encode() + frame + b"\r\n"
-                time.sleep(1.0 / FPS)
+                time.sleep(1.0 / max(1, getattr(stream, "fps", 20)))
         finally:
             registry.release(video_id)
 
