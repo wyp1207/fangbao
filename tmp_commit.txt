@@ -1,18 +1,17 @@
-feat(loc): 重置定位（X30 协议 2101）+ 定位丢失告警
+docs: 巡航/任务下发/多机调度/定位初始化 对标报告
 
-为什么必须有：
-「机器狗怎么知道自己在哪」靠的是激光 SLAM + IMU + odom（室外叠 RTK 融合）。
-断电重启、被人搬动、切换地图之后，位姿和地图会错位——此时导航会"到不了点"，
-必须在现场做一次**重定位**。参考旧项目（机器狗/环境说明/robot-dashboard）的做法：
-上一次是手工在页面上点地图发 /initialpose + 发 2101，我们这次直接接进平台。
+新增 docs/reviews/cruise-multi-robot-benchmark.md（429 行，9 组外链 + 38 条指向本仓库代码的行级链接）。
 
-改动：
-1) X30 适配器新增 set_initial_pose(x,y,yaw) → 协议 2101
-2) POST /robots/{id}/init-loc（admin/operator/safety，受写开关保护，写审计 robot.init_loc）
-3) 首页控制面板新增「重置定位」按钮：预填当前位姿，确认后先接管（取消运行中任务）再重置
-4) 告警新增 loc_lost：定位丢失立即 P2 告警——定位一丢，"到点判定"全部不可信
-5) adapters 里原本只有 protocol.init_loc，适配器没暴露、界面没入口（等于没有）
+核心结论：
+- 不是选错"逐点下发"，而是缺能力协商：JCROB 支持整单 sub_tasks，X30 的 1003 一次一个目标，
+  平台取交集 = 逐点。应把 exec_mode 交给适配器声明。
+- 订单无幂等：orderId = JC-{毫秒} 每次都变；external_id 只有普通索引、无唯一约束。
+- 状态机缺 dispatched / unknown / PAUSED，导致"已发出"与"已受理"不可区分。
+- 到点判定只有 FINISHED + 距离复核，超容差直接判 failed → 把"该重定位"误报成"任务失败"并盲重试。
+  建议三值判定：arrived / arrived_suspect / failed。
+- 多机只有"一车一任务"前置检查，无资源互斥。文档给出 resource_lock 表设计：
+  按 key 字典序抢锁（消灭环路等待）+ TTL 强拆 + 15s 环检测兜底。
+- 定位初始化只有一个手工按钮（本轮已实现），缺触发条件与初始化后校验；点位未绑地图版本。
 
-说明：地图切换（/map_request/pcd）与 /location_status 订阅未做，列入下一步。
-
-验证：89 用例通过
+商用可信度提醒：四家里只有国自 GRACE Xpress 有可量化指标（2000+ 台、1s 派单、10 万㎡交通），
+申昊/亿嘉和/优必选公开材料停在架构口号层面，报告已标注边界，对外汇报别当技术标杆。
