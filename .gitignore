@@ -54,3 +54,6 @@ web/_*.mjs
 
 # 调研用的 GitHub 镜像快照（可随时重拉，不入库）
 .research/
+
+# 本地运行日志
+*.log

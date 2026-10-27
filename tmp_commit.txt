@@ -1,20 +1,32 @@
-plan: 巡航与任务下发改造规划（调研 + 两轮模型评审后定稿）
+feat(task): A–D 四项落地（下发幂等、能力协商、到点三态、资源锁+定位门）
 
-新增 docs/巡航与任务下发-改造规划.md：
-- §0 一页纸结论：草稿 6 条里 4 条被批倒，收敛成 4 项改动
-- §1 ponytail 判断：七态/Redis/MQ/VDA5050 全量/RMF 协商一律不做，复用 TaskRun/task_lock/audit
-- §2 四项改动：A 幂等先落库再发、B 能力字典替代 exec_mode、C 到点三态、D 资源锁+定位触发
-  每项含问题/方案/表字段/改动点/验收判据/替代方案对比
-- §3 明确不做 6 条；§4 复用 8 处；§5 排期 3 天；§6 风险与回滚
-- §8 调研修正：VDA5050 无 order 级 status；SQLite 不支持 FOR UPDATE 改条件 UPDATE；
-  到点容差按节点 allowedDeviationXY；安全门用 localized 布尔而非 score；
-  /initialpose stamp 必须 now、covariance 对角 4 分量、/request_nomotion_update 可不动车校验；
-  slam_toolbox 无 set_pose 服务且不是 lifecycle 节点
+A 下发幂等
+- 迁移 0024：task_run 加 order_id(唯一)、order_update_id、dispatch_state、
+  dispatch_attempt、dispatch_lease_until、cancel_requested_at、last_seq；建 resource_lock 表
+- 先落库再发网络：条件 UPDATE 抢 pending→sending（SQLite 不支持 FOR UPDATE，条件 UPDATE 两端一致）
+- order_id = JC-R{run:06d}-A{attempt:02d}；重复下发 409 ORDER_IN_FLIGHT
+- 结果未知（超时/断网）→ 保持 sending + 租约，绝不盲重试
+- reconcile_dispatches 每 60 秒对账：租约到期无回执 → failed，有 external_id → sent
+- 实测：order_id=JC-R000031-A01、dispatch_state=sent、attempt=1；第二次下发被拦（400 BAD_STATUS）
 
-同时入库两份源码级调研与两轮模型评审：
-- docs/reviews/idempotency-state-machine-research.md（VDA5050/RMF/Nav2，含 404 仓库如实标注）
-- docs/reviews/multi-robot-localization-research.md（RMF 锁/AMCL/slam_toolbox/map_server，85 个源码链接）
-- docs/reviews/model_review_20261027-173507.md（豆包 + GLM 对草稿逐条挑错）
-- docs/评审-巡航改造方案-prompt.md（评审用 prompt）
+B 能力协商
+- 两个适配器加 capabilities：supports_batch / supports_inline_actions / supports_pause / cancel_semantics
+- 全部默认 False = 逐点（行为不变）；真机确认后在适配器改一个布尔，不动巡航逻辑
 
-.gitignore 增加 .research/（调研时的 GitHub 镜像快照，可随时重拉，不入库）
+C 到点三态
+- _wait_arrival 返回 arrived / suspect / failed
+- 超容差但 ≤ 2.5 倍 → suspect：标 step.status=suspect + 发 loc_suspect 告警，不重试、不算失败
+- 实测：0.5m→arrived、1.5m→suspect、4m→failed（用位移而非瞬时速度，避免机器狗踏步误判）
+
+D 资源锁 + 定位门
+- resource_lock：进程内锁 + key 字典序（消灭环路等待）+ TTL；DB 表只做快照，不承担互斥
+- 巡航到点动作期间占 point:<id>，finally 释放
+- 下发前检查 located==false → 409 NOT_LOCALIZED（VDA5050 的 localized 安全门）
+
+修复过程中发现的真问题：
+- 同步路由里 asyncio.run 复用共享 httpx 客户端会报 "Event ... bound to a different event loop"
+  → 新增 services/async_bridge.py，统一把协程投递到服务端主循环（run_coroutine_threadsafe）
+- task_runs 路由缺 logger，异常处理里 log.exception 触发 NameError 把 409 变成 500 → 补 logger
+
+测试：102 通过（新增 8：幂等 4、资源锁 4、到点三态 5 含能力断言）
+脚本：scripts/verify_abcd.py
