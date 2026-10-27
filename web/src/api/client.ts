@@ -16,6 +16,20 @@ function cookie(name: string): string {
   return hit ? decodeURIComponent(hit.split('=').slice(1).join('=')) : ''
 }
 
+// 全局 401 处理：登录态过期时不能只在页面里弹红字，要立刻退回登录页，
+// 否则大屏会一直"假装还活着"（定时轮询每 5 秒 401，但界面还是旧数据）。
+type UnauthorizedHandler = () => void
+let unauthorizedHandler: UnauthorizedHandler | null = null
+let lastUnauthorizedAt = 0
+
+export function onUnauthorized(fn: UnauthorizedHandler): void {
+  unauthorizedHandler = fn
+}
+
+// 这些接口的 401 是"业务答案"，不是会话过期：
+// /auth/login 密码错、/auth/me 用来判断有没有登录、/auth/logout 本来就可能没会话
+const AUTH_PATHS = new Set(['/auth/login', '/auth/me', '/auth/logout'])
+
 type Options = {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   body?: unknown
@@ -42,6 +56,13 @@ export async function request<T>(path: string, options: Options = {}): Promise<T
   })
 
   if (!res.ok) {
+    if (res.status === 401 && !AUTH_PATHS.has(path)) {
+      const now = Date.now()
+      if (unauthorizedHandler && now - lastUnauthorizedAt > 3000) {
+        lastUnauthorizedAt = now
+        try { unauthorizedHandler() } catch { /* 处理函数自己兜底 */ }
+      }
+    }
     let code = 'HTTP_ERROR'
     let message = `请求失败（${res.status}）`
     let details: unknown
