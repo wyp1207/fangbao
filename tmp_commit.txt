@@ -1,8 +1,29 @@
-feat: 录像回放页加「清空该相机录像」（DELETE /recordings/{id}/all 终于有入口）
+test: 三个新测试脚本 + 修两个真问题（设置 JSON 显示、Excel 公式注入）
 
-- 工具栏新增按钮：未选摄像头时禁用；确认后删除该相机全部录像段并提示删除数量
-- 危险操作用红色按钮 + 二次确认文案（"不可撤销，磁盘空间会立即释放"）
+一、scripts/ui_smoke.py（新增）
+登录后逐个打开 34 个路由，记录：空白页 / 控制台错误 / 接口 4xx-5xx，输出 docs/reviews/ui-smoke.md。
+修完两个问题后：**34 个路由 0 问题**。
 
-实测：选「充电房-可见光」→ 确认 → 已删除 4 段录像（开发环境的历史测试录像）。
-接口审计：166 条未调用 19 → 13（本轮 + 之后的系统状态页一起消掉 6 条）。
-验证：86 用例通过
+首跑发现并修掉：
+1) /settings 控制台报"The specified value [object Object] cannot be parsed"
+   原因：alarm.sla_minutes 是 json 类型，设置页却按 number 渲染 → 输入框被塞进对象。
+   现在：json 类型用文本域显示（JSON 文本），保存前解析；解析失败只提示该项、不提交。
+2) 冒烟脚本自身把 /api-keys 写错（真实路由是 /keys），已修正。
+
+二、scripts/adversarial_test.py（新增）
+1) 越权：viewer 尝试 建管理员/搁置告警/删管理员/改设置/下发任务/校验审计 → 6/6 全部 403 ✅
+2) 审计链篡改：直接改库里一条 result_summary 再校验 →
+   {"ok":false,"broken_at":820,"reason":"row_hash 对不上（内容被改）"}；恢复后 ok:true ✅
+
+三、Excel/CSV 公式注入（真实漏洞，已修）
+构造传感器名 "=cmd|' /C calc'!A0" 触发告警后导出 xlsx：
+- 修复前：告警明细!E206、环境!A14 两个单元格 data_type='f'（被当公式，Excel 打开会执行）❌
+- 修复后：全部 's'（文本，前面加了单引号）✅
+修法：reports.py 增加 sanitize_workbook()，保存前把 = + - @ 开头的字符串统一转义；
+前端告警「导出 CSV」同样加 csvCell() 转义。
+
+四、模型评审
+docs/对抗测试设计-prompt.md + docs/reviews/model_review_20261027-140020.md：
+豆包/GLM 给出 20 个高风险点 + 50 用例清单 + 5 个"看着会过实际翻车"场景。
+
+验证：86 用例通过；UI 冒烟 34/34 无问题

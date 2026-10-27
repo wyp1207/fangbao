@@ -229,6 +229,13 @@ function reset() {
   page.value = 1
 }
 
+// CSV 公式注入：以 = + - @ 开头的单元格在 Excel 里会被当公式执行
+function csvCell(v: unknown): string {
+  let text = String(v ?? '')
+  if (/^[=+\-@\t\r]/.test(text)) text = "'" + text
+  return `"${text.replace(/"/g, '""')}"`
+}
+
 function exportCsv() {
   const head = ['时间', '指标', '级别', '状态', '内容', '确认人', '延时(s)']
   const data = rows.value.map((a) => [
@@ -240,7 +247,7 @@ function exportCsv() {
     a.acked_at ? Math.round((Date.parse(a.acked_at) - Date.parse(a.started_at)) / 1000) : '',
   ])
   const csv = [head, ...data]
-    .map((r) => r.map((c: unknown) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','))
+    .map((r) => r.map(csvCell).join(','))
     .join('\n')
   const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
   const a = document.createElement('a')

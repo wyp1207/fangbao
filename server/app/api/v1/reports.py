@@ -107,6 +107,24 @@ def summary(
         _SUMMARY_LOCK.release()
 
 
+def sanitize_workbook(wb) -> int:
+    """把以 = + - @ 开头的文本改成文本单元格。
+
+    为什么必须做：openpyxl 见到 "=cmd|..." 会当公式写进文件，
+    现场用 Excel 打开就可能执行（CSV/Excel 公式注入，OWASP 明确列出的问题）。
+    传感器名、告警内容、备注明细都是用户可控的，必须逐格转义。
+    """
+    fixed = 0
+    for ws in wb.worksheets:
+        for row in ws.iter_rows():
+            for cell in row:
+                v = cell.value
+                if isinstance(v, str) and v[:1] in ("=", "+", "-", "@", "\t", "\r"):
+                    cell.value = "'" + v
+                    fixed += 1
+    return fixed
+
+
 def _summary_impl(
     date_from: str | None = Query(None, description="YYYY-MM-DD"),
     date_to: str | None = Query(None),
@@ -510,6 +528,7 @@ def export_xlsx(
     ws4.column_dimensions["A"].width = 20
     ws4.column_dimensions["B"].width = 20
 
+    sanitize_workbook(wb)
     buf = io.BytesIO()
     wb.save(buf)
 
