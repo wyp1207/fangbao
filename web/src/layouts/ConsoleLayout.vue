@@ -6,9 +6,11 @@ import TopNav from '@/components/TopNav.vue'
 import UserMenu from '@/components/UserMenu.vue'
 import logoUrl from '@/assets/logo.png'
 import { useRobotStore } from '@/stores/robot'
+import { usePlatformStore } from '@/stores/platform'
 
 const auth = useAuthStore()
 const robot = useRobotStore()
+const platform = usePlatformStore()
 const route = useRoute()
 const router = useRouter()
 
@@ -22,7 +24,7 @@ const state = computed(() => {
 const alarmCount = computed(() => robot.alarms.filter((a) => !a.acked_at).length)
 
 // 后台页也要有实时状态：轮询在布局层启动，子页面不用各自管
-onMounted(() => robot.start())
+onMounted(() => { robot.start(); void platform.load() })
 onBeforeUnmount(() => robot.stop())
 
 async function onLogout() {
@@ -42,7 +44,7 @@ async function onLogout() {
 
       <div class="hdr-center">
         <TopNav :start="0" :end="4" />
-        <div class="mini-title"><span class="w" />智能巡检机器人管理平台<span class="w r" /></div>
+        <div class="mini-title"><span class="w" />{{ platform.name }}<span class="w r" /></div>
         <TopNav :start="4" />
       </div>
 
