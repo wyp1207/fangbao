@@ -4,6 +4,7 @@ import { api, type DeviceItem } from '@/api'
 import { ApiError } from '@/api/client'
 import DarkSelect from '@/components/DarkSelect.vue'
 import { toast } from '@/composables/useToast'
+import { usePlatformStore } from '@/stores/platform'
 
 interface AdapterMeta {
   label: string
@@ -13,6 +14,7 @@ interface AdapterMeta {
   note: string
 }
 
+const platform = usePlatformStore()
 const rows = ref<DeviceItem[]>([])
 const meta = ref<{ device_types: { value: string; label: string }[]; adapters: Record<string, AdapterMeta> }>({
   device_types: [],
@@ -59,7 +61,7 @@ async function load() {
 
 function openCreate() {
   form.value = {
-    name: '', device_type: 'jcrob_wheel', adapter: 'jcrob_http', station: '默认场站',
+    name: '', device_type: 'jcrob_wheel', adapter: 'jcrob_http', station: platform.site,
     ip: '', port: 3546, ws_port: 3547, username: 'admin', password: '', mode: 'http', note: '',
     asset_no: '' as string, ex_marking: '' as string, ex_cert_no: '' as string,
     ex_cert_expiry: '' as string, ex_zone: '' as string, owner: '' as string,

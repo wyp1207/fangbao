@@ -1,21 +1,19 @@
-feat: 空闲自动退出可在系统设置里改（默认 5 分钟）+ 接上两个"假开关"
+feat(settings): 全量设置项审计 + 补上 3 个假开关（现在 24/24 都真的生效）
 
-一、空闲退出（security.idle_minutes）
-- 系统设置新增「空闲多久自动退出（分钟）」：默认 5，范围 1–240，分组"平台"
-- 前端守卫不再写死 30 分钟：启动时读设置，每 10 分钟刷新一次
-  读不到就用 5 分钟兜底（设置接口挂了也不能永不退出）
-- localStorage 的 jc_idle_minutes 只作为本地调试覆盖，不再作为主配置
+背景：之前发现"视频帧率"在界面上能改、代码里没人读。这次做了全量审计。
 
-二、顺手修两个"界面上有、代码里没人读"的假开关
-- video.mjpeg_fps（首页视频帧率）：之前 UI 显示 8，实际是代码常量；
-  现在 VideoStream 启动时读设置，默认改成 20（8fps 就是一卡一卡）
-- video.transcode_width（转码宽度）：之前读的是环境变量 video_scale_width，
-  改设置没用；现在同样走设置
+新增 scripts/audit_settings.py：
+  从 settings_schema.py 提取所有键 → 在 server/app、web/src、scripts、deploy 里搜字面量
+  → 输出 docs/reviews/settings-audit.md（每项：有没有人读、生效位置）
 
-三、实测
-- /settings schema 出现 security.idle_minutes，默认 5，PUT 改成 8 生效
-- 视频：设置 20 → 5 秒收到 83 帧 ≈ 16.6fps（之前 8fps）
-- 空闲守卫：保持会话、3 秒阈值、不动鼠标，70 秒后仍停在 /dashboard，
-  期间只多发 1 次 /auth/me（说明是"空闲才探一次"，不是定时心跳）
+第一次运行结果：24 项里 3 项没人读
+  ✗ platform.name / platform.site / platform.banner_on_fault
 
-验证：86 用例通过
+补法（前端 stores/platform.ts + 接线）：
+- platform.name → 首页标题、后台各页小标题、document.title（等登录后再读，避免 401）
+- platform.site  → 新建设备的默认场站
+- platform.banner_on_fault → 顶部故障横幅是否显示
+
+复跑审计：24/24 全部有代码读取。
+
+实测：把 platform.name 改成"防爆巡检平台（演示）"→ document.title 与首页 <h1> 同步变化；改回默认值。

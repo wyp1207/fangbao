@@ -10,6 +10,7 @@ import TopNav from '@/components/TopNav.vue'
 import UserMenu from '@/components/UserMenu.vue'
 import { toast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
+import { usePlatformStore } from '@/stores/platform'
 import { ApiError } from '@/api/client'
 import { panelsFor } from '@/components/panels/registry'
 import { useRobotStore } from '@/stores/robot'
@@ -18,6 +19,7 @@ import logoUrl from '@/assets/logo.png'
 
 const robot = useRobotStore()
 const auth = useAuthStore()
+const platform = usePlatformStore()
 const router = useRouter()
 
 const mapMeta = ref<MapMeta | null>(null)
@@ -635,7 +637,7 @@ async function logout() {
         <TopNav :start="0" :end="4" />
         <div class="board-title">
           <span class="wing l" />
-          <h1>智能巡检机器人管理平台</h1>
+          <h1>{{ platform.name }}</h1>
           <span class="wing r" />
         </div>
         <TopNav :start="4" />
