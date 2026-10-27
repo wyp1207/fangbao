@@ -19,6 +19,9 @@ export const useAuthStore = defineStore('auth', {
         const res = await api.login(username, password, totpCode)
         this.user = res.user
         this.checked = true
+        // 记一笔"这台浏览器登录过"：Cookie 过期后整页刷新也能判断出是会话过期，
+        // 而不是用户第一次来（用于登录页清空账号密码并给出提示）
+        try { sessionStorage.setItem('jc_signed_in', '1') } catch { /* 隐私模式忽略 */ }
       } finally {
         this.loading = false
       }
@@ -43,6 +46,7 @@ export const useAuthStore = defineStore('auth', {
         await api.logout()
       } finally {
         this.user = null
+        try { sessionStorage.removeItem('jc_signed_in') } catch { /* ignore */ }
       }
     },
   },

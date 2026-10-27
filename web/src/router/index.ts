@@ -69,9 +69,23 @@ const router = createRouter({
 
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
+  const wasLoggedIn = auth.isLoggedIn
   await auth.fetchMe()
   if (to.name !== 'login' && !auth.isLoggedIn) {
-    return { name: 'login', query: to.fullPath !== '/' ? { redirect: to.fullPath } : {} }
+    // 之前登录过又掉线 = 会话过期，登录页要清空账号密码并提示
+    let signedBefore = false
+    try { signedBefore = sessionStorage.getItem('jc_signed_in') === '1' } catch { /* ignore */ }
+    const expired = wasLoggedIn || signedBefore ? '1' : ''
+    if (signedBefore) {
+      try { sessionStorage.removeItem('jc_signed_in') } catch { /* ignore */ }
+    }
+    return {
+      name: 'login',
+      query: {
+        ...(to.fullPath !== '/' ? { redirect: to.fullPath } : {}),
+        ...(expired ? { expired } : {}),
+      },
+    }
   }
   if (to.name === 'login' && auth.isLoggedIn) return { name: 'dashboard' }
   // 页面级权限：URL 直接输也不能看（后端仍会 403，这里只是别让人看到页面骨架）
