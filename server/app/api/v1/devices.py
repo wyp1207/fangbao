@@ -304,7 +304,13 @@ def probe_status(
     if not r:
         raise NotFound("设备不存在")
     if device_id == 1:
-        return {"source": "cache", "data": cache.as_dict()}
+        cached = cache.as_dict()
+        # 缓存里没有实际数据（进程刚起/设备离线）时不能直接返回空壳，
+        # 否则页面会把"在线"显示成"离线 -1 秒"
+        has_data = bool(cached.get("status") or cached.get("info"))
+        if has_data:
+            return {"source": "cache", "data": cached}
+        # 没有就继续往下走，按真实设备读一次
 
     settings = get_settings()
     try:

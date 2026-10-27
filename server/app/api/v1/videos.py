@@ -293,6 +293,10 @@ def update_video(
         # 前端提交打码串 = 没改地址，保留原值
         data["url"] = v.url if "***@" in data["url"] else data["url"]
         split_url(data["url"])
+        # 换了地址却没指定流名 → 清掉旧流名，否则播放永远走 go2rtc 的旧流，
+        # 用户会以为"改了地址没生效"（QA 实测发现）
+        if "stream_name" not in data and data["url"] != v.url:
+            data["stream_name"] = ""
     for k, val in data.items():
         setattr(v, k, val)
     db.commit()

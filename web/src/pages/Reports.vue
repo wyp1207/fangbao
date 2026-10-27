@@ -227,7 +227,7 @@ onMounted(() => applyPreset('7d'))
                 <tr><td>动作总数</td><td class="num">{{ data.templates?.actions ?? 0 }}</td></tr>
                 <tr><td>涉及地图</td><td class="num">{{ data.templates?.maps ?? 0 }}</td></tr>
                 <tr v-for="r in data.alarms_by_robot ?? []" :key="r.robot_id">
-                  <td>告警 · 设备 #{{ r.robot_id }}</td><td class="num">{{ r.count }}</td>
+                  <td>告警 · {{ r.robot_id ? '设备 #' + r.robot_id : '未绑定设备' }}</td><td class="num">{{ r.count }}</td>
                 </tr>
               </tbody>
             </table>
