@@ -133,6 +133,41 @@ function goPlayback(a: AlarmItem) {
   })
 }
 
+// ---- 搁置（检修/标定期间临时屏蔽）----
+const shelveFor = ref<AlarmItem | null>(null)
+const shelveMinutes = ref(30)
+const shelveReason = ref('')
+
+function openShelve(a: AlarmItem) {
+  shelveFor.value = a
+  shelveMinutes.value = 30
+  shelveReason.value = ''
+}
+
+async function saveShelve() {
+  const a = shelveFor.value
+  if (!a) return
+  if (!shelveReason.value.trim()) { toast('必须写搁置原因（审计要留痕）', 'warn'); return }
+  try {
+    await api.shelveAlarm(a.id, Number(shelveMinutes.value), shelveReason.value.trim())
+    toast(`已搁置 ${shelveMinutes.value} 分钟`, 'ok')
+    shelveFor.value = null
+    await reload()
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : '搁置失败', 'danger')
+  }
+}
+
+async function unshelve(a: AlarmItem) {
+  try {
+    await api.unshelveAlarm(a.id)
+    toast('已解除搁置', 'ok')
+    await reload()
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : '解除失败', 'danger')
+  }
+}
+
 // ---- 转工单 ----
 async function asWorkOrder(a: AlarmItem) {
   try {
@@ -272,6 +307,7 @@ watch([levelFilter, ackFilter], async () => { page.value = 1; await reload() })
             <td>{{ (page - 1) * pageSize + i + 1 }}</td>
             <td class="num dim">{{ a.started_at.replace('T', ' ').slice(0, 19) }}</td>
             <td>
+              <span v-if="a.shelved_until" class="tag shelved" title="搁置中，到期自动恢复">搁置</span>
               <span class="tag p-badge">{{ a.priority ?? '—' }}</span>
               <span class="tag" :class="a.level === 'critical' ? 'danger' : 'warn'">{{ levelText[a.level] }}</span>
             </td>
@@ -293,6 +329,9 @@ watch([levelFilter, ackFilter], async () => { page.value = 1; await reload() })
                         @click="router.push({ name: 'work-orders', query: { focus: a.work_order_id } })">
                   工单{{ a.work_order_id }}
                 </button>
+                <button v-if="!a.shelved_until" class="act" title="搁置（检修时临时别报）"
+                        :disabled="!auth.canWrite || !!a.closed_at" @click="openShelve(a)">⏸</button>
+                <button v-else class="act warn" :title="`已搁置到 ${a.shelved_until}`" @click="unshelve(a)">▶</button>
                 <button class="act danger" title="关闭（给结论）" :disabled="!auth.canWrite || !!a.closed_at" @click="openAct(a, 'close')">⏹</button>
                 <button class="act" title="回看这个时刻的录像" @click="router.push({ name: 'record-playback', query: { date: a.started_at.slice(0, 10), t: a.started_at.slice(11, 19) } })">⟲</button>
               </div>
@@ -362,6 +401,22 @@ watch([levelFilter, ackFilter], async () => { page.value = 1; await reload() })
       </div>
     </div>
   </div>
+
+    <div v-if="shelveFor" class="mask" @click.self="shelveFor = null">
+      <div class="shelve-dlg">
+        <h3>搁置告警 #{{ shelveFor.id }}</h3>
+        <p class="dim small">{{ shelveFor.message }}</p>
+        <label class="fld"><span>搁置时长（分钟，1–10080）</span>
+          <input class="input" type="number" min="1" max="10080" v-model.number="shelveMinutes" /></label>
+        <label class="fld"><span>原因（必填，审计留痕）</span>
+          <input class="input" v-model="shelveReason" placeholder="如：探头标定中 / 检修动火 / 更换传感器" /></label>
+        <p class="dim small">搁置期间同指标不会再产生新告警；到期自动恢复，也可手动解除。</p>
+        <div class="acts">
+          <button class="btn btn-sm" @click="shelveFor = null">取消</button>
+          <button class="btn btn-sm primary" @click="saveShelve">确认搁置</button>
+        </div>
+      </div>
+    </div>
 </template>
 
 <style scoped>
@@ -386,4 +441,12 @@ watch([levelFilter, ackFilter], async () => { page.value = 1; await reload() })
 tr.flash td { background: rgba(255, 176, 46, .28) !important; box-shadow: inset 0 0 0 1px rgba(255,176,46,.7); }
 
 .p-badge { background: rgba(255, 168, 46, .18); color: #ffc355; margin-right: 4px; }
+
+.tag.shelved { background: rgba(255, 208, 64, .18); color: #ffd040; margin-right: 4px; }
+.mask { position: fixed; inset: 0; z-index: 200; background: rgba(2, 12, 26, .7); display: grid; place-items: center; }
+.shelve-dlg { width: 460px; padding: 14px 16px; background: linear-gradient(180deg, rgba(6,46,92,.98), rgba(4,26,54,.99));
+  border: 1px solid rgba(111,227,255,.55); border-radius: 4px; }
+.shelve-dlg h3 { margin: 0 0 6px; font-size: 14px; color: #ffd040; }
+.shelve-dlg .fld { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; font-size: 12px; color: #9fd2ff; }
+.shelve-dlg .acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
 </style>

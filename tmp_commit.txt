@@ -1,19 +1,20 @@
-feat(settings): 全量设置项审计 + 补上 3 个假开关（现在 24/24 都真的生效）
+feat: 接口审计（166 条路由，19 条前端没调）+ 补上告警搁置/审计校验两个入口
 
-背景：之前发现"视频帧率"在界面上能改、代码里没人读。这次做了全量审计。
+一、scripts/audit_api.py
+扫后端 APIRouter + 装饰器得到全部路由，扫 web/src 的 fetch/request/模板字符串路径，
+路由参数按通配匹配，输出 docs/reviews/api-audit.md（含人工分类）。
 
-新增 scripts/audit_settings.py：
-  从 settings_schema.py 提取所有键 → 在 server/app、web/src、scripts、deploy 里搜字面量
-  → 输出 docs/reviews/settings-audit.md（每项：有没有人读、生效位置）
+结果：166 条路由，前端未发现调用 19 条：
+  运维 3（/metrics、/ready、/health/deep）——本该没有前端入口
+  外部 4（sensors ingest、task-runs ingest、ai 图片、巡检照片）——给网关/算法箱用
+  待接 12（runtime、telemetry/rollup、streams/stats、plans 编辑删除、点位同步…）
 
-第一次运行结果：24 项里 3 项没人读
-  ✗ platform.name / platform.site / platform.banner_on_fault
+二、两个"后端做了、界面没有"的补上
+1) 告警搁置（ISA-18.2 shelve）
+   告警行新增 ⏸ 按钮 → 弹窗填时长+原因（原因必填，审计留痕）→ 确认后行首出现「搁置」徽标，
+   再点 ▶ 解除。实测：搁置 #205 20 分钟，badge 出现，审计里记下 alarm.shelve + 原因
+2) 审计链自检
+   操作日志页新增「校验审计链」按钮，结果显示绿/红条。
+   实测：审计链完整：已校验 793 条，哈希全部对得上
 
-补法（前端 stores/platform.ts + 接线）：
-- platform.name → 首页标题、后台各页小标题、document.title（等登录后再读，避免 401）
-- platform.site  → 新建设备的默认场站
-- platform.banner_on_fault → 顶部故障横幅是否显示
-
-复跑审计：24/24 全部有代码读取。
-
-实测：把 platform.name 改成"防爆巡检平台（演示）"→ document.title 与首页 <h1> 同步变化；改回默认值。
+验证：86 用例通过
