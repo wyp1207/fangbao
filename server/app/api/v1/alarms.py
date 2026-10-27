@@ -52,6 +52,11 @@ def _sync_order(db, alarm_id: int, note: str | None = None) -> None:
             o.closed_at = datetime.now()
             o.resolution = (f"{o.resolution}｜" if o.resolution else "") + "来源告警已关闭（联动）"
             o.description = (o.description or "") + (f"｜告警结论：{note}" if note else "")
+            # 联动关单也要留痕：等保查"工单为什么自己关了"时要能答
+            from app.services.messages import audit as _audit
+
+            _audit(db=db, action="work_order.auto_close", target=o.code or f"#{o.id}",
+                   user=None, detail={"by": "alarm.close", "alarm_id": alarm_id, "note": note})
     except Exception:  # noqa: BLE001
         pass
 

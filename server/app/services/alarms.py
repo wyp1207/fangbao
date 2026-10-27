@@ -52,8 +52,14 @@ class Alarm:
 SAFETY_METRICS = ("estop", "env_gas", "smoke", "fire")
 
 
+# 低风险/运维类指标：健康度不足、时钟偏差、通知失败——按 P4 提示，不占 P1–P3 的口径
+INFO_METRICS = ("disk", "clock", "notify", "config", "selftest_soft")
+
+
 def priority_for(metric: str, level: str) -> str:
     m = (metric or "").lower()
+    if any(k in m for k in INFO_METRICS):
+        return "P4"
     if level == "critical":
         if any(k in m for k in SAFETY_METRICS):
             return "P1"
@@ -81,9 +87,17 @@ def clear_expired_shelves(session_factory) -> int:
                         AlarmRecord.shelved_until <= now)
                 .all())
         for row in rows:
+            reason = row.shelve_reason
             row.shelved_until = None
             row.shelve_reason = None
             n += 1
+            try:
+                from app.services.messages import audit as _audit
+
+                _audit(db=db, action="alarm.unshelve_auto", target=f"#{row.id}",
+                       user=None, detail={"released_reason": reason})
+            except Exception:  # noqa: BLE001
+                pass
         if n:
             db.commit()
     return n

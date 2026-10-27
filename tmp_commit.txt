@@ -1,30 +1,19 @@
-fix: 修 Claude 二轮验收的 1 个 P0 + 3 个 P1 + 3 个 P2/P3
+fix: 补两个审计缺口 + 让 P4 优先级可达（Claude 二轮剩余建议）
 
-P0-1 严重告警不再自动建工单（NameError: sla）
-  上一轮我加 sla.due_at 时漏了 import，异常又被调用点的 except Exception: pass 吞掉。
-  现在 import 补上；实测造 critical 告警 → 自动建单 165 ✅
-  （这个正好说明"静默 except"有多危险，以后自动建单失败要记日志）
+一、审计缺口（等保会问"这条为什么自己变了"）
+1) 关闭告警联动关工单 → 记 work_order.auto_close
+   实测：关告警 209 → 工单 165 关闭，审计新增 1 条：
+   target=WO-20261027-165，detail={"by":"alarm.close","alarm_id":209}
+2) 搁置到期自动解除 → 记 alarm.unshelve_auto
+   实测：把到期时间改到过去，第 35 秒清理线程解除并新增审计（带原搁置原因）
+审计链复验：checked=880，ok=true（新增记录仍未破坏哈希链）
 
-P1-1 空闲退出只"探活"不退出
-  之前到点只调 /auth/me，token 还有效就什么都不做 → 设置形同虚设。
-  现在到点主动 api.logout() + 清状态 + 跳登录页 + 提示"已空闲 N 分钟，自动退出登录"。
+二、P4 优先级可达
+之前 priority_for() 只在"既非 critical 也非 warn"时返回 P4，而系统只产生 warn/critical，
+P4 结构性为 0。现在：运维/低风险指标（disk/clock/notify/config）固定 P4，其余按原规则。
+实测规则表：
+  env_gas_1 + critical → P1；battery + critical → P2；battery/offline + warn → P3
+  disk + critical → P4；clock_skew + warn → P4；notify_failed + critical → P4
 
-P1-2 改视频地址不生效
-  有 stream_name 时 URL 根本不参与播放。现在改 url 且没显式给 stream_name 时清空流名，
-  实测 PATCH 后 stream_name=''，走 URL 转码并重连 ✅
-
-P1-3 设备 1 读状态返回空壳
-  主设备原来无条件回缓存，缓存空时页面显示"离线 -1 秒"而系统状态页显示在线。
-  现在缓存无数据时按真实设备读一次；实测 source=live, online=true ✅
-
-P2-1 首页环形图被 limit=200 截断
-  改用 /alarms/stats 全量口径（stats 206 vs 列表 200）。实测环形图显示 208 ✅
-P2-3 热红外面板"更换地址"编辑到可见光相机 —— 绑定对象写错，已改 thermalVideo
-P2-5/P3-1 SLA 按期率口径错 + Excel 缺行
-  分母只算"有 due_at 的工单"（139 张早期工单没时限，不该算未按期）
-  实测 4/4 = 100%（之前 4/143 = 2.8%）；Excel「响应闭环」补 SLA 两行
-P2-7 巡检计划没有新建入口 —— 面板加「新建计划」，复用编辑弹窗
-P3-2 报表"设备 #0" → 显示"未绑定设备"
-
-新增 scripts/verify_fixes_r2.py：一次跑完 5 项验证（自动建单/环形图口径/清流名/主设备探测/SLA 分母）
+新增 scripts/verify_audit_p4.py（规则表 + 两个审计验证，可直接跑）
 验证：86 用例通过
