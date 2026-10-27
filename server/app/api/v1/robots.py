@@ -90,6 +90,46 @@ def robot_status(robot_id: int, cache=Depends(get_cache),
     return data
 
 
+@router.post("/{robot_id}/init-loc", dependencies=[Depends(require_csrf)])
+def init_location(
+    robot_id: int,
+    body: dict,
+    db: Session = Depends(get_db),
+    me: User = Depends(require_roles("admin", "operator", "safety")),
+) -> dict:
+    """重置机器人定位（X30 协议 2101）。
+
+    现场什么时候用：断电重启后、机器人被搬动过、切换地图后。
+    不重置的话位姿和地图对不上，巡航会"到不了点"。
+    """
+    from app.services.task_dispatch import _require_write
+
+    _require_write()
+    robot = db.get(Robot, robot_id)
+    if not robot:
+        raise NotFound("设备不存在")
+
+    from app.adapters.registry import build_for
+    import asyncio
+
+    adapter, err = build_for(robot)
+    if err:
+        raise BadRequest(err, code="ADAPTER_UNAVAILABLE")
+    fn = getattr(adapter, "set_initial_pose", None)
+    if fn is None:
+        raise BadRequest(f"适配器 {robot.adapter} 不支持重置定位", code="NOT_SUPPORTED")
+
+    x = float(body.get("x") or 0)
+    y = float(body.get("y") or 0)
+    yaw = float(body.get("yaw") or 0)
+    res = fn(x, y, yaw)
+    if hasattr(res, "__await__"):
+        res = asyncio.run(res)
+    audit(db=db, action="robot.init_loc", target=robot.name, user=me,
+          detail={"x": x, "y": y, "yaw": yaw})
+    return {"ok": True, "x": x, "y": y, "yaw": yaw, "result": res}
+
+
 @router.post("/{robot_id}/takeover", dependencies=[Depends(require_csrf)])
 def takeover_robot(
     robot_id: int,
