@@ -1,17 +1,20 @@
-docs: 巡航/任务下发/多机调度/定位初始化 对标报告
+plan: 巡航与任务下发改造规划（调研 + 两轮模型评审后定稿）
 
-新增 docs/reviews/cruise-multi-robot-benchmark.md（429 行，9 组外链 + 38 条指向本仓库代码的行级链接）。
+新增 docs/巡航与任务下发-改造规划.md：
+- §0 一页纸结论：草稿 6 条里 4 条被批倒，收敛成 4 项改动
+- §1 ponytail 判断：七态/Redis/MQ/VDA5050 全量/RMF 协商一律不做，复用 TaskRun/task_lock/audit
+- §2 四项改动：A 幂等先落库再发、B 能力字典替代 exec_mode、C 到点三态、D 资源锁+定位触发
+  每项含问题/方案/表字段/改动点/验收判据/替代方案对比
+- §3 明确不做 6 条；§4 复用 8 处；§5 排期 3 天；§6 风险与回滚
+- §8 调研修正：VDA5050 无 order 级 status；SQLite 不支持 FOR UPDATE 改条件 UPDATE；
+  到点容差按节点 allowedDeviationXY；安全门用 localized 布尔而非 score；
+  /initialpose stamp 必须 now、covariance 对角 4 分量、/request_nomotion_update 可不动车校验；
+  slam_toolbox 无 set_pose 服务且不是 lifecycle 节点
 
-核心结论：
-- 不是选错"逐点下发"，而是缺能力协商：JCROB 支持整单 sub_tasks，X30 的 1003 一次一个目标，
-  平台取交集 = 逐点。应把 exec_mode 交给适配器声明。
-- 订单无幂等：orderId = JC-{毫秒} 每次都变；external_id 只有普通索引、无唯一约束。
-- 状态机缺 dispatched / unknown / PAUSED，导致"已发出"与"已受理"不可区分。
-- 到点判定只有 FINISHED + 距离复核，超容差直接判 failed → 把"该重定位"误报成"任务失败"并盲重试。
-  建议三值判定：arrived / arrived_suspect / failed。
-- 多机只有"一车一任务"前置检查，无资源互斥。文档给出 resource_lock 表设计：
-  按 key 字典序抢锁（消灭环路等待）+ TTL 强拆 + 15s 环检测兜底。
-- 定位初始化只有一个手工按钮（本轮已实现），缺触发条件与初始化后校验；点位未绑地图版本。
+同时入库两份源码级调研与两轮模型评审：
+- docs/reviews/idempotency-state-machine-research.md（VDA5050/RMF/Nav2，含 404 仓库如实标注）
+- docs/reviews/multi-robot-localization-research.md（RMF 锁/AMCL/slam_toolbox/map_server，85 个源码链接）
+- docs/reviews/model_review_20261027-173507.md（豆包 + GLM 对草稿逐条挑错）
+- docs/评审-巡航改造方案-prompt.md（评审用 prompt）
 
-商用可信度提醒：四家里只有国自 GRACE Xpress 有可量化指标（2000+ 台、1s 派单、10 万㎡交通），
-申昊/亿嘉和/优必选公开材料停在架构口号层面，报告已标注边界，对外汇报别当技术标杆。
+.gitignore 增加 .research/（调研时的 GitHub 镜像快照，可随时重拉，不入库）
