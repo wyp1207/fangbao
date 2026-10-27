@@ -1,0 +1,15 @@
+feat(auth): 全局 401 拦截——会话过期就地退回登录页，不再"假装还活着"
+
+之前只有路由守卫会检查登录态：停在大屏时不点菜单，Token 过期后
+每 5 秒一次的轮询一直 401，界面还显示旧数据，看不出已经掉线。
+
+实现：
+- api/client.ts 增加 onUnauthorized 回调与 3 秒去重；
+  401 时先排除三个"业务上的 401"：/auth/login（密码错）、/auth/me（判登录态）、/auth/logout
+- main.ts 注册处理：清 auth.user + sessionStorage 标记 → push /login?redirect=<当前页>&expired=1
+  已在登录页则不重复跳
+- 登录页收到 expired=1 清空账号密码并提示（上一提交已做）
+
+实测（Playwright）：登录后清 Cookie，停留在大屏不做任何点击
+  9 秒后 URL 自动变 /login?redirect=/dashboard&expired=1
+  账号/密码均为空，提示"会话已过期，请重新登录（账号密码已清空）"
