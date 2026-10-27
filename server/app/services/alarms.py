@@ -63,6 +63,32 @@ def priority_for(metric: str, level: str) -> str:
     return "P4"
 
 
+def clear_expired_shelves(session_factory) -> int:
+    """把到期搁置的告警恢复成正常状态（清掉 shelved_until / 原因）。
+
+    为什么要有这个：搁置只做"不报新告警"的话，界面上会一直挂着"搁置"徽标，
+    值班的人以为还在屏蔽，其实早到期了——这种"假状态"比不显示更危险。
+    """
+    from datetime import datetime
+
+    from app.models.alarm import AlarmRecord
+
+    now = datetime.now()
+    n = 0
+    with session_factory() as db:  # type: ignore[misc]
+        rows = (db.query(AlarmRecord)
+                .filter(AlarmRecord.shelved_until.isnot(None),
+                        AlarmRecord.shelved_until <= now)
+                .all())
+        for row in rows:
+            row.shelved_until = None
+            row.shelve_reason = None
+            n += 1
+        if n:
+            db.commit()
+    return n
+
+
 class AlarmStore:
     def __init__(self, *, max_items: int = 200, dedupe_s: float = 60.0,
                  low_battery_warn: int = 20, low_battery_critical: int = 10,

@@ -187,6 +187,22 @@ async def lifespan(app: FastAPI):
     telemetry_janitor = _th.Thread(target=_telemetry_janitor, daemon=True)
     telemetry_janitor.start()
 
+    # 搁置到期恢复：单独一个 60 秒的轻量循环（保留期清理是 6 小时一次，太粗）
+    def _shelve_janitor():
+        import time as _t
+        from app.services.alarms import clear_expired_shelves
+        while True:
+            try:
+                n = clear_expired_shelves(_SL)
+                if n:
+                    log.info("搁置到期自动恢复 %s 条告警", n)
+            except Exception:  # noqa: BLE001
+                log.exception("搁置到期清理失败")
+            _t.sleep(60)
+
+    shelve_janitor = _th.Thread(target=_shelve_janitor, daemon=True)
+    shelve_janitor.start()
+
     from app.services import cruise as cruise_module
     cruise_module.runner = cruise_module.CruiseRunner(_SL)
 
