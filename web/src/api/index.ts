@@ -233,6 +233,9 @@ export const api = {
   updateDevice: (id: number, body: Record<string, unknown>) =>
     request<DeviceItem>(`/devices/${id}`, { method: 'PATCH', body }),
   deleteDevice: (id: number) => request<{ ok: boolean }>(`/devices/${id}`, { method: 'DELETE' }),
+  takeoverRobot: (id: number, reason?: string) =>
+    request<{ ok: boolean; cancelled: number; reason: string }>(
+      `/robots/${id}/takeover`, { method: 'POST', body: { reason } }),
   probeDeviceStatus: (id: number) =>
     request<{ source: string; data?: Record<string, unknown>; reason?: string }>(
       `/devices/${id}/status-probe`, { method: 'POST' }),

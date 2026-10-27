@@ -308,6 +308,12 @@ def start_cruise(
     from app.services.task_dispatch import _require_write
 
     _require_write()
+
+    from app.services.task_lock import assert_free
+
+    run = db.get(TaskRun, run_id)
+    if run is not None:
+        assert_free(db, run.robot_id, run.id)
     run = db.get(TaskRun, run_id)
     if not run:
         raise NotFound("执行记录不存在")
