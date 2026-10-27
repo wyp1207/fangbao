@@ -22,18 +22,33 @@ import time
 log = logging.getLogger(__name__)
 
 FFMPEG = shutil.which("ffmpeg")
-FPS = 20   # 20fps 才不卡；8fps 肉眼就是"一卡一卡"
+DEFAULT_FPS = 20     # 20fps 才不卡；8fps 肉眼就是"一卡一卡"
+
+
+def _setting(key: str, default: int) -> int:
+    """读系统设置里的值（video.mjpeg_fps / video.transcode_width）。
+
+    之前这两个设置在界面上有、代码里没人读——典型的"假开关"，这里接上。
+    读不到就用默认值，不让设置服务挂了把视频也带崩。
+    """
+    try:
+        from app.api.v1.settings import load_all
+
+        raw = load_all().get(key)
+        n = int(float(raw))  # type: ignore[arg-type]
+        return n if n > 0 else default
+    except Exception:  # noqa: BLE001
+        return default
 
 
 def _scale_width() -> int:
-    try:
-        from app.core.config import get_settings
-        return int(getattr(get_settings(), "video_scale_width", 1280) or 1280)
-    except Exception:
-        return 1280
+    return _setting("video.transcode_width", 1280)
 
 
-SCALE_WIDTH = _scale_width()
+def _fps() -> int:
+    return min(25, max(1, _setting("video.mjpeg_fps", DEFAULT_FPS)))
+
+
 IDLE_SECONDS = 20.0
 SOI = b"\xff\xd8"
 EOI = b"\xff\xd9"
@@ -54,13 +69,16 @@ class VideoStream:
 
     # ---- 生命周期 ----
     def start(self) -> None:
+        # 每路启动时读一次设置：改了帧率/宽度，重连后生效（不需要重启服务）
+        self.fps = _fps()
+        scale = _scale_width()
         cmd = [
             FFMPEG, "-hide_banner", "-loglevel", "error",
             "-rtsp_transport", "tcp",
             "-fflags", "nobuffer", "-flags", "low_delay",
             "-probesize", "32768", "-analyzeduration", "0",
             "-i", self.url,
-            "-an", "-vf", f"fps={FPS},scale={SCALE_WIDTH}:-2",
+            "-an", "-vf", f"fps={self.fps},scale={scale}:-2",
             "-f", "image2pipe", "-vcodec", "mjpeg", "-q:v", "7", "-",
         ]
         self._proc = subprocess.Popen(

@@ -55,6 +55,12 @@ SCHEMA: dict[str, dict[str, Any]] = {
         "effect": "关闭时下发/暂停/取消一律 403，并说明缺什么；真机联调通过并签授权后再开",
     },
 
+    "security.idle_minutes": {
+        "label": "空闲多久自动退出（分钟）", "type": "int", "default": 5, "min": 1, "max": 240,
+        "group": "平台",
+        "effect": "超过这么久没有鼠标/键盘操作，前端会核一次会话；已过期就退回登录页。值班大屏建议 10–30 分钟",
+    },
+
     "sensor.keep_days": {
         "label": "环境读数保留（天）", "type": "int", "default": 90, "min": 1, "max": 3650,
         "group": "平台", "effect": "超过天数的传感器读数自动清理；告警记录不受影响",
@@ -104,7 +110,7 @@ SCHEMA: dict[str, dict[str, Any]] = {
         "group": "视频", "effect": "MJPEG 兜底流的缩放宽度，越小越省 CPU",
     },
     "video.mjpeg_fps": {
-        "label": "兜底流帧率", "type": "int", "default": 8, "min": 1, "max": 25,
+        "label": "首页视频帧率", "type": "int", "default": 20, "min": 1, "max": 25,
         "group": "视频", "effect": "go2rtc/HLS 都不可用时的 MJPEG 帧率",
     },
 
