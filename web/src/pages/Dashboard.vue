@@ -422,6 +422,12 @@ watch(panels, (list) => {
 
 /** X30 的起立/趴下是切换指令；写开关没开会直接 403，提示原因 */
 async function doMotion(action: 'stand' | 'lie') {
+  // 手动控制前先"接管"：把正在跑的自动任务取消，否则指令和任务互相打架
+  try {
+    const t = await api.takeoverRobot(Number(deviceId.value), '手动控制（起立/趴下）')
+    if (t.cancelled) toast(`已接管，取消 ${t.cancelled} 条运行中任务`, 'warn', 4000)
+  } catch { /* 接管失败不阻塞手动控制，后端命令网关仍会拦非法指令 */ }
+
   busyMotion.value = true
   try {
     await api.robotMotion(Number(deviceId.value), action)

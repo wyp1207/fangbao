@@ -147,6 +147,11 @@ def dispatch(db, run: TaskRun, adapter) -> TaskRun:
     if run.status != "planned":
         raise BadRequest(f"当前状态 {run.status} 不能下发", code="BAD_STATUS")
 
+    # 同一台车只允许一个运行中的任务，否则两条订单会互相打断
+    from app.services.task_lock import assert_free
+
+    assert_free(db, run.robot_id, run.id)
+
     gate = preflight(db, run, adapter)
     if not gate["ok"]:
         raise PlatformError(gate["reason"], code="PREFLIGHT_FAILED", status_code=409)

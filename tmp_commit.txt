@@ -1,19 +1,18 @@
-fix: 补两个审计缺口 + 让 P4 优先级可达（Claude 二轮剩余建议）
+feat(task): 任务互斥锁 + 人工接管（两人同时下发 / 巡航中手动开车的场景）
 
-一、审计缺口（等保会问"这条为什么自己变了"）
-1) 关闭告警联动关工单 → 记 work_order.auto_close
-   实测：关告警 209 → 工单 165 关闭，审计新增 1 条：
-   target=WO-20261027-165，detail={"by":"alarm.close","alarm_id":209}
-2) 搁置到期自动解除 → 记 alarm.unshelve_auto
-   实测：把到期时间改到过去，第 35 秒清理线程解除并新增审计（带原搁置原因）
-审计链复验：checked=880，ok=true（新增记录仍未破坏哈希链）
+背景：之前同一台车可以同时下发两条任务，谁先谁后无保证，车会来回横跳；
+巡航中有人想手动把车开回去，也没有抢占机制。
 
-二、P4 优先级可达
-之前 priority_for() 只在"既非 critical 也非 warn"时返回 P4，而系统只产生 warn/critical，
-P4 结构性为 0。现在：运维/低风险指标（disk/clock/notify/config）固定 P4，其余按原规则。
-实测规则表：
-  env_gas_1 + critical → P1；battery + critical → P2；battery/offline + warn → P3
-  disk + critical → P4；clock_skew + warn → P4；notify_failed + critical → P4
+新增 services/task_lock.py：
+- active_run(db, robot_id)：该车当前 running 的任务
+- assert_free()：下发/巡航前检查，占用则 409 RUN_BUSY，提示"还在执行任务 #id「名称」"
+- takeover()：把该车所有 running 任务置 cancelled（原因写进 dispatch_error）
 
-新增 scripts/verify_audit_p4.py（规则表 + 两个审计验证，可直接跑）
-验证：86 用例通过
+接线：
+- task_dispatch.dispatch 与 POST /task-runs/{id}/cruise 之前都过 assert_free
+- 新增 POST /robots/{id}/takeover（admin/operator/safety），写审计 robot.takeover
+- 首页"起立/趴下"前先调 takeover（提示"已接管，取消 N 条运行中任务"）
+- 任务执行页 running 行加「接管」按钮（二次确认）
+
+测试：tests/test_task_lock.py 3 例（第二次下发被拦、接管取消两条、无运行任务不拦）
+验证：89 用例通过

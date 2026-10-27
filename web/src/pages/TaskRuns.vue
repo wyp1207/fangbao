@@ -191,6 +191,19 @@ onMounted(async () => {
   } catch { /* 无模板也能看列表 */ }
   await load()
 })
+
+// 人工接管：先取消这台车所有运行中任务，再让人手动处理
+async function takeover(r: { id: number; robot_id?: number }) {
+  const rid = r.robot_id ?? 1
+  if (!window.confirm('取消这台车所有运行中的任务，交由人工接管？')) return
+  try {
+    const t = await api.takeoverRobot(rid, `人工接管（任务 #${r.id}）`)
+    toast(`已接管，取消 ${t.cancelled} 条任务`, 'ok')
+    await load()
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : '接管失败', 'danger')
+  }
+}
 </script>
 
 <template>

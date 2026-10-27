@@ -90,6 +90,23 @@ def robot_status(robot_id: int, cache=Depends(get_cache),
     return data
 
 
+@router.post("/{robot_id}/takeover", dependencies=[Depends(require_csrf)])
+def takeover_robot(
+    robot_id: int,
+    body: dict | None = None,
+    db: Session = Depends(get_db),
+    me: User = Depends(require_roles("admin", "operator", "safety")),
+) -> dict:
+    """人工接管：取消这台车所有运行中的任务，把控制权交给人。"""
+    from app.services.task_lock import takeover
+
+    reason = (body or {}).get("reason") or f"人工接管（{me.username}）"
+    n = takeover(db, robot_id, reason=reason)
+    audit(db=db, action="robot.takeover", target=f"robot:{robot_id}", user=me,
+          detail={"cancelled_runs": n, "reason": reason})
+    return {"ok": True, "cancelled": n, "reason": reason}
+
+
 @router.get("/runtime")
 def runtime_list(_user: User = Depends(get_current_user)) -> list[dict]:
     """所有设备的运行时状态（哪台在轮询、哪台适配器没实现）。"""
