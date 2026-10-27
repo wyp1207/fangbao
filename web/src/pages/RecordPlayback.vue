@@ -109,6 +109,21 @@ onMounted(async () => {
   await load()
   await jumpToTarget()
 })
+
+// 清空某个摄像头的全部录像（磁盘告急或调错参数后重录时用）
+async function clearCamera() {
+  if (!videoId.value) { toast('先选一个摄像头', 'warn'); return }
+  const id = Number(videoId.value)
+  const name = nameOf(id)
+  if (!window.confirm(`删除「${name}」的全部录像段？\n这个操作不可撤销，磁盘空间会立即释放。`)) return
+  try {
+    const res = await api.deleteAllRecordings(id)
+    toast(`已删除 ${res.deleted} 段录像`, 'ok', 5000)
+    await load()
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : '清空失败', 'danger')
+  }
+}
 </script>
 
 <template>
@@ -126,6 +141,8 @@ onMounted(async () => {
         <input class="input date" type="date" v-model="date" />
         <button class="btn btn-sm ok" :disabled="loading" @click="load">查询</button>
         <button class="btn btn-sm warn" @click="videoId = ''; date = ''">重置</button>
+        <button class="btn btn-sm danger" :disabled="!videoId"
+                title="删除这个摄像头的全部录像段" @click="clearCamera">清空该相机录像</button>
         <span class="grow" />
         <router-link class="btn btn-sm" :to="{ name: 'record-plan' }">去录像计划</router-link>
       </div>
