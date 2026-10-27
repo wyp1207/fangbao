@@ -14,7 +14,7 @@ const message = ref('')
 interface SchemaItem {
   key: string
   label: string
-  type: 'int' | 'float' | 'bool' | 'str'
+  type: 'int' | 'float' | 'bool' | 'str' | 'json'
   group: string
   effect: string
   min?: number
@@ -44,6 +44,29 @@ async function loadSettings() {
   }
 }
 
+// json 类型（如 SLA 矩阵）：页面里用文本存，保存前转回对象
+const jsonErrors = ref<Record<string, string>>({})
+
+function jsonText(key: string): string {
+  const v = dirty.value[key] ?? values.value[key]
+  if (typeof v === 'string') return v
+  try {
+    return JSON.stringify(v ?? {})
+  } catch {
+    return ''
+  }
+}
+
+function onJsonEdit(key: string, text: string) {
+  try {
+    const parsed = JSON.parse(text)
+    delete jsonErrors.value[key]
+    jsonErrors.value = { ...jsonErrors.value }
+    onEdit(key, parsed)
+  } catch {
+    jsonErrors.value = { ...jsonErrors.value, [key]: 'JSON 格式不对' }
+  }
+}
 function onEdit(key: string, raw: unknown) {
   dirty.value = { ...dirty.value, [key]: raw }
 }
@@ -129,7 +152,7 @@ onMounted(async () => {
       <div class="set-grid">
         <div v-for="(items, g) in groups" :key="g" class="set-group">
           <div class="set-head">{{ g }}</div>
-          <div v-for="it in items" :key="it.key" class="set-row" :class="{ wide: it.type === 'str' }">
+          <div v-for="it in items" :key="it.key" class="set-row" :class="{ wide: it.type === 'str' || it.type === 'json' }">
             <label :title="it.effect">{{ it.label }}</label>
             <DarkSelect
               v-if="it.type === 'bool'"
@@ -137,6 +160,13 @@ onMounted(async () => {
               :options="[{ value: 'true', label: '开启' }, { value: 'false', label: '关闭' }]"
               width="110px"
               @update:model-value="onEdit(it.key, $event === 'true')"
+            />
+            <textarea
+              v-else-if="it.type === 'json'"
+              class="input json-in"
+              rows="3"
+              :value="jsonText(it.key)"
+              @input="onJsonEdit(it.key, ($event.target as HTMLTextAreaElement).value)"
             />
             <input
               v-else-if="it.type === 'str'"
@@ -157,6 +187,7 @@ onMounted(async () => {
           </div>
         </div>
       </div>
+      <p v-for="(err, k) in jsonErrors" :key="k" class="danger small">{{ k }}：{{ err }}（这一项不会保存）</p>
       <p v-if="message" class="muted small">{{ message }}</p>
     </section>
 
@@ -265,4 +296,6 @@ onMounted(async () => {
 
 .num-in { text-align: right; }
 .eff { grid-column: 1 / -1; font-size: 11px; color: #7fa8cc; line-height: 1.5; margin-top: -4px; }
+
+.json-in { font-family: ui-monospace, Consolas, monospace; font-size: 12px; resize: vertical; }
 </style>
