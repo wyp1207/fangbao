@@ -1,29 +1,18 @@
-test: 三个新测试脚本 + 修两个真问题（设置 JSON 显示、Excel 公式注入）
+fix(alarm): 搁置到期自动解除 + 搁置期间暂停工单升级（模型评审点出的两个漏洞）
 
-一、scripts/ui_smoke.py（新增）
-登录后逐个打开 34 个路由，记录：空白页 / 控制台错误 / 接口 4xx-5xx，输出 docs/reviews/ui-smoke.md。
-修完两个问题后：**34 个路由 0 问题**。
+一、到期自动解除（clear_expired_shelves + 60 秒清理线程）
+之前搁置只做"不报新告警"（_is_shelved 判断到期时间），
+但 DB 里的 shelved_until 永远不清 → 界面上一直挂着「搁置」徽标，
+值班的人以为还在屏蔽，其实早到期了。这种"假状态"比不显示更危险。
+现在：每分钟扫一次到期搁置，清掉 shelved_until 与原因（日志记条数）。
+实测：把到期时间改到 1 秒前 → 第 35 秒自动解除、原因清空 ✅
 
-首跑发现并修掉：
-1) /settings 控制台报"The specified value [object Object] cannot be parsed"
-   原因：alarm.sla_minutes 是 json 类型，设置页却按 number 渲染 → 输入框被塞进对象。
-   现在：json 类型用文本域显示（JSON 文本），保存前解析；解析失败只提示该项、不提交。
-2) 冒烟脚本自身把 /api-keys 写错（真实路由是 /keys），已修正。
+二、搁置期间不升级工单（escalate_overdue）
+现场检修/标定时告警被搁置，但工单 SLA 照跑，超时就升级到值班长。
+现在：升级扫描先查"当前被搁置的告警 id"，来源是这些告警的工单跳过。
+实测：工单 due_at 改到 1 小时前 + 来源告警搁置 2 小时 → 升级扫描 0 条 ✅（恢复后正常）
 
-二、scripts/adversarial_test.py（新增）
-1) 越权：viewer 尝试 建管理员/搁置告警/删管理员/改设置/下发任务/校验审计 → 6/6 全部 403 ✅
-2) 审计链篡改：直接改库里一条 result_summary 再校验 →
-   {"ok":false,"broken_at":820,"reason":"row_hash 对不上（内容被改）"}；恢复后 ok:true ✅
-
-三、Excel/CSV 公式注入（真实漏洞，已修）
-构造传感器名 "=cmd|' /C calc'!A0" 触发告警后导出 xlsx：
-- 修复前：告警明细!E206、环境!A14 两个单元格 data_type='f'（被当公式，Excel 打开会执行）❌
-- 修复后：全部 's'（文本，前面加了单引号）✅
-修法：reports.py 增加 sanitize_workbook()，保存前把 = + - @ 开头的字符串统一转义；
-前端告警「导出 CSV」同样加 csvCell() 转义。
-
-四、模型评审
-docs/对抗测试设计-prompt.md + docs/reviews/model_review_20261027-140020.md：
-豆包/GLM 给出 20 个高风险点 + 50 用例清单 + 5 个"看着会过实际翻车"场景。
-
-验证：86 用例通过；UI 冒烟 34/34 无问题
+新增脚本：
+- scripts/test_shelve_expiry.py（到期恢复，轮询 70 秒）
+- scripts/test_escalate_shelved.py（搁置期间不升级，直连服务层）
+验证：86 用例通过

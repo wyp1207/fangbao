@@ -57,16 +57,29 @@ def escalate_overdue(session_factory) -> int:
     now = datetime.now()
     n = 0
     with session_factory() as db:
-        rows = (
-            db.query(WorkOrder)
-            .filter(
-                WorkOrder.status != "closed",
-                WorkOrder.due_at.isnot(None),
-                WorkOrder.due_at < now,
-                WorkOrder.escalated_at.is_(None),
+        # 来源告警被搁置（检修/标定）时不升级：SLA 暂停，
+        # 否则现场正在标定，值班长半夜被叫起来
+        from app.models.alarm import AlarmRecord
+
+        shelved_ids = {
+            aid for (aid,) in db.query(AlarmRecord.id).filter(
+                AlarmRecord.shelved_until.isnot(None),
+                AlarmRecord.shelved_until > now,
+            ).all()
+        }
+        rows = [
+            o for o in (
+                db.query(WorkOrder)
+                .filter(
+                    WorkOrder.status != "closed",
+                    WorkOrder.due_at.isnot(None),
+                    WorkOrder.due_at < now,
+                    WorkOrder.escalated_at.is_(None),
+                )
+                .all()
             )
-            .all()
-        )
+            if not (o.source == "alarm" and o.source_id in shelved_ids)
+        ]
         for o in rows:
             o.escalated_at = now
             n += 1
