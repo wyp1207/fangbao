@@ -50,6 +50,14 @@ PATHS = {
 class HttpJcrobAdapter:
     mode = "http"
 
+    # 能力声明（B 项）：全部 False = 逐点。真机确认支持节点内动作后再改这里。
+    capabilities = {
+        "supports_batch": False,
+        "supports_inline_actions": False,
+        "supports_pause": False,
+        "cancel_semantics": "async",
+    }
+
     def __init__(self, *, base_url: str, username: str, password: str,
                  token: str = "", timeout: float = 3.0,
                  angle_unit: AngleUnit = "auto") -> None:

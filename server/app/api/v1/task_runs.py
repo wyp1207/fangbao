@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import json
 from datetime import datetime
 
@@ -81,6 +83,9 @@ def _run_out(r: TaskRun, steps: list[TaskRunStep] | None = None) -> dict:
         "paused": bool(getattr(r, "paused_at", None)),
         "dispatched_at": r.dispatched_at.isoformat(timespec="seconds") if getattr(r, "dispatched_at", None) else None,
         "dispatch_error": getattr(r, "dispatch_error", None),
+        "order_id": getattr(r, "order_id", None),
+        "dispatch_state": getattr(r, "dispatch_state", None),
+        "dispatch_attempt": getattr(r, "dispatch_attempt", None),
     }
     if steps is not None:
         ok = sum(1 for s in steps if s.status == "ok")
@@ -251,6 +256,7 @@ def dispatch_run(
     except Exception as exc:  # noqa: BLE001
         run.dispatch_error = f"{exc.__class__.__name__}: {exc}"[:300]
         db.commit()
+        log.exception("任务下发失败 run=%s", run_id)
         raise
     audit(db=db, action="task_run.dispatch", target=run.name, user=me,
           detail={"status": run.status, "external_id": run.external_id})
@@ -429,3 +435,6 @@ def cancel_run(
     r = task_dispatch.cancel(db, r, _adapter_for(db, r))
     audit(db=db, action="task_run.cancel", target=r.name, user=me, detail={"mode": "robot"})
     return _run_out(r)
+
+
+log = logging.getLogger(__name__)

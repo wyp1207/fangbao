@@ -188,6 +188,20 @@ async def lifespan(app: FastAPI):
     telemetry_janitor.start()
 
     # 搁置到期恢复：单独一个 60 秒的轻量循环（保留期清理是 6 小时一次，太粗）
+    def _dispatch_janitor():
+        import time as _t
+        from app.services.task_dispatch import reconcile_dispatches
+        while True:
+            try:
+                with _SL() as db:
+                    reconcile_dispatches(db)
+            except Exception:  # noqa: BLE001
+                log.exception("下发对账失败")
+            _t.sleep(60)
+
+    dispatch_janitor = _th.Thread(target=_dispatch_janitor, daemon=True)
+    dispatch_janitor.start()
+
     def _shelve_janitor():
         import time as _t
         from app.services.alarms import clear_expired_shelves
@@ -228,6 +242,10 @@ async def lifespan(app: FastAPI):
 
     with _SL2() as _db:
         _robots = _db.query(_Robot).filter(_Robot.is_active.is_(True)).all()
+    from app.services.async_bridge import set_loop
+
+    set_loop(asyncio.get_running_loop())
+
     await robot_registry.start(_robots)
 
     # 环境传感器走机器人推的 WS（SDK p107），与 HTTP 轮询是两套机制

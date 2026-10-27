@@ -12,6 +12,7 @@ from app.core.errors import BadRequest, NotFound
 from app.db.session import get_db
 from app.models.robot import Robot
 from app.models.user import User
+from app.services.async_bridge import run_async
 from app.services.command_gateway import precheck as run_precheck
 from app.services.messages import audit
 
@@ -60,7 +61,7 @@ def motion(
         raise BadRequest(f"适配器 {robot.adapter} 不支持 {action}", code="NOT_SUPPORTED")
     res = fn()
     if hasattr(res, "__await__"):
-        res = asyncio.run(res)
+        res = run_async(res)
     audit(db=db, action=f"robot.{action}", target=robot.name, user=me)
     return {"ok": True, "result": res}
 
@@ -124,7 +125,7 @@ def init_location(
     yaw = float(body.get("yaw") or 0)
     res = fn(x, y, yaw)
     if hasattr(res, "__await__"):
-        res = asyncio.run(res)
+        res = run_async(res)
     audit(db=db, action="robot.init_loc", target=robot.name, user=me,
           detail={"x": x, "y": y, "yaw": yaw})
     return {"ok": True, "x": x, "y": y, "yaw": yaw, "result": res}

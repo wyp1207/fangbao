@@ -17,10 +17,12 @@ import json
 import logging
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.core.errors import BadRequest, PlatformError
-from app.models.task_run import TaskRun, TaskRunStep
+from app.models.task_run import TaskRun
+from app.services.async_bridge import run_async
+from app.models.task_run import TaskRunStep
 from app.models.task_template import TaskTemplate
 
 log = logging.getLogger(__name__)
@@ -59,7 +61,7 @@ def _call(fn, *args):
 
     res = fn(*args)
     if inspect.isawaitable(res):
-        return asyncio.run(res)
+        return run_async(res)
     return res
 
 
@@ -77,11 +79,12 @@ def preflight(db, run: TaskRun, adapter) -> dict:
         info = adapter.get_info()
         import asyncio, inspect
         if inspect.isawaitable(status):
-            status = asyncio.run(status)
+            status = run_async(status)
         if inspect.isawaitable(info):
-            info = asyncio.run(info)
+            info = run_async(info)
     except Exception as exc:  # noqa: BLE001
-        return {"ok": False, "reason": f"读不到机器人状态：{exc.__class__.__name__}",
+        log.exception("preflight 读取状态失败")
+        return {"ok": False, "reason": f"读不到机器人状态：{exc.__class__.__name__}: {exc}",
                 "checks": {"link": "fail"}}
 
     st = (status or {}).get("status") if isinstance(status, dict) else {}
@@ -114,13 +117,14 @@ def preflight(db, run: TaskRun, adapter) -> dict:
     return {"ok": True, "reason": "", "checks": checks}
 
 
-def _order_payload(db, template: TaskTemplate | None, steps: list[TaskRunStep]) -> dict:
+def _order_payload(db, template: TaskTemplate | None, steps: list[TaskRunStep],
+                   order_id: str = "") -> dict:
     """下发给机器人的订单结构。坐标必须带上——只给 pointId 机器人不知道去哪。"""
     from app.models.map_library import PointDraft
 
     points = {p.id: p for p in db.query(PointDraft).all()}
     return {
-        "orderId": f"JC-{int(time.time() * 1000)}",
+        "orderId": order_id,
         "orderUpdateId": 0,
         "actions": [
             {
@@ -141,8 +145,45 @@ def _order_payload(db, template: TaskTemplate | None, steps: list[TaskRunStep]) 
     }
 
 
+LEASE_SECONDS = 120
+
+
+def _claim_dispatch(db, run: TaskRun) -> str:
+    """抢占这次下发（幂等闸门）。
+
+    为什么先落库再发网络：如果先发后写，进程在中间崩了，
+    重启后无法判断车端到底收没收到（unknown commit），补发就是双单。
+    这里用"条件 UPDATE + rowcount"而不是 SELECT ... FOR UPDATE：
+    SQLite 不支持 FOR UPDATE（语法错），条件 UPDATE 在 SQLite/MySQL 语义一致。
+    """
+    from sqlalchemy import update
+
+    from app.models.task_run import TaskRun as _TR
+
+    now = datetime.now()
+    attempt = (run.dispatch_attempt or 0) + 1
+    order_id = f"JC-R{run.id:06d}-A{attempt:02d}"
+
+    res = db.execute(
+        update(_TR)
+        .where(_TR.id == run.id)
+        .where(_TR.dispatch_state.in_(("pending", "failed", "rejected")))
+        .values(dispatch_state="sending", dispatch_attempt=attempt, order_id=order_id,
+                dispatch_lease_until=now + timedelta(seconds=LEASE_SECONDS)))
+    db.commit()
+    if (res.rowcount or 0) == 0:
+        db.refresh(run)
+        # 已有在途/已确认的下发：拒绝重复，避免车端两份订单
+        raise PlatformError(
+            f"这条任务已下发过（order_id={run.order_id}, state={run.dispatch_state}），"
+            f"要重发请先取消或等对账完成",
+            code="ORDER_IN_FLIGHT", status_code=409)
+    db.refresh(run)
+    return order_id
+
+
 def dispatch(db, run: TaskRun, adapter) -> TaskRun:
-    """把一条 planned 的执行记录下发给机器人。"""
+    """把一条 planned 的执行记录下发给机器人（幂等：同一 run 同一 attempt 只发一次）。"""
     _require_write()
     if run.status != "planned":
         raise BadRequest(f"当前状态 {run.status} 不能下发", code="BAD_STATUS")
@@ -152,6 +193,23 @@ def dispatch(db, run: TaskRun, adapter) -> TaskRun:
 
     assert_free(db, run.robot_id, run.id)
 
+    # 定位未就绪不许跑：带着错位姿导航 = 到点全错，VDA5050 把它定为 FATAL
+    try:
+        from app.services.robot_runtime import registry as _reg
+
+        rt = _reg.get(run.robot_id or 0)
+        located = None
+        if rt is not None:
+            located = (rt.cache.as_dict().get("status") or {}).get("located")
+        if located is False:
+            raise PlatformError(
+                "机器人定位未就绪（located=false），先重置定位再下发",
+                code="NOT_LOCALIZED", status_code=409)
+    except PlatformError:
+        raise
+    except Exception:  # noqa: BLE001
+        pass
+
     gate = preflight(db, run, adapter)
     if not gate["ok"]:
         raise PlatformError(gate["reason"], code="PREFLIGHT_FAILED", status_code=409)
@@ -160,26 +218,39 @@ def dispatch(db, run: TaskRun, adapter) -> TaskRun:
     if not steps:
         raise BadRequest("这条计划没有点位，先补点位", code="EMPTY_STEPS")
 
+    # 先落库抢占，再发网络
+    order_id = _claim_dispatch(db, run)
     template = db.get(TaskTemplate, run.template_id) if run.template_id else None
-    order = _order_payload(db, template, steps)
+    order = _order_payload(db, template, steps, order_id=order_id)
 
     from app.adapters.jcrob import errors as jerr
 
     try:
         res = _call(adapter.dispatch, order)
     except jerr.NotSupported as exc:
+        run.dispatch_state = "rejected"
+        run.dispatch_error = f"机器人不支持下发：{exc.reason}"
+        db.commit()
         raise PlatformError(f"机器人不支持下发：{exc.reason}", code="NOT_SUPPORTED",
                             status_code=501) from exc
+    except Exception as exc:  # noqa: BLE001
+        # 结果未知：保持 sending，租约到期后由对账处理，绝不盲重试
+        run.dispatch_error = f"下发结果未知：{exc.__class__.__name__}: {exc}"
+        db.commit()
+        raise PlatformError(
+            "下发结果未知（超时/网络中断），已进入对账，不会自动重发",
+            code="ORDER_UNKNOWN", status_code=504) from exc
 
     run.status = STATE_MAP.get(res.get("state", "RUNNING"), "running")
     run.external_id = str(res.get("id") or run.external_id or "")
     run.dispatched_at = datetime.now()
     run.dispatch_error = None
     run.last_progress_at = datetime.now()
+    run.dispatch_state = "sent"
     run.order_json = json.dumps(order, ensure_ascii=False)
     db.commit()
     db.refresh(run)
-    log.info("任务下发 #%s → %s", run.id, run.external_id)
+    log.info("任务下发 #%s order=%s → %s", run.id, order_id, run.external_id)
 
     # 下发 ≠ 完成：异步轮询订单状态，把 run 从 running 推到 done/failed。
     # 之前没有这一段，任务永远停在 running，30s 后看门狗误报"卡住"并建告警。
@@ -334,3 +405,34 @@ class TaskWatchdog:
 
 
 watchdog: TaskWatchdog | None = None
+
+
+def reconcile_dispatches(db) -> int:
+    """对账：处理"发出去了但不知道车端收没收到"的行。
+
+    - 租约过期且没有 external_id → 标 failed（交人工确认，绝不自动重发）
+    - 有 external_id 但在途 → 收到 sent
+    这是 unknown commit 的唯一正确解法（VDA5050 靠 orderUpdateId，我们靠对账）。
+    """
+    from app.models.task_run import TaskRun as _TR
+
+    now = datetime.now()
+    rows = (db.query(_TR)
+            .filter(_TR.dispatch_state.in_(("sending", "unknown")),
+                    _TR.dispatch_lease_until.isnot(None),
+                    _TR.dispatch_lease_until < now)
+            .all())
+    n = 0
+    for row in rows:
+        if row.external_id:
+            row.dispatch_state = "sent"
+        else:
+            row.dispatch_state = "failed"
+            row.dispatch_error = (row.dispatch_error or "") + "｜对账：租约到期仍无车端回执"
+            if row.status == "planned":
+                row.status = "failed"
+        n += 1
+    if n:
+        db.commit()
+        log.warning("下发对账：处理 %s 条无回执行", n)
+    return n

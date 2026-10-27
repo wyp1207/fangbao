@@ -29,6 +29,15 @@ def _num(v: Any) -> float | None:
 
 class DeepRoboticsX30Adapter:
     mode = "x30"
+
+    # 能力声明：平台只读这里，不判断厂商（B 项）。
+    # X30 的 1003 一次只能给一个目标点，天然逐点；真机确认后只改布尔值。
+    capabilities = {
+        "supports_batch": False,
+        "supports_inline_actions": False,
+        "supports_pause": False,
+        "cancel_semantics": "sync",
+    }
     # 实测：30000 的响应时间在 0.15~8s 之间波动（导航主机单线程处理），
     # 所以轮询放慢到 3s，超时放宽，宁可数据旧一点也不要一直超时。
     poll_interval = 5.0

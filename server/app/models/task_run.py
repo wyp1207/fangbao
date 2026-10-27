@@ -44,6 +44,15 @@ class TaskRun(Base):
     dispatch_error: Mapped[str | None] = mapped_column(String(300), nullable=True)
     order_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # ---- 下发幂等（迁移 0024）；主状态仍是上面那 5 个，不扩枚举 ----
+    order_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    order_update_id: Mapped[int] = mapped_column(Integer, default=0)
+    dispatch_state: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    dispatch_attempt: Mapped[int] = mapped_column(Integer, default=0)
+    dispatch_lease_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    cancel_requested_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_seq: Mapped[int] = mapped_column(Integer, default=0)
+
 
 class TaskRunStep(Base):
     """任务里每个点位的执行结果。"""

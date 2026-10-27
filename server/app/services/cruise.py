@@ -19,7 +19,9 @@ import time
 from datetime import datetime
 
 from app.models.map_library import PointDraft
-from app.models.task_run import TaskRun, TaskRunStep
+from app.models.task_run import TaskRun
+from app.services.async_bridge import run_async
+from app.models.task_run import TaskRunStep
 
 log = logging.getLogger(__name__)
 
@@ -59,7 +61,7 @@ class CruiseRunner:
                 res = adapter.cancel()
                 if hasattr(res, "__await__"):
                     import asyncio
-                    asyncio.run(res)
+                    run_async(res)
         except Exception:  # noqa: BLE001
             log.exception("取消巡航时通知机器人失败")
         return True
@@ -98,19 +100,44 @@ class CruiseRunner:
                 continue
 
             radius = float(getattr(point, "arrive_radius_m", 1.0) or 1.0)
-            arrived, reason = self._wait_arrival(adapter, stop,
-                                                 target=(point.x, point.y),
-                                                 radius=radius)
+            result, reason = self._wait_arrival(adapter, stop,
+                                                target=(point.x, point.y),
+                                                radius=radius)
             if stop.is_set():
                 self._mark(step.id, "skipped", error="人工取消")
                 break
-            if not arrived:
+            if result == "suspect":
+                # 不重试、不算失败：标 suspect + 告警，交人工决定
+                self._mark(step.id, "suspect", error=reason,
+                           result={"point": point.name, "x": point.x, "y": point.y})
+                try:
+                    from app.services.alarms import get_store
+
+                    store = get_store()
+                    if store is not None:
+                        store.raise_external(
+                            metric="loc_suspect", level="warn",
+                            message=f"[{point.name}] {reason}", robot_id=run.robot_id)
+                except Exception:  # noqa: BLE001
+                    log.warning("suspect 告警发送失败", exc_info=True)
+                continue
+            if result != "arrived":
                 self._mark(step.id, "failed", error=reason)
                 failed += 1
                 continue
 
             # 到点后执行这个点位配的动作（拍照/测温/停留），不是只记坐标
-            action_result, action_err = self._do_action(adapter, step, run.robot_id)
+            # 期间占用"该点位"这把锁，避免另一台车同时挤进窄道口
+            from app.services.resource_lock import release, try_acquire
+
+            lock_key = f"point:{step.point_id}"
+            got = try_acquire([lock_key], run_id=run_id, robot_id=run.robot_id or 0,
+                              ttl_s=600)
+            try:
+                action_result, action_err = self._do_action(adapter, step, run.robot_id)
+            finally:
+                if got:
+                    release([lock_key], run_id=run_id)
             if action_err:
                 self._mark(step.id, "failed",
                            error=f"到点但动作失败：{action_err}",
@@ -156,7 +183,7 @@ class CruiseRunner:
             }]})
         if hasattr(res, "__await__"):
             import asyncio
-            asyncio.run(res)
+            run_async(res)
 
     def _ensure_sensor(self, robot_id: int | None, kind: str, label: str) -> int | None:
         """按（设备, 类型）找传感器，没有就建（测温/环境流共用）。"""
@@ -211,7 +238,7 @@ class CruiseRunner:
 
             res = getter()
             if hasattr(res, "__await__"):
-                res = asyncio.run(res)
+                res = run_async(res)
             tmax = (res or {}).get("max")
             if tmax is None:
                 return {"thermal": res}, "测温接口没有返回温度值"
@@ -231,7 +258,7 @@ class CruiseRunner:
             res = fn(step, stream)
             if hasattr(res, "__await__"):
                 import asyncio
-                res = asyncio.run(res)
+                res = run_async(res)
             return {"capture": res}, None
         if action == "wait":
             time.sleep(3)
@@ -240,19 +267,24 @@ class CruiseRunner:
 
     def _wait_arrival(self, adapter, stop: threading.Event,
                       target: tuple[float, float] | None = None,
-                      radius: float = 1.0) -> tuple[bool, str]:
+                      radius: float = 1.0) -> tuple[str, str]:
+        """返回 (结果, 原因)，结果是 arrived / suspect / failed。
+
+        suspect = 车端报完成但离目标超出容差（多半是定位漂移）：
+        不重试、不判失败，交给人工重定位后重跑该点（避免把"该重定位"当成"任务失败"）。
+        """
         deadline = time.time() + ARRIVE_TIMEOUT_S
         while time.time() < deadline:
             if stop.is_set():
-                return False, "人工取消"
+                return "failed", "人工取消"
             try:
                 order = adapter.get_order()
                 if hasattr(order, "__await__"):
                     import asyncio
-                    order = asyncio.run(order)
+                    order = run_async(order)
             except Exception as exc:  # noqa: BLE001
                 # 查询失败多半是机器人失联/网络断：这是"待人工确认位置"，不是普通超时
-                return False, f"机器人失联（查询失败：{exc.__class__.__name__}），需人工确认位置"
+                return "failed", f"机器人失联（查询失败：{exc.__class__.__name__}），需人工确认位置"
             state = (order or {}).get("state")
             if state == "FINISHED":
                 # 有目标坐标就再核对一次位姿：误差 > 1.5m 不算到点（防止空任务被当完成）
@@ -261,21 +293,24 @@ class CruiseRunner:
                         pose = adapter.get_pose()
                         if hasattr(pose, "__await__"):
                             import asyncio
-                            pose = asyncio.run(pose)
+                            pose = run_async(pose)
                         if isinstance(pose, dict) and pose.get("x") is not None:
                             dx = float(pose["x"]) - float(target[0])
                             dy = float(pose["y"]) - float(target[1])
                             dist = (dx * dx + dy * dy) ** 0.5
+                            if dist > radius * 2.5:
+                                return "failed", (f"机器人报完成但离目标 {dist:.1f}m"
+                                                  f"（{radius:.1f}m 的 2.5 倍以上，按失败处理）")
                             if dist > radius:
-                                return False, (f"机器人报完成但离目标 {dist:.1f}m"
-                                               f"（该点位要求 {radius:.1f}m 内）")
+                                return "suspect", (f"机器人报完成但离目标 {dist:.1f}m"
+                                                   f"（容差 {radius:.1f}m，疑似定位漂移，建议重置定位后重跑该点）")
                     except Exception:  # noqa: BLE001
                         pass
-                return True, ""
+                return "arrived", ""
             if state == "FAILED":
-                return False, "机器人报告无法到达"
+                return "failed", "机器人报告无法到达"
             time.sleep(POLL_S)
-        return False, f"超过 {ARRIVE_TIMEOUT_S}s 未到达"
+        return "failed", f"超过 {ARRIVE_TIMEOUT_S}s 未到达"
 
     def _mark(self, step_id: int, status: str, *, error: str | None = None,
               result: dict | None = None) -> None:
