@@ -1,20 +1,21 @@
-feat: 接口审计（166 条路由，19 条前端没调）+ 补上告警搁置/审计校验两个入口
+feat: 设备"读一次状态" + 巡检计划可编辑/删除（审计里 12 条待接的先落两个）
 
-一、scripts/audit_api.py
-扫后端 APIRouter + 装饰器得到全部路由，扫 web/src 的 fetch/request/模板字符串路径，
-路由参数按通配匹配，输出 docs/reviews/api-audit.md（含人工分类）。
+一、设备页新增「读一次状态」（POST /devices/{id}/status-probe）
+这个接口之前没前端入口，所以藏了两个 bug：
+1) 它只调 adapter.snapshot()，而 X30/JCROB 适配器都没有这个方法 → AttributeError。
+   现在：有 snapshot 用它，没有就并行取 get_status/get_info 自己拼。
+2) 离线设备会把请求卡 30 秒（connect 被取消后 aclose 又卡住）。
+   现在：线程里跑 + 硬上限 6 秒；aclose 单独 2 秒封顶。
+实测：X30（离线）6.0 秒返回「探测超时（6 秒内没响应）」；不再拖到半分钟。
 
-结果：166 条路由，前端未发现调用 19 条：
-  运维 3（/metrics、/ready、/health/deep）——本该没有前端入口
-  外部 4（sensors ingest、task-runs ingest、ai 图片、巡检照片）——给网关/算法箱用
-  待接 12（runtime、telemetry/rollup、streams/stats、plans 编辑删除、点位同步…）
+二、巡检计划「编辑」「删除」（PATCH/DELETE /inspection/plans/{id}）
+之前只能建、不能改，建错了只能重建。
+- 编辑弹窗：名称/场站/班次/启用/点位（每行一个）/备注
+- 删除：二次确认，已生成任务不受影响
+实测：改名保存后列表立即更新；测试完已恢复原名称。
 
-二、两个"后端做了、界面没有"的补上
-1) 告警搁置（ISA-18.2 shelve）
-   告警行新增 ⏸ 按钮 → 弹窗填时长+原因（原因必填，审计留痕）→ 确认后行首出现「搁置」徽标，
-   再点 ▶ 解除。实测：搁置 #205 20 分钟，badge 出现，审计里记下 alarm.shelve + 原因
-2) 审计链自检
-   操作日志页新增「校验审计链」按钮，结果显示绿/红条。
-   实测：审计链完整：已校验 793 条，哈希全部对得上
+三、接口审计复跑
+166 条路由，前端未调用 19 条（分类见 docs/reviews/api-audit.md）：
+运维 3、外部 4、待接 12。本次消掉 2 条（status-probe、plans PATCH/DELETE 中的 PATCH 与 DELETE）。
 
 验证：86 用例通过

@@ -313,15 +313,55 @@ def probe_status(
         return {"source": "unsupported", "reason": exc.reason, "adapter": exc.adapter}
 
     import asyncio
+    import threading
 
     async def _read():
-        try:
-            return await adapter.snapshot()
-        finally:
-            await adapter.aclose()
+        """不同适配器能力不一样：有 snapshot() 就用它，否则自己拼一个。
 
-    try:
-        snap = asyncio.run(_read())
-        return {"source": "live", "data": snap}
-    except Exception as exc:  # noqa: BLE001
-        return {"source": "error", "reason": f"{exc.__class__.__name__}: {exc}"}
+        之前这里只调 adapter.snapshot()，而 X30/JCROB 适配器都没有这个方法
+        （这个接口一直没前端入口，所以从没被触发过）。
+        """
+        try:
+            if hasattr(adapter, "snapshot"):
+                return await adapter.snapshot()
+
+            out: dict[str, Any] = {}
+            errors: list[str] = []
+            for key, method in (("status", "get_status"), ("info", "get_info")):
+                fn = getattr(adapter, method, None)
+                if fn is None:
+                    continue
+                try:
+                    out[key] = await fn()
+                except Exception as exc:  # noqa: BLE001
+                    errors.append(f"{method}: {exc.__class__.__name__}")
+            if not out and errors:
+                raise RuntimeError("；".join(errors))
+            out["online"] = bool(out)
+            out["age_s"] = 0.0
+            return out
+        finally:
+            try:
+                # 关连接也要设上限：离线设备上 aclose 本身就可能卡住
+                await asyncio.wait_for(adapter.aclose(), timeout=2)
+            except Exception:  # noqa: BLE001
+                pass
+
+    # 硬上限：放到线程里跑，最多等 10 秒就返回。
+    # 单纯 asyncio.wait_for 不够——connect 被取消后 aclose 仍可能把请求拖到 30 秒。
+    box: dict[str, Any] = {}
+
+    def _worker():
+        try:
+            box["data"] = asyncio.run(asyncio.wait_for(_read(), timeout=5))
+        except Exception as exc:  # noqa: BLE001
+            box["error"] = f"{exc.__class__.__name__}: {exc}"
+
+    th = threading.Thread(target=_worker, daemon=True, name=f"probe-{device_id}")
+    th.start()
+    th.join(timeout=6)
+    if th.is_alive():
+        return {"source": "error", "reason": "探测超时（6 秒内没响应）"}
+    if "error" in box:
+        return {"source": "error", "reason": box["error"]}
+    return {"source": "live", "data": box.get("data") or {}}
