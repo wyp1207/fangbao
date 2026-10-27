@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { ApiError } from '@/api/client'
@@ -7,11 +7,22 @@ import { ApiError } from '@/api/client'
 const auth = useAuthStore()
 const router = useRouter()
 const route = useRoute()
-const username = ref('admin')
+const username = ref('')
 const password = ref('')
 const error = ref('')
 const totp = ref('')
 const needTotp = ref(false)
+
+// 会话过期进来：清空账号密码、明确告诉用户为什么回到登录页
+onMounted(() => {
+  username.value = ''
+  password.value = ''
+  totp.value = ''
+  needTotp.value = false
+  if (route.query.expired) {
+    error.value = '会话已过期，请重新登录（账号密码已清空）'
+  }
+})
 
 async function submit() {
   error.value = ''
@@ -50,17 +61,19 @@ async function submit() {
 
       <label class="field">
         <span>账 号</span>
-        <input v-model="username" autocomplete="username" @keyup.enter="submit" />
+        <input v-model="username" autocomplete="off" autocapitalize="off" spellcheck="false"
+               placeholder="请输入账号" @keyup.enter="submit" />
       </label>
       <label v-if="needTotp" class="field">
         <span>动态码</span>
-        <input v-model="totp" inputmode="numeric" maxlength="6" placeholder="Authenticator 里的 6 位数字"
-               @keyup.enter="submit" />
+        <input v-model="totp" inputmode="numeric" maxlength="6" autocomplete="off"
+               placeholder="Authenticator 里的 6 位数字" @keyup.enter="submit" />
       </label>
 
       <label class="field">
         <span>密 码</span>
-        <input v-model="password" type="password" autocomplete="current-password" @keyup.enter="submit" />
+        <input v-model="password" type="password" autocomplete="new-password"
+               placeholder="请输入密码" @keyup.enter="submit" />
       </label>
 
       <p v-if="error" class="danger small">{{ error }}</p>
@@ -72,7 +85,7 @@ async function submit() {
       <p class="hint">默认账号见 <code>server/.env.example</code>；生产环境首次登录后必须改密码。</p>
     </div>
 
-    <p class="footer">一期：驾驶舱 / 地图点位 / 任务只读 / 告警 · 无视频、无三维</p>
+    <p class="footer">驾驶舱 / 地图点位 / 任务巡航 / 告警工单 / 实时视频 / 环境与测温</p>
   </div>
 </template>
 
