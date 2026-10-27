@@ -167,6 +167,28 @@ function openVideo(which: string) {
   toast(`${which}通道未接入：真机联调后按 RTSP / WebRTC 接入`, 'warn', 3000)
 }
 const busyMotion = ref(false)
+// 重置定位弹窗（断电/搬动/换图后要用）
+const locOpen = ref(false)
+const locForm = ref({ x: 0, y: 0, yaw: 0 })
+
+function openInitLoc() {
+  const p = pose.value as { x?: number; y?: number; theta_rad?: number } | null
+  locForm.value = { x: Number(p?.x ?? 0), y: Number(p?.y ?? 0), yaw: Number(p?.theta_rad ?? 0) }
+  locOpen.value = true
+}
+
+async function saveInitLoc() {
+  try {
+    await api.takeoverRobot(Number(deviceId.value), '重置定位')
+    await api.initLoc(Number(deviceId.value), {
+      x: Number(locForm.value.x), y: Number(locForm.value.y), yaw: Number(locForm.value.yaw),
+    })
+    toast('已重置定位，等机器人重新定位（约 2–5 秒）', 'ok', 6000)
+    locOpen.value = false
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : '重置定位失败', 'danger')
+  }
+}
 // 视频健康：真抓一帧判断流有没有画面；没画面就不渲染播放器，改显示"未接入"
 const videoHealth = ref<Record<number, { ok: boolean; reason: string }>>({})
 // 图片轮询：2.5 帧/秒够看现场，全幅 contain 不裁切，也不会把 go2rtc 的报错糊上来
@@ -759,6 +781,7 @@ async function logout() {
             <div class="ctrl-meta">
               <div v-if="canStand" class="pose-actions">
                 <button class="btn" :disabled="busyMotion" @click="doMotion('stand')">起立</button>
+              <button class="btn" @click="openInitLoc">重置定位</button>
                 <button class="btn" :disabled="busyMotion" @click="doMotion('lie')">趴下</button>
               </div>
               <p v-else class="dim small">这台设备不支持起立/趴下</p>

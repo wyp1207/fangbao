@@ -172,6 +172,10 @@ class DeepRoboticsX30Adapter:
         return await self._call(capture_frame, stream, get_settings().go2rtc_base)
 
     # ---- 现场动作 ----
+    async def set_initial_pose(self, x: float, y: float, yaw: float = 0.0) -> dict:
+        """重置定位（协议 2101）。断电/被搬动/地图切换后必须做，否则导航会跑偏。"""
+        return await self._call(self.client.init_loc, x, y, yaw)
+
     async def stand(self) -> dict:
         """起立/趴下是切换指令：趴下时发起立，站立时发就是趴下。"""
         from app.adapters.deeprobotics.protocol import CMD_STAND_LIE, send_motion

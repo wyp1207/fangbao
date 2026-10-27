@@ -161,6 +161,12 @@ class AlarmStore:
         if info.get("driver_port") is True:
             found.append(("estop", "critical", "硬件急停被按下", True))
 
+        # 定位丢失（X30 /location_status=1，或 1002 的 Location 非 1）
+        # 定位一丢，后面所有"到点判定"都是错的，必须立刻让人知道
+        st_located = status.get("located") if isinstance(status, dict) else None
+        if st_located is False:
+            found.append(("loc_lost", "critical", "机器人定位丢失，导航与到点判定不可信", False))
+
         # 自检（SDK p16–17）：motor_driver/camera/charge/lidar/bluetooth/battery
         # 任一路报错就算严重；全部恢复后由 _resolve_gone 自动解除
         st = info.get("self_test")

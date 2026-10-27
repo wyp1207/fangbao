@@ -1,18 +1,18 @@
-feat(task): 任务互斥锁 + 人工接管（两人同时下发 / 巡航中手动开车的场景）
+feat(loc): 重置定位（X30 协议 2101）+ 定位丢失告警
 
-背景：之前同一台车可以同时下发两条任务，谁先谁后无保证，车会来回横跳；
-巡航中有人想手动把车开回去，也没有抢占机制。
+为什么必须有：
+「机器狗怎么知道自己在哪」靠的是激光 SLAM + IMU + odom（室外叠 RTK 融合）。
+断电重启、被人搬动、切换地图之后，位姿和地图会错位——此时导航会"到不了点"，
+必须在现场做一次**重定位**。参考旧项目（机器狗/环境说明/robot-dashboard）的做法：
+上一次是手工在页面上点地图发 /initialpose + 发 2101，我们这次直接接进平台。
 
-新增 services/task_lock.py：
-- active_run(db, robot_id)：该车当前 running 的任务
-- assert_free()：下发/巡航前检查，占用则 409 RUN_BUSY，提示"还在执行任务 #id「名称」"
-- takeover()：把该车所有 running 任务置 cancelled（原因写进 dispatch_error）
+改动：
+1) X30 适配器新增 set_initial_pose(x,y,yaw) → 协议 2101
+2) POST /robots/{id}/init-loc（admin/operator/safety，受写开关保护，写审计 robot.init_loc）
+3) 首页控制面板新增「重置定位」按钮：预填当前位姿，确认后先接管（取消运行中任务）再重置
+4) 告警新增 loc_lost：定位丢失立即 P2 告警——定位一丢，"到点判定"全部不可信
+5) adapters 里原本只有 protocol.init_loc，适配器没暴露、界面没入口（等于没有）
 
-接线：
-- task_dispatch.dispatch 与 POST /task-runs/{id}/cruise 之前都过 assert_free
-- 新增 POST /robots/{id}/takeover（admin/operator/safety），写审计 robot.takeover
-- 首页"起立/趴下"前先调 takeover（提示"已接管，取消 N 条运行中任务"）
-- 任务执行页 running 行加「接管」按钮（二次确认）
+说明：地图切换（/map_request/pcd）与 /location_status 订阅未做，列入下一步。
 
-测试：tests/test_task_lock.py 3 例（第二次下发被拦、接管取消两条、无运行任务不拦）
 验证：89 用例通过
