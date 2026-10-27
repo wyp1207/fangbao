@@ -422,6 +422,8 @@ export const api = {
   recordingFileUrl: (path: string) => `/api/v1/recordings/file?path=${encodeURIComponent(path)}`,
   deleteRecording: (path: string) =>
     request<{ ok: boolean }>(`/recordings/file?path=${encodeURIComponent(path)}`, { method: 'DELETE' }),
+  deleteAllRecordings: (videoId: number) =>
+    request<{ ok: boolean; deleted: number }>(`/recordings/${videoId}/all`, { method: 'DELETE' }),
   recordingStorage: () => request<{ files: number; bytes: number; dir: string }>('/recordings/storage'),
   recordingDuration: (path: string) =>
     request<{ path: string; duration: number | null }>(`/recordings/duration?path=${encodeURIComponent(path)}`),
