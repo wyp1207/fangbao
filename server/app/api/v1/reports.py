@@ -292,8 +292,9 @@ def _summary_impl(
         if o.closed_at and o.created_at:
             order_close.append((o.closed_at - o.created_at).total_seconds() / 60)
 
-    closed_orders = [o for o in orders if o.closed_at]
-    on_time = [o for o in closed_orders if o.due_at and o.closed_at <= o.due_at]
+    # 只算"本来就有时限"的工单：早期工单没有 due_at，把它们算成"未按期"是错的
+    closed_orders = [o for o in orders if o.closed_at and o.due_at]
+    on_time = [o for o in closed_orders if o.closed_at <= o.due_at]
     sla_on_time_rate = round(len(on_time) / len(closed_orders) * 100, 1) if closed_orders else None
 
     response_metrics = {
@@ -507,6 +508,8 @@ def export_xlsx(
         ("告警→建单时长(分钟)", rm.get("alarm_to_order_avg_min")),
         ("工单闭环时长(分钟)", rm.get("order_close_avg_min")),
         ("工单闭环率(%)", rm.get("order_close_rate")),
+        ("SLA 按期销号(%)", rm.get("sla_on_time_rate")),
+        ("SLA 按期/有期限(张)", f"{rm.get('sla_on_time')}/{rm.get('sla_closed')}"),
     ]:
         ws5.append([k, v])
     style_header(ws5, 2)

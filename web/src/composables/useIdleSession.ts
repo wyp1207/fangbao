@@ -1,6 +1,8 @@
 import { onBeforeUnmount, onMounted } from 'vue'
 import { api } from '@/api'
-import { ApiError, triggerUnauthorized } from '@/api/client'
+import { triggerUnauthorized } from '@/api/client'
+import { useAuthStore } from '@/stores/auth'
+import { toast } from '@/composables/useToast'
 
 /**
  * 空闲会话守卫：超过 N 分钟没有任何鼠标/键盘/滚动操作，就向服务端问一次"我还登录着吗"。
@@ -48,15 +50,20 @@ export function useIdleSessionGuard() {
   async function check() {
     const idle = (Date.now() - lastActive) / 60000
     if (idle < idleMinutes) return
-    lastActive = Date.now()      // 先推后，避免服务端仍在线时每 60 秒重复问
+    lastActive = Date.now()      // 先推后，避免同一分钟重复触发
+
+    // 空闲超时 = 主动退出，而不是"问一下还登录着吗"。
+    // 之前只探活，服务端 token 还有效就什么都不做，设置形同虚设（QA 实测发现）。
     try {
-      await api.me()
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 401) {
-        triggerUnauthorized()    // /auth/me 不在全局拦截名单，这里补一刀
-      }
-      // 网络错误不算掉线：等下一次检查
+      await api.logout()
+    } catch {
+      // 服务端已经失效也无所谓，本地照样清状态
     }
+    try { sessionStorage.removeItem('jc_signed_in') } catch { /* ignore */ }
+    const auth = useAuthStore()
+    auth.user = null
+    triggerUnauthorized()        // 复用全局跳转（回登录页并带 expired=1）
+    toast(`已空闲 ${Math.round(idleMinutes)} 分钟，自动退出登录`, 'warn', 6000)
   }
 
   onMounted(() => {

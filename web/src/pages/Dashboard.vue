@@ -462,14 +462,20 @@ const slam = computed(() => robot.snapshot?.info?.slam_type ?? '—')
 const updated = computed(() => (robot.snapshot ? robot.snapshot.age_s.toFixed(1) + 's 前' : '—'))
 
 const RING_C = 2 * Math.PI * 42
+// 全量口径：列表接口 limit=200，用它算总数会把 206 显示成 200（QA 实测发现）
+const stats7 = ref<{ total: number; unacked: number; acked: number } | null>(null)
+
 const donut = computed(() => {
-  const total = robot.alarms.length
+  const s = stats7.value
+  const total = s?.total ?? robot.alarms.length
+  const un = s?.unacked ?? unacked.value.length
+  const ac = s?.acked ?? acked.value.length
   return {
     total,
-    unacked: unacked.value.length,
-    acked: acked.value.length,
-    red: total ? (unacked.value.length / total) * RING_C : 0,
-    green: total ? (acked.value.length / total) * RING_C : 0,
+    unacked: un,
+    acked: ac,
+    red: total ? (un / total) * RING_C : 0,
+    green: total ? (ac / total) * RING_C : 0,
   }
 })
 
@@ -516,7 +522,9 @@ function barH(n: number): number {
 
 async function loadTrend() {
   try {
-    trend.value = (await api.alarmStats(7)).series
+    const stats = await api.alarmStats(7)
+    trend.value = stats.series
+    stats7.value = { total: stats.total, unacked: stats.unacked, acked: stats.acked }
   } catch { /* 统计失败不影响大屏 */ }
 }
 
@@ -727,7 +735,7 @@ async function logout() {
               <span v-else>热像仪接上后，勾选「首页显示」即自动呈现</span>
               <div class="embed-acts">
                 <button v-if="thermalVideo" class="btn btn-sm" @click="loadVideoHealth">重新探测</button>
-                <button class="btn btn-sm" @click="openUrl(visibleVideo)">更换地址</button>
+                <button class="btn btn-sm" @click="openUrl(thermalVideo)">更换地址</button>
               </div>
             </div>
             <button class="embed-expand" title="打开视频监控" :disabled="!thermalVideo"

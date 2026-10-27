@@ -60,6 +60,14 @@ async function load() {
 const planEdit = ref<Plan | null>(null)
 const planForm = ref({ name: '', station: '', shift: '', enabled: '1' as string, note: '', itemsText: '' })
 
+// 新建计划：复用编辑弹窗（id=0 表示新建）
+function openPlanCreate() {
+  planEdit.value = { id: 0, name: '', station: '默认场站', shift: '白班',
+                     enabled: true, point_count: 0, items: [] }
+  planForm.value = { name: '', station: '默认场站', shift: '白班',
+                     enabled: '1', note: '', itemsText: '' }
+}
+
 function openPlanEdit(p: Plan) {
   planEdit.value = p
   planForm.value = {
@@ -74,14 +82,16 @@ async function savePlan() {
   if (!p) return
   if (!planForm.value.name.trim()) { toast('计划名称不能为空', 'warn'); return }
   const items = planForm.value.itemsText.split('\n').map((x) => x.trim()).filter(Boolean)
+  const body = {
+    name: planForm.value.name.trim(), station: planForm.value.station.trim() || '默认场站',
+    shift: planForm.value.shift.trim() || '白班', enabled: planForm.value.enabled === '1',
+    note: planForm.value.note,
+    items: items.map((name) => ({ name, code: '', checks: [] })),
+  }
   try {
-    await api.updateInspectionPlan(p.id, {
-      name: planForm.value.name.trim(), station: planForm.value.station.trim() || '默认场站',
-      shift: planForm.value.shift.trim() || '白班', enabled: planForm.value.enabled === '1',
-      note: planForm.value.note,
-      items: items.map((name) => ({ name, code: '', checks: [] })),
-    })
-    toast('计划已保存', 'ok')
+    if (!p.id) await api.createInspectionPlan(body)
+    else await api.updateInspectionPlan(p.id, body)
+    toast(p.id ? '计划已保存' : '计划已创建', 'ok')
     planEdit.value = null
     await load()
   } catch (e) {
@@ -141,6 +151,8 @@ onMounted(load)
       <div class="panel-title">
         <span>人工巡检</span>
         <span class="muted small">计划派发 → 扫码打点 → 现场记录 → 缺陷上报；扫码编号对不上会记录在案</span>
+        <span class="grow" />
+        <button class="btn btn-sm primary" :disabled="!auth.canWrite" @click="openPlanCreate">新建计划</button>
         <span class="grow" />
         <span class="tag" :class="pendingCount ? 'warn' : 'ok'">{{ pendingCount }} 个待执行</span>
       </div>
@@ -237,7 +249,7 @@ onMounted(load)
           <template v-if="detail.progress?.abnormal"> · 异常 {{ detail.progress.abnormal }}
     <div v-if="planEdit" class="mask" @click.self="planEdit = null">
       <div class="plan-dlg">
-        <h3>编辑计划 #{{ planEdit.id }}</h3>
+        <h3>{{ planEdit.id ? "编辑计划 #" + planEdit.id : "新建巡检计划" }}</h3>
         <div class="grid2">
           <label class="fld"><span>名称</span><input class="input" v-model="planForm.name" /></label>
           <label class="fld"><span>场站</span><input class="input" v-model="planForm.station" /></label>
@@ -280,7 +292,7 @@ onMounted(load)
 
     <div v-if="planEdit" class="mask" @click.self="planEdit = null">
       <div class="plan-dlg">
-        <h3>编辑计划 #{{ planEdit.id }}</h3>
+        <h3>{{ planEdit.id ? "编辑计划 #" + planEdit.id : "新建巡检计划" }}</h3>
         <div class="grid2">
           <label class="fld"><span>名称</span><input class="input" v-model="planForm.name" /></label>
           <label class="fld"><span>场站</span><input class="input" v-model="planForm.station" /></label>
