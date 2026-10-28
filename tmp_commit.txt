@@ -1,12 +1,12 @@
-feat(notify): 新增短信/语音网关通道（HTTP），补齐"夜间无人盯屏"缺口
+ci: 加 GitHub Actions（pytest + 迁移 + 前端构建）+ 验收前必测清单
 
-- notify.py 新增 type=sms：POST {to, text, alarm} 到配置的网关 URL，
-  沿用已有的时间戳+HMAC 签名头（X-Jcrob-Timestamp / X-Jcrob-Signature）
-- 前端通知通道下拉新增「短信/语音网关（HTTP）」，带填写提示
-- 测试：起本地假网关接收 POST，断言 to 拆分、text 含告警内容、签名/时间戳头存在
-- 顺带修 test_notify_channel_validation：sms 现在是合法类型，改用 fax 验证拒绝路径
-
-评估文档补「评估之后已补掉」表：设备一机一密、备份/恢复演练、部署脚本、现场自检、
-短信通道、request_id、3 分钟浸泡结果。
-
-验证：pytest 120 通过；联调 24/24
+- .github/workflows/ci.yml：
+  backend：Python 3.11，装依赖 -> pytest -> 空库 alembic upgrade head
+  frontend：Node 20，npm ci -> vue-tsc + vite build
+- docs/验收前必测清单.md：
+  · 能当场演示的 10 条（含预期与备用说明）
+  · 能拿出的证据（命令 + 当前结果）
+  · 只能讲不能演的真机项（现场话术）
+  · 演示前 30 分钟检查清单
+  · 被问到时必须说实话的 5 句
+  · 已知缺陷与计划
