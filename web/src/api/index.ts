@@ -235,6 +235,10 @@ export const api = {
   deleteDevice: (id: number) => request<{ ok: boolean }>(`/devices/${id}`, { method: 'DELETE' }),
   initLoc: (id: number, body: { x: number; y: number; yaw?: number }) =>
     request<{ ok: boolean }>(`/robots/${id}/init-loc`, { method: 'POST', body }),
+  telemetryPoses: (robotId: number, hours = 24, points = 1200) =>
+    request<{ count: number; points: { ts: string; x: number; y: number; theta: number }[];
+      distance_m: number; from: string | null; to: string | null }>(
+      `/telemetry/poses?robot_id=${robotId}&hours=${hours}&points=${points}`),
   selfCheck: () => request<{ ok: boolean; ts: string; checks: { name: string; ok: boolean;
     detail: string; hint?: string }[] }>('/system/self-check'),
   deviceKeys: () => request<{ id: number; robot_id: number; key_id: string; enabled: boolean;

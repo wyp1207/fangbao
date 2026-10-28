@@ -1,16 +1,19 @@
-feat(realtime): 位姿 WebSocket 推送（200ms 一帧）+ 前端插值，替代 1s 轮询观感
+feat(3d): 轨迹回放（24h、1215 点）+ 历史位姿接口
 
-- 后端 GET /api/v1/ws/robot/{id}（WebSocket）：
-  · 复用 httpOnly cookie 的 JWT 鉴权，未登录 1008 关闭
-  · 每 200ms 推送 {pose{x,y,theta,theta_rad}, status{status,located}, battery, online, age_s}
-  · 数据源是 registry 缓存（车端 1Hz），推得快只是让前端拿到"最接近当前"的一帧
-- 前端 stores/robot.ts：
-  · startWs/stopWs，断线 3 秒重连；onmessage 合并 pose/status/battery
-  · wsConnected 状态供页面显示
-- Twin 页面：挂载连 WS、卸载断开；HUD 显示 "WS 200ms" / "轮询 1s"；位姿继续 lerp
-- vite proxy 与生产 nginx：/api 开启 ws upgrade、读超时 3600s
+后端：GET /api/v1/telemetry/poses?robot_id&hours&points
+- 只取有 x/y 的采样，按时间升序
+- 定位跳变 >5m 视为重定位：断开线段，不画"穿墙直线"
+- 等间隔抽稀到 points（默认 1200，最大 5000）
+- 返回 count/points[{ts,x,y,theta}]/distance_m/from/to；空数据也返回 distance_m=0
 
-实测（Playwright）：HUD 显示 "WS 200ms"；连续采样位姿 (0.05,1.00) -> (-0.41,0.97) 平滑变化；
-截图 docs/screenshots/twin-ws.png
+前端 Twin：
+- 「轨迹回放」面板：1h/6h/24h/3d 切换、播放/暂停、1x-30x 变速、时间滑块、时间标签、点数/里程
+- 历史轨迹线青色，回放标记用线框方块，和实时机器人（橙色实心）区分
+- 播放时逐帧推进索引；拖动滑块立即定位
+- 修复：数组下标必须是整数（浮点索引会取到 undefined 导致播放不动）
 
-测试：新增 test_ws_pose.py 2 例（未登录被拒、登录后连续收到 3 帧）；pytest 129 通过
+实测（Playwright）：24h 载入 1215 点 / 7116.6m；点播放后时间从 13:26:49 前进到 13:30:22；
+截图 docs/screenshots/twin-playback.png
+
+测试：新增 test_telemetry_poses.py 2 例（空数据不 500、字段与时间升序）；pytest 131 通过
+UI 冒烟 36 路由 0 问题

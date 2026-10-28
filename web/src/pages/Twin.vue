@@ -23,6 +23,15 @@ const pointsOn = ref(true)
 const alarmsOn = ref(true)
 const height = ref(2.4)
 const threshold = ref(60)
+// ---- 轨迹回放 ----
+const playHours = ref(24)
+const playPoints = ref<{ ts: string; x: number; y: number; theta: number }[]>([])
+const playIndex = ref(0)
+const playing = ref(false)
+const playSpeed = ref(4)
+const playTime = ref('')
+const playDistance = ref(0)
+let playTimer = 0
 const loading = ref(true)
 const err = ref('')
 const info = ref({ map: '', points: 0, walls: 0, pose: '' })
@@ -33,6 +42,8 @@ let scene: THREE.Scene | null = null
 let camera: THREE.PerspectiveCamera | null = null
 let controls: OrbitControls | null = null
 let wallMesh: THREE.InstancedMesh | null = null
+let playGroup: THREE.Group | null = null
+let playLine: THREE.Line | null = null
 let pointGroup: THREE.Group | null = null
 let alarmGroup: THREE.Group | null = null
 let robotGroup: THREE.Group | null = null
@@ -439,8 +450,95 @@ function loop() {
     })
   }
 
+  if (playing.value && playPoints.value.length > 1) {
+    // 每帧推进：playSpeed 个采样点/秒（采样约 1 点/秒）
+    const step = playSpeed.value / 60
+    playIndex.value += step
+    if (playIndex.value >= playPoints.value.length - 1) {
+      playIndex.value = playPoints.value.length - 1
+      playing.value = false
+    }
+    applyPlayIndex()
+  }
+
   if (renderer && scene && camera) renderer.render(scene, camera)
   if (labelRenderer && scene && camera) labelRenderer.render(scene, camera)
+}
+
+async function loadPlayback() {
+  try {
+    const r = await api.telemetryPoses(Number(robot.deviceId), playHours.value, 1200)
+    playPoints.value = r.points || []
+    playDistance.value = r.distance_m || 0
+    playIndex.value = 0
+    playing.value = false
+    drawPlayback()
+    if (!playPoints.value.length) toast('这段时间没有历史位姿（车端未上报或已被清理）', 'warn', 4000)
+    else toast(`已加载 ${playPoints.value.length} 个历史点，共 ${r.distance_m} 米`, 'ok', 3000)
+  } catch (e) {
+    toast(e instanceof Error ? e.message : '加载轨迹失败', 'danger')
+  }
+}
+
+function drawPlayback() {
+  if (!scene) return
+  if (playGroup) {
+    scene.remove(playGroup)
+    playGroup.traverse((o) => (o as THREE.Mesh).geometry?.dispose?.())
+  }
+  playGroup = new THREE.Group()
+
+  // 历史轨迹线（青色，与实时橙色轨迹区分）
+  if (playPoints.value.length > 1) {
+    const arr = new Float32Array(playPoints.value.length * 3)
+    playPoints.value.forEach((p, i) => {
+      arr[i * 3] = p.x
+      arr[i * 3 + 1] = 0.08
+      arr[i * 3 + 2] = p.y
+    })
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.BufferAttribute(arr, 3))
+    playLine = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0x28e0c8, transparent: true, opacity: 0.85 }))
+    playLine.frustumCulled = false
+    playGroup.add(playLine)
+  }
+
+  // 回放标记（线框方块，和实时机器人区分）
+  const ghost = new THREE.Mesh(
+    new THREE.BoxGeometry(0.9, 0.45, 1.15),
+    new THREE.MeshBasicMaterial({ color: 0x28e0c8, wireframe: true, transparent: true, opacity: 0.95 }),
+  )
+  ghost.name = 'ghost'
+  const g = new THREE.Group()
+  g.name = 'ghostGroup'
+  g.add(ghost)
+  const nose = new THREE.Mesh(
+    new THREE.ConeGeometry(0.14, 0.36, 10),
+    new THREE.MeshBasicMaterial({ color: 0x9ffff2 }),
+  )
+  nose.rotation.z = -Math.PI / 2
+  nose.position.set(0.68, 0, 0)
+  g.add(nose)
+  playGroup.add(g)
+  scene.add(playGroup)
+  applyPlayIndex()
+}
+
+function applyPlayIndex() {
+  if (!playGroup) return
+  const g = playGroup.getObjectByName('ghostGroup') as THREE.Group | undefined
+  const pts = playPoints.value
+  if (!g || !pts.length) return
+  const p = pts[Math.floor(Math.min(playIndex.value, pts.length - 1))]
+  g.position.set(p.x, 0.25, p.y)
+  g.rotation.y = -p.theta
+  playTime.value = p.ts.replace('T', ' ')
+}
+
+function togglePlay() {
+  playing.value = !playing.value
+  if (playing.value && !playPoints.value.length) void loadPlayback()
+  if (playing.value && playIndex.value >= playPoints.value.length - 1) playIndex.value = 0
 }
 
 function applyHeight() {
@@ -481,6 +579,7 @@ function onResize() {
 onMounted(async () => {
   robot.setDevice(robot.deviceId)
   robot.startWs()
+  void loadPlayback()
   await build()
   updateAlarms(robot.alarms)
   window.addEventListener('resize', onResize)
@@ -492,6 +591,7 @@ onBeforeUnmount(() => {
   robot.stopWs()
   cancelAnimationFrame(raf)
   window.removeEventListener('resize', onResize)
+  window.clearInterval(playTimer)
   controls?.dispose()
   renderer?.dispose()
   if (renderer?.domElement.parentElement) renderer.domElement.remove()
@@ -523,6 +623,28 @@ onBeforeUnmount(() => {
         </label>
         <button class="btn btn-xs" @click="resetCamera">复位视角</button>
       </div>
+
+      <div class="play">
+        <span class="tag">轨迹回放</span>
+        <select v-model.number="playHours" @change="loadPlayback">
+          <option :value="1">最近 1 小时</option>
+          <option :value="6">最近 6 小时</option>
+          <option :value="24">最近 24 小时</option>
+          <option :value="72">最近 3 天</option>
+        </select>
+        <button class="btn btn-xs primary" @click="togglePlay">{{ playing ? '暂停' : '播放' }}</button>
+        <input class="slider" type="range" min="0" :max="Math.max(0, playPoints.length - 1)"
+               step="1" v-model.number="playIndex" @input="applyPlayIndex" />
+        <span class="mono">{{ playTime || '—' }}</span>
+        <span class="mono">{{ playPoints.length }} 点 / {{ playDistance }} m</span>
+        <select v-model.number="playSpeed">
+          <option :value="1">1×</option>
+          <option :value="4">4×</option>
+          <option :value="10">10×</option>
+          <option :value="30">30×</option>
+        </select>
+        <button class="btn btn-xs" @click="loadPlayback">刷新</button>
+      </div>
     </div>
   </div>
 </template>
@@ -541,6 +663,16 @@ onBeforeUnmount(() => {
   border: 1px solid rgba(0, 168, 255, .28); color: #9fd6ee; font-size: 12px;
 }
 .ctrl label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+.play {
+  position: absolute; left: 14px; right: 14px; bottom: 58px;
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  padding: 8px 12px; border-radius: 8px; background: rgba(5, 12, 20, .78);
+  border: 1px solid rgba(40, 224, 200, .35); color: #a9e8dd; font-size: 12px;
+}
+.play .tag { color: #28e0c8; }
+.play select, .play .btn { font-size: 12px; }
+.play .slider { flex: 1; min-width: 180px; accent-color: #28e0c8; }
+.play .mono { font-family: ui-monospace, Consolas, monospace; opacity: .9; }
 .ctrl .range { gap: 8px; }
 .ctrl input[type='range'] { width: 110px; }
 .hint {
