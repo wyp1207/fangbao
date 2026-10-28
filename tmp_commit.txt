@@ -1,20 +1,21 @@
-fix(audit2): 修复审计指出的 X30 回归与三处半修复
+feat(3d): 三维数字孪生页（地图驱动程序化 3D）+ 方案决策文档
 
-复审计（docs/reviews/audit-round2-full.md）指出上一轮修复引入 P0 回归，本轮修掉：
+不请建模师、不做白模，先把已有 SLAM 栅格地图"拉"成 3D：
+- 新增 web/src/pages/Twin.vue（路由 /twin，菜单「实时监控 → 三维孪生」）
+  · 地图 PNG 采样 -> 占据像素生成 InstancedMesh 墙体 + 青色描边
+  · 地面铺地图纹理（与墙体对位），GridHelper + 雾
+  · 点位 CSS2D 标签；机器人程序化车体 + 朝向 + 光柱，位姿 lerp 插值（处理 ±pi 跳变）
+  · 告警光柱/光环/标签；最近 1500 点轨迹线
+  · 墙体/点位/告警开关、墙高滑杆、复位视角、FPS/位姿 HUD
+- 坐标换算按 origin/resolution 从接口取，行号翻转、像素中心 +0.5（文档记录 5 个坑）
+- three@0.169 + @types/three（懒加载 chunk 507KB/gzip 129KB）
 
-1. X30 多点下发回归（P0）
-   上一版把 photo/thermal/wait 当"非导航"跳过 -> 模板一条导航都不发；且同步返回 FINISHED
-   -> 轮询线程不再补步骤。改为：后台线程逐点下发，每个带坐标的动作都发 1003，
-   逐点等 1007；dispatch 立即返回 RUNNING。
-   新增 2 个回归测试：模板两个动作必须产生两次 nav_goal；dispatch 必须返回 RUNNING。
-2. 取消把 UNKNOWN 当已停（JCROB 空任务列表）-> UNKNOWN 继续等，不谎报 cancelled
-3. 暂停静默成功 -> 非巡航任务遇到 NotSupported 直接 501；巡航才允许"平台侧暂停"
-4. 接管不回读 -> 接管后 _confirm_stopped，审计/响应改 robot_stopped
-5. MySQL 自动备份 -> 从 JC_DB_URL 解析 host/port/user/password/db 调 mysqldump；
-   镜像加 default-mysql-client；compose 挂载 /app/data/backups
-6. go2rtc 进 compose（之前不在编排里，默认后端连不上）+ 配置模板 deploy/go2rtc.yaml
-   + JC_GO2RTC_BASE 指向 jc-go2rtc
-7. X30 地图接口空实现（避免 /robots/{id}/maps 500）、钉钉加签 URL、短信通道强制 URL、
-   tier=2 前端入口、sms 标签诚实化（不承诺语音）
+方案决策：docs/3D建模与数字孪生方案.md
+- A 程序化（先上）/ B GLB+标定（客户给模型再上）/ C Astral3D 不采用 / D 2D 放弃
+- 三阶段路线、性能预算、验收指标（帧率/延迟/点位误差/告警上屏）、汇报话术与风险化解
+- GLM 评审全文：docs/reviews/model_review_20261028-121810.md
 
-验证：pytest 127 通过（新增 2 例）
+实测：/twin 渲染成功，demo 地图 900x600 -> 2194 墙体实例，6 点位，FPS 17（无头软件渲染，
+不代表核显）；截图 docs/screenshots/twin-3d.png；UI 冒烟 36 路由 0 问题。
+
+说明：豆包两次长文请求均超时（>300s），本次未拿到豆包结论；已另发短问答重试。

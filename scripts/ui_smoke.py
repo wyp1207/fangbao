@@ -23,7 +23,7 @@ ROUTES = [
     "history/tasks", "history/alarms", "run-data", "reports",
     "robots", "peripherals", "cameras", "env-device", "sensor-gateways",
     "record/plan", "record/playback",
-    "users", "settings", "notify", "oplog", "keys", "system-status", "device-keys", "messages",
+    "users", "settings", "notify", "oplog", "keys", "system-status", "device-keys", "twin", "messages",
 ]
 
 

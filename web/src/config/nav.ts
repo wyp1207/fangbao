@@ -28,6 +28,7 @@ export const NAV: NavGroup[] = [
     items: [
       { name: 'robot-status', label: '机器人状态', real: true },
       { name: 'map', label: '地图监控', real: true },
+      { name: 'twin', label: '三维孪生', real: true },
       { name: 'video', label: '视频监控', real: true },
       { name: 'room', label: '充电房监控', real: true },
       { name: 'env', real: true, label: '环境监测' },
