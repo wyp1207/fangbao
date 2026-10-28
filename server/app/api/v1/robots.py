@@ -187,10 +187,25 @@ def takeover_robot(
     from app.services.task_lock import takeover
 
     reason = (body or {}).get("reason") or f"人工接管（{me.username}）"
+
+    # 先给机器人发取消，别只改数据库（否则页面显示"已接管"、车还在跑）
+    stopped = None
+    try:
+        from app.services.robot_runtime import registry as _reg
+
+        rt = _reg.get(robot_id)
+        if rt is not None and rt.adapter is not None and hasattr(rt.adapter, "cancel"):
+            res = rt.adapter.cancel()
+            if hasattr(res, "__await__"):
+                res = run_async(res)
+            stopped = True
+    except Exception:  # noqa: BLE001
+        stopped = False
+
     n = takeover(db, robot_id, reason=reason)
     audit(db=db, action="robot.takeover", target=f"robot:{robot_id}", user=me,
-          detail={"cancelled_runs": n, "reason": reason})
-    return {"ok": True, "cancelled": n, "reason": reason}
+          detail={"cancelled_runs": n, "reason": reason, "robot_cancel_sent": stopped})
+    return {"ok": True, "cancelled": n, "reason": reason, "robot_cancel_sent": stopped}
 
 
 @router.get("/runtime")

@@ -24,6 +24,7 @@ from typing import Any
 from app.core.config import get_settings
 
 import httpx
+import sqlalchemy as sa
 
 log = logging.getLogger(__name__)
 
@@ -278,6 +279,9 @@ class NotifyDispatcher:
                     AlarmRecord.acked_at.is_(None),
                     AlarmRecord.closed_at.is_(None),
                     AlarmRecord.escalated_at.is_(None),
+                    # 搁置中的告警不升级（和工单侧一致：检修/标定期间别叫人）
+                    sa.or_(AlarmRecord.shelved_until.is_(None),
+                           AlarmRecord.shelved_until <= datetime.now()),
                     AlarmRecord.started_at <= cutoff,
                 )
                 .all()
@@ -291,10 +295,12 @@ class NotifyDispatcher:
                 .all()
             )
 
+            if not chiefs:
+                # 没配置升级通道时不要标记 escalated：否则以后补建通道也不会再升级
+                return {"escalated": 0, "reason": "没有 tier=2 通道"}
+
             for alarm in pending:
                 alarm.escalated_at = datetime.now()
-                if not chiefs:
-                    continue
                 payload = alarm.to_dict()
                 for ch in chiefs:
                     ok, status = self._deliver_with_retry(ch, payload)

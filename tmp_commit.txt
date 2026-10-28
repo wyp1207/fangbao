@@ -1,0 +1,23 @@
+fix(audit): 按独立审计修 8 处确定性缺陷（不是真机问题）
+
+Claude Code 独立审计（docs/reviews/independent-audit-20261028.md）结论："只差真机联调"不成立。
+本轮把其中代码/部署层的确定性缺陷修掉：
+
+1. 重启恢复死代码：main.py 用未定义的 _SL -> NameError 被吞，残留 running 永不处理
+   -> 抽成 task_dispatch.mark_stale_runs()，main 调用；新增回归测试
+2. 取消不确认停车：cancel 后直接写 cancelled
+   -> 回读 get_order 最多 8s；仍 RUNNING 时写 failed 并提示"已发取消但仍在执行"
+3. 人工接管只改数据库：不发停车命令
+   -> 接管前先 adapter.cancel()，返回值写审计 robot_cancel_sent
+4. 巡航暂停不生效：runner 只检查 stop
+   -> 增加 _pause 事件 + _wait_if_paused；pause/resume 同时驱动适配器（不支持也平台侧停）
+5. 点位资源锁抢不到仍执行动作
+   -> 抢不到直接标 failed 跳过该点，避免两车挤点位
+6. X30 多点位只执行第一个动作
+   -> dispatch 串行执行所有动作，逐点等 1007 落地（最多 240s）
+7. 报警升级：搁置中仍升级 / 无 tier=2 通道也标记 escalated
+   -> 查询排除搁置；无通道直接返回，不再吞掉升级
+8. 工程基线：CI 与 deploy.sh 引用的 server/requirements.txt 不存在
+   -> 补文件；README 去掉"只读阶段"陈旧描述；模板一键下发从 501 改成真正创建+下发
+
+验证：pytest 125 通过（新增 5 例：重启恢复/取消两态/暂停开关/模板下发）
