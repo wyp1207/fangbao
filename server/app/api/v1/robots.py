@@ -91,6 +91,30 @@ def robot_status(robot_id: int, cache=Depends(get_cache),
     return data
 
 
+def verify_initial_pose(status: dict | None, x: float, y: float,
+                        tolerance_m: float = 0.5) -> dict:
+    """重置定位后的校验：located=true 且位姿与目标差 ≤ 容差。
+
+    单独抽出来是因为这段数学错了没人看得出来——界面只会显示"已重置"。
+    """
+    st = status or {}
+    located = st.get("located")
+    pose = st.get("pose") or {}
+    dist = None
+    if pose.get("x") is not None and pose.get("y") is not None:
+        dist = round(((float(pose["x"]) - x) ** 2 + (float(pose["y"]) - y) ** 2) ** 0.5, 2)
+    verified = bool(located) and (dist is None or dist <= tolerance_m)
+    if verified:
+        note = ""
+    elif not located:
+        note = "定位未就绪（located=false）"
+    elif dist is not None:
+        note = f"位姿与目标差 {dist}m，超过 {tolerance_m}m"
+    else:
+        note = "读不到位姿"
+    return {"verified": verified, "located": located, "distance_m": dist, "note": note}
+
+
 @router.post("/{robot_id}/init-loc", dependencies=[Depends(require_csrf)])
 def init_location(
     robot_id: int,
@@ -111,9 +135,9 @@ def init_location(
         raise NotFound("设备不存在")
 
     from app.adapters.registry import build_for
-    import asyncio
+    from app.core.config import get_settings
 
-    adapter, err = build_for(robot)
+    adapter, err = build_for(robot, settings=get_settings())
     if err:
         raise BadRequest(err, code="ADAPTER_UNAVAILABLE")
     fn = getattr(adapter, "set_initial_pose", None)
@@ -126,9 +150,28 @@ def init_location(
     res = fn(x, y, yaw)
     if hasattr(res, "__await__"):
         res = run_async(res)
+
+    # 发出去不等于生效：等 2 秒读回一次，确认 located=true 且位姿接近目标。
+    # 不校验的话，界面提示"已重置"，实际机器人还站在旧位姿上（比不提示更糟）。
+    import time as _t
+
+    _t.sleep(2)
+    verified = None
+    located = None
+    dist = None
+    note = ""
+    try:
+        probe = run_async(adapter.get_status(), timeout=8) if hasattr(adapter, "get_status") else None
+        check = verify_initial_pose(probe, x, y)
+        verified, located, dist, note = (check["verified"], check["located"],
+                                        check["distance_m"], check["note"])
+    except Exception as exc:  # noqa: BLE001
+        note = f"读回校验失败：{exc.__class__.__name__}"
+
     audit(db=db, action="robot.init_loc", target=robot.name, user=me,
-          detail={"x": x, "y": y, "yaw": yaw})
-    return {"ok": True, "x": x, "y": y, "yaw": yaw, "result": res}
+          detail={"x": x, "y": y, "yaw": yaw, "verified": verified, "dist_m": dist})
+    return {"ok": True, "x": x, "y": y, "yaw": yaw, "result": res,
+            "verified": verified, "located": located, "distance_m": dist, "note": note}
 
 
 @router.post("/{robot_id}/takeover", dependencies=[Depends(require_csrf)])

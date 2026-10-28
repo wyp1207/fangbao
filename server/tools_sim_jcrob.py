@@ -42,6 +42,10 @@ def _fixture(name: str) -> dict | list:
 
 
 def _pose() -> dict:
+    fixed = STATE.get("pose")
+    if fixed:
+        return {"x": fixed["x"], "y": fixed["y"],
+                "angle": round((fixed.get("yaw") or 0) * 180 / math.pi, 2)}
     t = time.time() - STATE["started"]
     return {"x": round(1.0 + 2 * math.cos(t / 25), 3),
             "y": round(-1.0 + 2 * math.sin(t / 25), 3),
@@ -103,7 +107,18 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"error": f"no map {name}"}, 404)
         if path == "/task":
             # 真机返回的是任务数组（见 contracts/jcrob/fixtures/task.json）
-            return self._json([STATE["task"]] if STATE["task"] else [])
+            t = STATE["task"]
+            if t and t.get("state") == "RUNNING":
+                t["polls"] = t.get("polls", 0) + 1
+                t["progress"] = min(99, t["polls"] * 40)
+                if t["polls"] >= 2:
+                    t["state"] = "COMPLETE"
+                    t["progress"] = 100
+                    goal = t.get("goal") or {}
+                    if goal:
+                        STATE["pose"] = {"x": goal["x"], "y": goal["y"],
+                                         "theta": goal.get("yaw", 0), "theta_rad": goal.get("yaw", 0)}
+            return self._json([t] if t else [])
         if path == "/action":
             return self._json(_fixture("action"))
         return self._json({"error": "not found", "path": path}, 404)
@@ -120,12 +135,17 @@ class Handler(BaseHTTPRequestHandler):
             body = {}
 
         if path == "/task":
+            nav = next((t for t in body.get("sub_tasks") or []
+                        if t.get("type") == "nav_action"), {})
             STATE["task"] = {
                 "id": body.get("id") or f"SIM-{int(time.time())}",
                 "name": body.get("name") or "sim-task",
                 "state": "RUNNING",
                 "progress": 0,
                 "path_data": body.get("path_data") or "",
+                "goal": {"x": float(nav.get("x") or 0), "y": float(nav.get("y") or 0),
+                         "yaw": float(nav.get("yaw") or 0)},
+                "polls": 0,
             }
             return self._json({"ok": True, "id": STATE["task"]["id"]})
         if path == "/task/cancel":
