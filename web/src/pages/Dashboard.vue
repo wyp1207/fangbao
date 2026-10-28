@@ -180,10 +180,16 @@ function openInitLoc() {
 async function saveInitLoc() {
   try {
     await api.takeoverRobot(Number(deviceId.value), '重置定位')
-    await api.initLoc(Number(deviceId.value), {
+    const detail = await api.initLoc(Number(deviceId.value), {
       x: Number(locForm.value.x), y: Number(locForm.value.y), yaw: Number(locForm.value.yaw),
-    })
-    toast('已重置定位，等机器人重新定位（约 2–5 秒）', 'ok', 6000)
+    }) as { verified?: boolean | null; distance_m?: number | null; note?: string }
+    if (detail?.verified === false) {
+      toast(`重置已发送，但校验没过：${detail.note || '位姿未收敛'}`, 'warn', 8000)
+    } else if (detail?.verified === true) {
+      toast('重置定位成功，位姿已校验', 'ok', 4000)
+    } else {
+      toast('重置已发送（该设备不支持读回校验）', 'ok', 4000)
+    }
     locOpen.value = false
   } catch (e) {
     toast(e instanceof ApiError ? e.message : '重置定位失败', 'danger')
@@ -466,6 +472,20 @@ function tryControl() {
   toast('写操作未开放：需真机联调通过 + 现场授权签字（采集表 01 表 15–17 行）', 'warn', 3200)
 }
 
+
+// 定位状态横幅：定位丢了 / 未知，都别让人误以为车知道自己在哪
+const locBanner = computed(() => {
+  const st = robot.snapshot?.status
+  if (!st) return null
+  const located = (st as { located?: boolean }).located
+  if (located === false) {
+    return { tone: 'danger', text: '定位丢失：导航与到点判定不可信，先重置定位再下发' }
+  }
+  if (located === undefined || located === null) {
+    return { tone: 'warn', text: '定位状态未知：请确认机器人已完成初始化定位' }
+  }
+  return null
+})
 
 const pose = computed(() => robot.pose)
 const galileo = computed(() => robot.snapshot?.galileo ?? {})
@@ -883,7 +903,12 @@ async function logout() {
       </main>
 
       <aside class="col right">
-        <ScadaPanel title="告警统计" tone="gold" class="h-donut stack-panel" :right="`近7日 ${trendTotal} 条`">
+        <div v-if="locBanner" class="loc-banner" :class="locBanner.tone">
+        <b>定位</b><span>{{ locBanner.text }}</span>
+        <button class="btn btn-xs" @click="openInitLoc">重置定位</button>
+      </div>
+
+      <ScadaPanel title="告警统计" tone="gold" class="h-donut stack-panel" :right="`近7日 ${trendTotal} 条`">
           <div class="donut-row" title="点击查看未确认告警" @click="goAlarms('unacked')">
             <svg viewBox="0 0 100 100" class="donut">
               <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,.14)" stroke-width="13" />
@@ -1821,4 +1846,14 @@ async function logout() {
   border: 0; background: #04101f; display: block; margin: auto;
 }
 .live-box { display: flex; align-items: center; justify-content: center; }
+
+.loc-banner {
+  grid-column: 1 / -1;
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 14px; border-radius: 8px; font-size: 13px;
+}
+.loc-banner b { flex: none; letter-spacing: 1px; }
+.loc-banner span { flex: 1; }
+.loc-banner.danger { background: rgba(255, 86, 86, .12); border: 1px solid rgba(255, 86, 86, .45); color: #ffb4b4; }
+.loc-banner.warn { background: rgba(255, 190, 60, .12); border: 1px solid rgba(255, 190, 60, .45); color: #ffd98a; }
 </style>
