@@ -1,22 +1,23 @@
-eval: 八角色全维度评估（豆包带截图 + GLM）+ 补备份/恢复与 UI 文案
+feat(security): P1 设备一机一密 + 报文签名/防重放，并补部署运维手册与 request_id
 
-一、模型接入
-- 新增 scripts/ask_models.py：豆包 Responses API（/api/v3/responses，支持 input_image 截图），
-  失败回退 chat/completions；GLM 走 chat/completions。密钥从 api.txt 读，不打印。
-- 豆包开通后实测可用：8031 字（带首页截图）；GLM 5987 字。
+设备接入安全（评审里"设备侧无认证"的硬伤）
+- 迁移 0025：device_credential（robot_id 唯一、key_id、sealed secret、启停/吊销）
+  + device_nonce（key_id+nonce 唯一，防重放）
+- services/device_auth.py：
+  · issue/rotate/revoke，明文密钥只返回一次
+  · verify：HMAC-SHA256(secret, key_id + timestamp + nonce + sha256(body))，常数时间比较
+  · 时间窗 ±300s；nonce 唯一索引挡重放；吊销即失效
+- POST /api/v1/device-keys 签发/轮换、/{id}/revoke 吊销，写审计；前端「设备接入凭证」页
+- ingest 改造：带 X-Device-Key 必须验签；无签名且设备已有凭证 + JC_DEVICE_AUTH_MODE=strict → 401
+- nonce 清理接入后台循环
+- 测试：签名正确/错误/过期/重放/吊销 5 例 + 端到端 1 例（无签名 401、带签名 200）
 
-二、评估结论（docs/reviews/八角色评估-20261028.md）
-- 两模型独立定级均为 L1（演示可用级）；一号问题都是"真机最小链路未验证"
-- 自评：测试/安全达 L2–L3，短板集中在真机、单 worker 架构、无备份/容器化、交付手册
-- 汇总 8 角色评分表 + 分歧说明 + 两周计划（P0 真机 / P1 设备接入安全 / P2 部署备份 / P3 观测 / P4 MQ+时序库）
-- 事实核查：纠正模型 3 处误判（已有企微/钉钉/webhook/邮件四通道；资源锁有 TTL；
-  8 并发只成功 1 次是一车一任务的设计而非吞吐上限），避免用错误结论做决策
+协议畸形报文容错
+- tests/test_protocol_tolerance.py 6 例：垃圾 XML、截断帧、未知 magic、零长度、超长声明、帧往返
 
-三、按评审意见立刻补的两项
-- scripts/backup_db.py：SQLite 用 backup API、MySQL 用 mysqldump；支持 --keep 轮转、restore、list
-- scripts/restore_drill.py：把备份还原到临时库并校验审计链
-  实测：task_run=46、operation_log=1185、order_id 任务=6，审计链 ok=true
-- 首页底部去掉"WebSocket 推送未接入 / v0.1.0"，改为"数据刷新 1s / 通讯链路正常"；
-  视频占位改"视频通道待启用"（豆包 UI 评审第 2 条）
+可观测与部署（P2/P3 的可做部分）
+- request_id 中间件：每请求一个 rid，响应头 X-Request-Id，访问日志一行一条（含耗时）
+- scripts/deploy.sh：venv+依赖+alembic+systemd+健康检查（Linux 一键）
+- docs/部署与运维手册.md：部署、配置、备份/恢复/RTO-RPO、设备凭证接入、日常巡检、故障定界三步、升级回滚、已知限制
 
-验证：pytest 106 通过；备份 35MB 成功；恢复演练通过
+验证：pytest 118 通过；联调 24/24；UI 冒烟 35 路由 0 问题

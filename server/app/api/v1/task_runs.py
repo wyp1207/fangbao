@@ -15,7 +15,7 @@ import logging
 import json
 from datetime import datetime
 
-from fastapi import APIRouter, Body, Depends, Query
+from fastapi import Request, APIRouter, Body, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -191,12 +191,41 @@ def create_run(
 
 
 @router.post("/ingest")
-def ingest_run(
-    body: IngestIn,
+async def ingest_run(
+    request: Request,
     db: Session = Depends(get_db),
-    _client: dict = Depends(require_scope("task:ingest")),
 ) -> dict:
-    """机器人回传执行结果。按 external_id 幂等：同一任务重复上报是"更新"，不是新增。"""
+    """机器人回传执行结果。按 external_id 幂等：同一任务重复上报是"更新"，不是新增。
+
+    鉴权两条路：带 X-Device-Key 走一机一密签名（含防重放）；不带则回退平台 API Key/会话。
+    """
+    from app.core.config import get_settings
+    from app.services import device_auth
+    from app.services.api_auth import session_or_key
+
+    raw = await request.body()
+    key_id = request.headers.get("X-Device-Key")
+    if key_id:
+        ok, why = device_auth.verify(
+            db, key_id=key_id,
+            ts=request.headers.get("X-Timestamp", ""),
+            nonce=request.headers.get("X-Nonce", ""),
+            signature=request.headers.get("X-Signature", ""),
+            body=raw, secret=get_settings().secret_key,
+        )
+        if not ok:
+            raise PlatformError("设备签名校验失败：%s" % why,
+                                code="DEVICE_SIGNATURE", status_code=401)
+    else:
+        session_or_key(request=request, db=db)
+
+    if len(raw) > 1024 * 1024:
+        raise BadRequest("上报体超过 1MB", code="BODY_TOO_LARGE")
+    try:
+        body = IngestIn.model_validate_json(raw or b"{}")
+    except Exception as exc:  # noqa: BLE001
+        raise BadRequest("上报 JSON 格式错误：%s" % exc.__class__.__name__,
+                         code="BAD_BODY") from exc
     status = body.status if body.status in STATUS_LABELS else "done"
     existing = db.query(TaskRun).filter(TaskRun.external_id == body.external_id).first()
 
