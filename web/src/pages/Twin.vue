@@ -480,6 +480,7 @@ function onResize() {
 
 onMounted(async () => {
   robot.setDevice(robot.deviceId)
+  robot.startWs()
   await build()
   updateAlarms(robot.alarms)
   window.addEventListener('resize', onResize)
@@ -488,6 +489,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   alive = false
+  robot.stopWs()
   cancelAnimationFrame(raf)
   window.removeEventListener('resize', onResize)
   controls?.dispose()
@@ -507,6 +509,7 @@ onBeforeUnmount(() => {
         <span>点位：{{ info.points }} · 墙体：{{ info.walls }}</span>
         <span>位姿：{{ info.pose || '—' }}</span>
         <span>FPS：{{ fps }}</span>
+        <span>{{ robot.wsConnected ? 'WS 200ms' : '轮询 1s' }}</span>
       </div>
       <div class="ctrl">
         <label><input v-model="wallsOn" type="checkbox" @change="(wallMesh && (wallMesh.visible = wallsOn)) || (wallEdges && (wallEdges.visible = wallsOn))" /> 墙体</label>

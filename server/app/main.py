@@ -20,7 +20,7 @@ from app.adapters.jcrob import build_adapter
 from app.adapters.jcrob import errors as jerr
 import app.models.peripheral  # noqa: F401  确保建表/迁移能看到
 import app.models.device_credential  # noqa: F401  设备接入凭证
-from app.api.v1 import (alarms, audit, auth, device_keys, devices, feed, health, map_library,
+from app.api.v1 import (alarms, audit, auth, device_keys, devices, feed, health, map_library, ws,
                         self_check, metrics as health_metrics, peripherals,
                         ai, api_clients, inspection, messages, notify, sensor_gateways, record_plans, recordings, reports, robots, sensors,
                         task_runs, task_templates, telemetry,
@@ -446,6 +446,7 @@ def create_app() -> FastAPI:
     app.include_router(map_library.router, prefix=settings.api_prefix)
     app.include_router(device_keys.router, prefix=settings.api_prefix)
     app.include_router(self_check.router, prefix=settings.api_prefix)
+    app.include_router(ws.router, prefix=settings.api_prefix)
     app.include_router(settings_api.router, prefix=settings.api_prefix)
     app.include_router(sensors.router, prefix=settings.api_prefix)
     app.include_router(notify.router, prefix=settings.api_prefix)
