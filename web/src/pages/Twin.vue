@@ -22,6 +22,7 @@ const wallsOn = ref(true)
 const pointsOn = ref(true)
 const alarmsOn = ref(true)
 const height = ref(2.4)
+const threshold = ref(60)
 const loading = ref(true)
 const err = ref('')
 const info = ref({ map: '', points: 0, walls: 0, pose: '' })
@@ -44,6 +45,8 @@ const lerpPos = new THREE.Vector3()
 const lerpYaw = { v: 0 }
 const trailPts: THREE.Vector3[] = []
 let wallBase: Float32Array | null = null
+let wallEdges: THREE.InstancedMesh | null = null
+let gridData: { data: Uint8ClampedArray; w: number; h: number } | null = null
 let wallCount = 0
 let meta = { res: 0.05, ox: -10, oy: -8, w: 900, h: 600 }
 
@@ -92,6 +95,7 @@ async function build() {
     const ctx = canvas.getContext('2d')!
     ctx.drawImage(img, 0, 0)
     const data = ctx.getImageData(0, 0, img.width, img.height).data
+    gridData = { data, w: img.width, h: img.height }
 
     // ---------- 场景 ----------
     scene = new THREE.Scene()
@@ -140,7 +144,7 @@ async function build() {
     })
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(worldW, worldH), groundMat)
     ground.rotation.x = -Math.PI / 2
-    ground.position.set(cx, -0.02, cy)
+    ground.position.set(cx, -0.01, cy)
     scene.add(ground)
 
     const grid = new THREE.GridHelper(Math.max(worldW, worldH), Math.round(Math.max(worldW, worldH)), 0x0a4a6a, 0x072434)
@@ -164,24 +168,63 @@ async function build() {
 
 function buildWalls(data: Uint8ClampedArray, w: number, h: number) {
   if (!scene) return
+  // 1) 占据判定：阈值可调（豆包：脏栅格是程序化 3D 第一杀手）
+  const mask = new Uint8Array(w * h)
+  for (let i = 0; i < w * h; i++) {
+    const idx = i * 4
+    const lum = data[idx] * 0.299 + data[idx + 1] * 0.587 + data[idx + 2] * 0.114
+    if (lum < threshold.value) mask[i] = 1
+  }
+  // 2) 3x3 多数滤波：去掉人影/噪点造成的锯齿墙
+  const clean = new Uint8Array(w * h)
+  for (let row = 1; row < h - 1; row++) {
+    for (let col = 1; col < w - 1; col++) {
+      let n = 0
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) n += mask[(row + dr) * w + (col + dc)]
+      }
+      if (n >= 5) clean[row * w + col] = 1
+    }
+  }
+  // 3) 去孤立点：邻居 < 2 的格子不建墙
+  const keep: [number, number][] = []
+  for (let row = 1; row < h - 1; row++) {
+    for (let col = 1; col < w - 1; col++) {
+      if (!clean[row * w + col]) continue
+      const n = clean[row * w + col - 1] + clean[row * w + col + 1]
+        + clean[(row - 1) * w + col] + clean[(row + 1) * w + col]
+      if (n >= 2) keep.push([col, row])
+    }
+  }
+
   const step = 2
+  const cells: [number, number][] = []
+  for (const [col, row] of keep) {
+    if (col % step === 0 && row % step === 0) cells.push([col, row])
+  }
+  if (cells.length > 16000) {
+    for (let i = cells.length - 1; i > 0; i -= 2) cells.splice(i, 1)
+  }
+
+  // 重建前先清掉旧的墙
+  if (wallMesh) {
+    scene.remove(wallMesh)
+    wallMesh.geometry.dispose()
+    ;(wallMesh.material as THREE.Material).dispose()
+    wallMesh = null
+  }
+  if (wallEdges) {
+    scene.remove(wallEdges)
+    wallEdges.geometry.dispose()
+    ;(wallEdges.material as THREE.Material).dispose()
+    wallEdges = null
+  }
+
   const boxGeo = new THREE.BoxGeometry(meta.res * step, 1, meta.res * step)
   const mat = new THREE.MeshStandardMaterial({
     color: 0x1d3d59, emissive: 0x0c2940, emissiveIntensity: 0.65,
     roughness: 0.75, metalness: 0.2, transparent: true, opacity: 0.72,
   })
-  const cells: [number, number][] = []
-  for (let row = 0; row < h; row += step) {
-    for (let col = 0; col < w; col += step) {
-      const idx = (row * w + col) * 4
-      const lum = data[idx] * 0.299 + data[idx + 1] * 0.587 + data[idx + 2] * 0.114
-      if (lum < 100) cells.push([col, row])
-    }
-  }
-  if (cells.length > 16000) {
-    // 太密就隔一个取一个，保证核显也能跑
-    for (let i = cells.length - 1; i > 0; i -= 2) cells.splice(i, 1)
-  }
   wallCount = cells.length
   info.value.walls = cells.length
   wallMesh = new THREE.InstancedMesh(boxGeo, mat, cells.length)
@@ -197,19 +240,24 @@ function buildWalls(data: Uint8ClampedArray, w: number, h: number) {
     wallMesh!.setMatrixAt(i, dummy.matrix)
   })
   wallMesh.instanceMatrix.needsUpdate = true
+  wallMesh.visible = wallsOn.value
   scene.add(wallMesh)
 
-  // 描边：让方块看起来像"全息线框"
   const edgeGeo = new THREE.EdgesGeometry(boxGeo)
   const edgeMat = new THREE.LineBasicMaterial({ color: 0x3ee0ff, transparent: true, opacity: 0.5 })
-  const edges = new THREE.InstancedMesh(edgeGeo as unknown as THREE.BufferGeometry, edgeMat, cells.length)
+  wallEdges = new THREE.InstancedMesh(edgeGeo as unknown as THREE.BufferGeometry, edgeMat, cells.length)
   cells.forEach((_, i) => {
     const m4 = new THREE.Matrix4()
     wallMesh!.getMatrixAt(i, m4)
-    edges.setMatrixAt(i, m4)
+    wallEdges!.setMatrixAt(i, m4)
   })
-  edges.instanceMatrix.needsUpdate = true
-  scene.add(edges)
+  wallEdges.instanceMatrix.needsUpdate = true
+  wallEdges.visible = wallsOn.value
+  scene.add(wallEdges)
+}
+
+function rebuildWalls() {
+  if (gridData) buildWalls(gridData.data, gridData.w, gridData.h)
 }
 
 function label(text: string, cls = ''): HTMLDivElement {
@@ -461,11 +509,14 @@ onBeforeUnmount(() => {
         <span>FPS：{{ fps }}</span>
       </div>
       <div class="ctrl">
-        <label><input v-model="wallsOn" type="checkbox" @change="wallsOn ? (wallMesh && (wallMesh.visible = true)) : (wallMesh && (wallMesh.visible = false))" /> 墙体</label>
+        <label><input v-model="wallsOn" type="checkbox" @change="(wallMesh && (wallMesh.visible = wallsOn)) || (wallEdges && (wallEdges.visible = wallsOn))" /> 墙体</label>
         <label><input v-model="pointsOn" type="checkbox" @change="pointGroup && (pointGroup.visible = pointsOn)" /> 点位</label>
         <label><input v-model="alarmsOn" type="checkbox" @change="alarmGroup && (alarmGroup.visible = alarmsOn)" /> 告警</label>
         <label class="range">墙高 {{ height.toFixed(1) }}m
           <input v-model.number="height" type="range" min="0.5" max="5" step="0.1" @input="applyHeight" />
+        </label>
+        <label class="range">阈值 {{ threshold }}
+          <input v-model.number="threshold" type="range" min="30" max="120" step="5" @change="rebuildWalls" />
         </label>
         <button class="btn btn-xs" @click="resetCamera">复位视角</button>
       </div>
