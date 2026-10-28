@@ -58,3 +58,6 @@ web/_*.mjs
 # 本地运行日志
 *.log
 *.err
+
+# 数据库备份（体积大，不入库）
+server/data/backups/

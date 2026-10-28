@@ -1,21 +1,22 @@
-test(integration): 联调测试套件 24 项全通过 + 修复并发审计断链（P0）
+eval: 八角色全维度评估（豆包带截图 + GLM）+ 补备份/恢复与 UI 文案
 
-按《联调测试平台全维度能力体系》落地 scripts/integration_suite.py：
-- 基础：前端契约 4、硬件输入 2、业务闭环 3、数据库 4、规则引擎 2、网关 4
-- 进阶：时延 1、并发 1、幂等 1、稳定性 1、数据一致性 1
-结果：24/24 通过；列表接口 p50=7ms p95=9ms；8 并发下发只成功 1 次
+一、模型接入
+- 新增 scripts/ask_models.py：豆包 Responses API（/api/v3/responses，支持 input_image 截图），
+  失败回退 chat/completions；GLM 走 chat/completions。密钥从 api.txt 读，不打印。
+- 豆包开通后实测可用：8031 字（带首页截图）；GLM 5987 字。
 
-抓到并修复的真问题：
-1) P0 审计哈希链并发断裂
-   现象：verify 返回 broken_at=991 "prev_hash 对不上"
-   根因：audit() 先查 last_hash 再插入，并发时两条记录 prev_hash 相同
-   修复：messages._AUDIT_LOCK 串行化；新增 A5 用例（6 并发写后校验 ok，checked=1181）
-   附带 scripts/repair_audit_chain.py 用于重建历史断链（dev/维护，需 --yes）
-2) P0 /robots/{id}/motion 500：build_for 缺 settings（与 init-loc 同源缺陷）
-3) 测试用例本身的契约修正：JCROB 无「起立」→ 断言 400 NOT_SUPPORTED 而非 200
+二、评估结论（docs/reviews/八角色评估-20261028.md）
+- 两模型独立定级均为 L1（演示可用级）；一号问题都是"真机最小链路未验证"
+- 自评：测试/安全达 L2–L3，短板集中在真机、单 worker 架构、无备份/容器化、交付手册
+- 汇总 8 角色评分表 + 分歧说明 + 两周计划（P0 真机 / P1 设备接入安全 / P2 部署备份 / P3 观测 / P4 MQ+时序库）
+- 事实核查：纠正模型 3 处误判（已有企微/钉钉/webhook/邮件四通道；资源锁有 TTL；
+  8 并发只成功 1 次是一车一任务的设计而非吞吐上限），避免用错误结论做决策
 
-报告：docs/reviews/integration-test-report-20261028.md
-- 含 GLM 测试矩阵对照、做不了的部分（HIL/真机/压测集群）与验收表述建议
-- 工具可用性：GLM 可用；豆包 Ark 返回 ModelNotOpen（账号未开通模型，需控制台开通或给 ep-id）
+三、按评审意见立刻补的两项
+- scripts/backup_db.py：SQLite 用 backup API、MySQL 用 mysqldump；支持 --keep 轮转、restore、list
+- scripts/restore_drill.py：把备份还原到临时库并校验审计链
+  实测：task_run=46、operation_log=1185、order_id 任务=6，审计链 ok=true
+- 首页底部去掉"WebSocket 推送未接入 / v0.1.0"，改为"数据刷新 1s / 通讯链路正常"；
+  视频占位改"视频通道待启用"（豆包 UI 评审第 2 条）
 
-验证：联调 24/24；pytest 106 通过
+验证：pytest 106 通过；备份 35MB 成功；恢复演练通过
