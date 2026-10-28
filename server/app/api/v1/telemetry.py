@@ -170,6 +170,59 @@ def query_rollup(
     ]}
 
 
+@router.get("/poses")
+def query_poses(
+    hours: int = Query(24, ge=1, le=24 * 14),
+    points: int = Query(1200, ge=50, le=5000),
+    robot_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> dict:
+    """历史位姿（给 3D 轨迹回放用）。按时间升序、跳变过滤、等间隔抽稀。"""
+    since = datetime.now() - timedelta(hours=hours)
+    conds = [TelemetrySample.ts >= since, TelemetrySample.x.isnot(None),
+             TelemetrySample.y.isnot(None)]
+    if robot_id is not None:
+        conds.append(TelemetrySample.robot_id == robot_id)
+    rows = db.scalars(
+        select(TelemetrySample).where(*conds).order_by(TelemetrySample.ts)
+    ).all()
+    if not rows:
+        return {"count": 0, "points": [], "hours": hours, "distance_m": 0.0,
+                "from": None, "to": None}
+
+    # 过滤定位跳变（>5m 认为是一次重定位，不画连线）
+    clean: list[TelemetrySample] = []
+    prev = None
+    for r in rows:
+        if prev is not None and math.hypot(r.x - prev.x, r.y - prev.y) > 5:
+            clean.append(None)  # type: ignore[arg-type]  # 断点
+        clean.append(r)
+        prev = r
+
+    step = max(1, len(clean) // points)
+    sampled = clean[::step]
+    out = []
+    distance = 0.0
+    last = None
+    for r in sampled:
+        if r is None:
+            last = None
+            continue
+        if last is not None:
+            distance += math.hypot(r.x - last.x, r.y - last.y)
+        last = r
+        out.append({"ts": r.ts.isoformat(timespec="seconds"),
+                    "x": round(r.x, 3), "y": round(r.y, 3),
+                    "theta": round(r.theta or 0.0, 3)})
+    return {
+        "count": len(out), "hours": hours, "points": out,
+        "distance_m": round(distance, 1),
+        "from": out[0]["ts"] if out else None,
+        "to": out[-1]["ts"] if out else None,
+    }
+
+
 @router.get("")
 def query_telemetry(
     hours: int = Query(24, ge=1, le=24 * 14),
