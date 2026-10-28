@@ -235,6 +235,8 @@ export const api = {
   deleteDevice: (id: number) => request<{ ok: boolean }>(`/devices/${id}`, { method: 'DELETE' }),
   initLoc: (id: number, body: { x: number; y: number; yaw?: number }) =>
     request<{ ok: boolean }>(`/robots/${id}/init-loc`, { method: 'POST', body }),
+  selfCheck: () => request<{ ok: boolean; ts: string; checks: { name: string; ok: boolean;
+    detail: string; hint?: string }[] }>('/system/self-check'),
   deviceKeys: () => request<{ id: number; robot_id: number; key_id: string; enabled: boolean;
     created_at: string | null; last_used_at: string | null }[]>('/device-keys'),
   issueDeviceKey: (robot_id: number) =>
