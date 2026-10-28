@@ -19,7 +19,7 @@ from app.models.map_library import PlatformMap
 
 log = logging.getLogger(__name__)
 
-ROOT = Path(__file__).resolve().parents[3] / "data" / "maps"
+ROOT = Path(__file__).resolve().parents[2] / "data" / "maps"
 
 
 def current_map_id(db: Session, robot=None) -> int | None:
