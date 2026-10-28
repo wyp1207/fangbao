@@ -235,6 +235,13 @@ export const api = {
   deleteDevice: (id: number) => request<{ ok: boolean }>(`/devices/${id}`, { method: 'DELETE' }),
   initLoc: (id: number, body: { x: number; y: number; yaw?: number }) =>
     request<{ ok: boolean }>(`/robots/${id}/init-loc`, { method: 'POST', body }),
+  deviceKeys: () => request<{ id: number; robot_id: number; key_id: string; enabled: boolean;
+    created_at: string | null; last_used_at: string | null }[]>('/device-keys'),
+  issueDeviceKey: (robot_id: number) =>
+    request<{ id: number; robot_id: number; key_id: string; secret: string }>('/device-keys',
+      { method: 'POST', body: { robot_id } }),
+  revokeDeviceKey: (id: number) =>
+    request<{ ok: boolean }>(`/device-keys/${id}/revoke`, { method: 'POST', body: {} }),
   takeoverRobot: (id: number, reason?: string) =>
     request<{ ok: boolean; cancelled: number; reason: string }>(
       `/robots/${id}/takeover`, { method: 'POST', body: { reason } }),

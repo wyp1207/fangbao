@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
     secret_key: str = Field(default="dev-only-secret-change-me-please-32b")
     jwt_ttl_minutes: int = 240
+    # 设备上报鉴权：warn=没签名也放行（记录日志）；strict=设备已签发凭证时必须签名
+    device_auth_mode: str = "warn"
     cookie_name: str = "jc_token"
 
     # Cookie 的 Secure 标记：None = 按实际协议自动判断（https 才加 Secure）。

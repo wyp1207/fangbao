@@ -10,6 +10,8 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
+from starlette.middleware.base import BaseHTTPMiddleware
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -17,7 +19,8 @@ from fastapi.responses import JSONResponse
 from app.adapters.jcrob import build_adapter
 from app.adapters.jcrob import errors as jerr
 import app.models.peripheral  # noqa: F401  确保建表/迁移能看到
-from app.api.v1 import (alarms, audit, auth, devices, feed, health, map_library, metrics as health_metrics, peripherals,
+import app.models.device_credential  # noqa: F401  设备接入凭证
+from app.api.v1 import (alarms, audit, auth, device_keys, devices, feed, health, map_library, metrics as health_metrics, peripherals,
                         ai, api_clients, inspection, messages, notify, sensor_gateways, record_plans, recordings, reports, robots, sensors,
                         task_runs, task_templates, telemetry,
                         settings as settings_api, users, videos)
@@ -190,11 +193,13 @@ async def lifespan(app: FastAPI):
     # 搁置到期恢复：单独一个 60 秒的轻量循环（保留期清理是 6 小时一次，太粗）
     def _dispatch_janitor():
         import time as _t
+        from app.services.device_auth import purge_nonces
         from app.services.task_dispatch import reconcile_dispatches
         while True:
             try:
                 with _SL() as db:
                     reconcile_dispatches(db)
+                    purge_nonces(db)
             except Exception:  # noqa: BLE001
                 log.exception("下发对账失败")
             _t.sleep(60)
@@ -301,6 +306,27 @@ async def lifespan(app: FastAPI):
         log.info("已停止")
 
 
+class RequestContextMiddleware(BaseHTTPMiddleware):
+    """每个请求一个 request_id；访问日志一行一条，排障时按 id 串。"""
+
+    async def dispatch(self, request, call_next):
+        import time as _t
+        import uuid as _uuid
+
+        rid = request.headers.get("X-Request-Id") or _uuid.uuid4().hex[:12]
+        request.state.request_id = rid
+        t0 = _t.time()
+        try:
+            response = await call_next(request)
+        except Exception:
+            log.exception("请求异常 rid=%s %s %s", rid, request.method, request.url.path)
+            raise
+        log.info("rid=%s %s %s -> %s %sms", rid, request.method, request.url.path,
+                 response.status_code, int((_t.time() - t0) * 1000))
+        response.headers["X-Request-Id"] = rid
+        return response
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     _docs = bool(get_settings().docs_enabled)
@@ -326,6 +352,8 @@ def create_app() -> FastAPI:
             raise
         health_metrics.record(request.method, request.url.path, resp.status_code, _t.perf_counter() - t0)
         return resp
+
+    app.add_middleware(RequestContextMiddleware)
 
     app.add_middleware(
         CORSMiddleware,
@@ -361,6 +389,7 @@ def create_app() -> FastAPI:
     app.include_router(audit.router, prefix=settings.api_prefix)
     app.include_router(devices.router, prefix=settings.api_prefix)
     app.include_router(map_library.router, prefix=settings.api_prefix)
+    app.include_router(device_keys.router, prefix=settings.api_prefix)
     app.include_router(settings_api.router, prefix=settings.api_prefix)
     app.include_router(sensors.router, prefix=settings.api_prefix)
     app.include_router(notify.router, prefix=settings.api_prefix)
