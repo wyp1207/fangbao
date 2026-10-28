@@ -133,17 +133,46 @@ class DeepRoboticsX30Adapter:
 
     # ---- 写 ----
     async def dispatch(self, order: dict) -> dict:
+        """逐个动作执行：导航点等它到，再下一个。
+
+        以前只取 actions[0]，模板里多点位会被静默丢掉（审计发现）。
+        X30 的 1003 一次只能给一个目标，所以这里串行下发，每点等 1007 落地。
+        """
         actions = order.get("actions") or []
         if not actions:
             return {"id": "", "state": "FAILED"}
-        first = actions[0]
-        params = {p.get("key"): p.get("value") for p in first.get("actionParameters", [])}
-        x = _num(params.get("x")) or 0.0
-        y = _num(params.get("y")) or 0.0
-        yaw = _num(params.get("yaw")) or 0.0
-        r = await self._call(self.client.nav_goal, x, y, yaw)
-        ok = "_error" not in r
-        return {"id": order.get("orderId", ""), "state": "RUNNING" if ok else "FAILED", "raw": r}
+
+        results = []
+        for act in actions:
+            params = {p.get("key"): p.get("value") for p in act.get("actionParameters", [])}
+            kind = str(act.get("actionType") or "nav").lower()
+            if kind in ("photo", "video", "thermal", "wait"):
+                # 非导航动作：拍照/测温由平台侧到点后再做，这里只记一笔
+                results.append({"action": kind, "skipped": True})
+                continue
+
+            x = _num(params.get("x")) or 0.0
+            y = _num(params.get("y")) or 0.0
+            yaw = _num(params.get("yaw")) or 0.0
+            r = await self._call(self.client.nav_goal, x, y, yaw)
+            if "_error" in r:
+                return {"id": order.get("orderId", ""), "state": "FAILED",
+                        "raw": r, "done": results}
+            # 等这个点跑完（最多 240 秒），否则多点会互相打断
+            import asyncio
+
+            for _ in range(80):
+                st = await self._call(self.client.nav_status)
+                status = str(st.get("Status", ""))
+                if status == "0":
+                    results.append({"action": kind, "x": x, "y": y, "ok": True})
+                    break
+                if status == "-1":
+                    return {"id": order.get("orderId", ""), "state": "FAILED",
+                            "raw": st, "done": results}
+                await asyncio.sleep(3)
+        return {"id": order.get("orderId", ""), "state": "FINISHED",
+                "raw": {"points": results}}
 
     async def goto(self, x: float, y: float, yaw: float = 0.0) -> dict:
         # 1003 的响应要等任务跑完才回（官方文档 2.2 的【注意】）。

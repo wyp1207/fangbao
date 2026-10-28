@@ -307,7 +307,16 @@ def pause(db, run: TaskRun, adapter) -> TaskRun:
     _require_write()
     if run.status != "running":
         raise BadRequest("只有执行中的任务能暂停", code="BAD_STATUS")
-    _call(adapter.pause)
+    # 机器人可能不支持 pause（JCROB 明确不支持）；平台侧照样暂停巡航循环
+    try:
+        _call(adapter.pause)
+    except Exception as exc:  # noqa: BLE001
+        log.info("适配器不支持暂停，仅暂停平台侧巡航：%s", exc)
+
+    from app.services import cruise as cruise_mod
+
+    if cruise_mod.runner is not None:
+        cruise_mod.runner.pause(run.id)
     run.paused_at = datetime.now()
     db.commit()
     return run
@@ -317,20 +326,56 @@ def resume(db, run: TaskRun, adapter) -> TaskRun:
     _require_write()
     if not run.paused_at:
         raise BadRequest("任务不在暂停状态", code="NOT_PAUSED")
-    _call(adapter.resume)
+    try:
+        _call(adapter.resume)
+    except Exception as exc:  # noqa: BLE001
+        log.info("适配器不支持继续，仅恢复平台侧巡航：%s", exc)
+
+    from app.services import cruise as cruise_mod
+
+    if cruise_mod.runner is not None:
+        cruise_mod.runner.resume(run.id)
     run.paused_at = None
     run.last_progress_at = datetime.now()
     db.commit()
     return run
 
 
-def cancel(db, run: TaskRun, adapter) -> TaskRun:
+def _confirm_stopped(adapter, timeout_s: float = 8.0) -> bool:
+    """回读订单状态，确认机器人真的停了。查询失败按"未确认"处理。"""
+    import time as _t
+
+    deadline = _t.time() + timeout_s
+    while _t.time() < deadline:
+        try:
+            order = _call(adapter.get_order)
+            state = str((order or {}).get("state", "")).upper()
+            if state in ("RUNNING", "PAUSED"):
+                _t.sleep(1.0)
+                continue
+            return True
+        except Exception:  # noqa: BLE001
+            return False
+    return False
+
+
+def cancel(db, run: TaskRun, adapter, reason: str = "") -> TaskRun:
     _require_write()
     if run.status in ("done", "cancelled"):
         raise BadRequest("已结束的任务不能取消", code="BAD_STATUS")
     _call(adapter.cancel)
-    run.status = "cancelled"
+
+    # 发取消 ≠ 车停了：回读一次，停不下来就别谎报"已取消"
+    stopped = _confirm_stopped(adapter)
+    run.cancel_requested_at = datetime.now()
     run.finished_at = datetime.now()
+    if stopped:
+        run.status = "cancelled"
+        run.dispatch_error = reason or "人工取消"
+    else:
+        run.status = "failed"
+        run.dispatch_error = ("已发取消但车端仍在执行（回读仍 RUNNING），"
+                             "请用急停或现场处理")
     db.commit()
     return run
 
@@ -435,4 +480,25 @@ def reconcile_dispatches(db) -> int:
     if n:
         db.commit()
         log.warning("下发对账：处理 %s 条无回执行", n)
+    return n
+
+
+def mark_stale_runs(session_factory) -> int:
+    """服务重启后，把上次残留的 running/dispatched 标成 failed 并写明原因。
+
+    之前这段写在 main.py 里、用了尚未定义的 _SL，NameError 被 except 吞掉，
+    等于从未执行（审计发现）。抽出来既能测，也不会再踩变量顺序的坑。
+    """
+    from app.models.task_run import TaskRun as _TR
+
+    n = 0
+    with session_factory() as db:
+        stale = db.query(_TR).filter(_TR.status.in_(("running", "dispatched"))).all()
+        for r in stale:
+            r.status = "failed"
+            r.dispatch_error = "服务重启，任务状态未知；请确认机器人是否仍在执行"
+            n += 1
+        if n:
+            db.commit()
+            log.warning("标记 %s 条重启前残留任务为 failed", n)
     return n

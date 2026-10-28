@@ -16,6 +16,7 @@ from app.api.deps import get_current_user, require_csrf, require_roles
 from app.core.errors import BadRequest, NotFound
 from app.db.session import get_db
 from app.models.map_library import PlatformMap, PointDraft
+from app.models.task_run import TaskRun, TaskRunStep
 from app.models.task_template import TaskTemplate
 from app.models.user import User
 from app.services.messages import audit
@@ -196,11 +197,34 @@ def delete_template(
 @router.post("/{template_id}/dispatch", dependencies=[Depends(require_csrf)])
 def dispatch_template(
     template_id: int,
-    _: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+    me: User = Depends(require_roles("admin", "operator")),
 ) -> dict:
-    """下发到机器人：真机联调 + 现场授权后才开放。现在明确拒绝。"""
-    raise HTTPException(
-        status_code=501,
-        detail="任务下发需要机器人写权限：等真机到场联调 + 现场授权签字后开放。"
-               "现在可以在模板里把点位和动作配好，届时一键下发。",
-    )
+    """从模板直接创建执行记录并下发（写开关仍然把关）。"""
+    from app.services import task_dispatch
+
+    tpl = db.get(TaskTemplate, template_id)
+    if tpl is None:
+        raise NotFound("模板不存在")
+    if not tpl.robot_id:
+        raise BadRequest("模板没绑定设备，先选设备", code="NO_ROBOT")
+
+    actions = json.loads(tpl.actions_json or "[]")
+    names = {p.id: p.name for p in db.query(PointDraft).all()}
+    run = TaskRun(template_id=tpl.id, robot_id=tpl.robot_id, name=tpl.name[:64],
+                  status="planned")
+    db.add(run)
+    db.flush()
+    for i, a in enumerate(actions):
+        db.add(TaskRunStep(run_id=run.id, seq=i + 1, point_id=a.get("point_id"),
+                           point_name=names.get(a.get("point_id")),
+                           action=a.get("action", "photo"), status="pending"))
+    db.commit()
+    db.refresh(run)
+
+    from app.api.v1.task_runs import _adapter_for
+
+    run = task_dispatch.dispatch(db, run, _adapter_for(db, run))
+    audit(db=db, action="task_template.dispatch", target=tpl.name, user=me,
+          detail={"run_id": run.id, "status": run.status})
+    return {"ok": True, "run_id": run.id, "status": run.status}

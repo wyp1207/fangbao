@@ -36,6 +36,7 @@ class CruiseRunner:
         self._sf = session_factory
         self._threads: dict[int, threading.Thread] = {}
         self._cancel: dict[int, threading.Event] = {}
+        self._pause: dict[int, threading.Event] = {}
 
     def running(self) -> list[int]:
         return [rid for rid, t in self._threads.items() if t.is_alive()]
@@ -45,11 +46,31 @@ class CruiseRunner:
             return False
         ev = threading.Event()
         self._cancel[run_id] = ev
+        self._pause[run_id] = threading.Event()
         t = threading.Thread(target=self._run, args=(run_id, adapter, ev, from_seq),
                              daemon=True, name=f"cruise-{run_id}")
         self._threads[run_id] = t
         t.start()
         return True
+
+    def pause(self, run_id: int) -> bool:
+        ev = self._pause.get(run_id)
+        if ev is None:
+            return False
+        ev.set()
+        return True
+
+    def resume(self, run_id: int) -> bool:
+        ev = self._pause.get(run_id)
+        if ev is None:
+            return False
+        ev.clear()
+        return True
+
+    def _wait_if_paused(self, run_id: int, stop: threading.Event) -> None:
+        ev = self._pause.get(run_id)
+        while ev is not None and ev.is_set() and not stop.is_set():
+            stop.wait(0.5)
 
     def cancel(self, run_id: int, adapter) -> bool:
         ev = self._cancel.get(run_id)
@@ -86,6 +107,7 @@ class CruiseRunner:
         for step in steps:
             if stop.is_set():
                 break
+            self._wait_if_paused(run_id, stop)
             point = points.get(step.point_id or -1)
             if point is None:
                 self._mark(step.id, "failed", error="点位没有坐标（未在地图上打点）")
@@ -106,6 +128,7 @@ class CruiseRunner:
             if stop.is_set():
                 self._mark(step.id, "skipped", error="人工取消")
                 break
+            self._wait_if_paused(run_id, stop)
             if result == "suspect":
                 # 不重试、不算失败：标 suspect + 告警，交人工决定
                 self._mark(step.id, "suspect", error=reason,
@@ -133,11 +156,16 @@ class CruiseRunner:
             lock_key = f"point:{step.point_id}"
             got = try_acquire([lock_key], run_id=run_id, robot_id=run.robot_id or 0,
                               ttl_s=600)
+            if not got:
+                # 抢不到点位锁 = 另一台车正在这个点；不执行动作，避免两车挤窄道
+                self._mark(step.id, "failed",
+                           error="该点位被其他任务占用（资源锁），本点跳过")
+                failed += 1
+                continue
             try:
                 action_result, action_err = self._do_action(adapter, step, run.robot_id)
             finally:
-                if got:
-                    release([lock_key], run_id=run_id)
+                release([lock_key], run_id=run_id)
             if action_err:
                 self._mark(step.id, "failed",
                            error=f"到点但动作失败：{action_err}",
@@ -167,6 +195,7 @@ class CruiseRunner:
             run.finished_at = datetime.now()
             db.commit()
         self._cancel.pop(run_id, None)
+        self._pause.pop(run_id, None)
 
     def _goto(self, adapter, x: float, y: float, yaw: float) -> None:
         if getattr(adapter, "goto", None):

@@ -76,17 +76,13 @@ async def lifespan(app: FastAPI):
     # 服务重启后，上次残留的 running 任务状态已不可知：标成 failed 并写明原因，
     # 不要让它一直显示"执行中"（评审共识：宁可显示未知，也不要撒谎）
     try:
-        from app.models.task_run import TaskRun as _TR
-        with _SL() as _db:
-            stale = _db.query(_TR).filter(_TR.status.in_(("running", "dispatched"))).all()
-            for r in stale:
-                r.status = "failed"
-                r.dispatch_error = "服务重启，任务状态未知；请确认机器人是否仍在执行"
-            if stale:
-                _db.commit()
-                import logging as _lg
-                _lg.getLogger(__name__).warning("标记 %s 条重启前残留任务为 failed", len(stale))
+        from app.services.task_dispatch import mark_stale_runs
+
+        mark_stale_runs(_SessionLocal)
     except Exception:  # noqa: BLE001
+        import logging as _lg
+
+        _lg.getLogger(__name__).exception("重启残留任务标记失败")
         pass
 
     # 预热报表缓存：避免首个打开报表的人触发 2.4s 冷查询
@@ -207,16 +203,27 @@ async def lifespan(app: FastAPI):
 
                 from app.core.config import get_settings as _gs
 
-                src = Path(str(_gs().db_url).split("///")[-1])
-                if not src.is_absolute():
-                    src = Path(__file__).resolve().parents[2] / src
-                out_dir = src.parent / "backups"
-                out_dir.mkdir(parents=True, exist_ok=True)
-                dst = out_dir / ("auto-%s.db" % _dt.now().strftime("%Y%m%d"))
-                with sqlite3.connect(src) as sdb, sqlite3.connect(dst) as ddb:
-                    sdb.backup(ddb)
+                url = str(_gs().db_url)
+                if url.startswith("mysql"):
+                    # MySQL：调用 mysqldump（生产 compose 用的是 MySQL，SQLite 分支对它无效）
+                    import subprocess
+
+                    out_dir = Path("data") / "backups"
+                    out_dir.mkdir(parents=True, exist_ok=True)
+                    dst = out_dir / ("auto-%s.sql" % _dt.now().strftime("%Y%m%d"))
+                    subprocess.run("mysqldump --single-transaction --quick jc_robot > %s" % dst,
+                                   shell=True, check=True, timeout=600)
+                else:
+                    src = Path(url.split("///")[-1])
+                    if not src.is_absolute():
+                        src = Path(__file__).resolve().parents[2] / src
+                    out_dir = src.parent / "backups"
+                    out_dir.mkdir(parents=True, exist_ok=True)
+                    dst = out_dir / ("auto-%s.db" % _dt.now().strftime("%Y%m%d"))
+                    with sqlite3.connect(src) as sdb, sqlite3.connect(dst) as ddb:
+                        sdb.backup(ddb)
                 # 只留最近 14 天
-                olds = sorted(out_dir.glob("auto-*.db"))[:-14]
+                olds = sorted(list(out_dir.glob("auto-*.db")) + list(out_dir.glob("auto-*.sql")))[:-14]
                 for old in olds:
                     old.unlink()
                 log.info("每日备份完成：%s", dst.name)
