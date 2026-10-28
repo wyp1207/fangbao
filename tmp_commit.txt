@@ -1,22 +1,15 @@
-feat(x30): 真机只读探测通过 + 导入真实场站地图 + MapID 可配
+fix(x30): Location 语义写反（0=正常/1=丢失），真机抓到 P0
 
-实测（只读，未发任何运动指令）：
-- 192.168.1.106:30000 已通：MotionState=0（趴下）、Electricity=100、
-  PosX=9.52 PosY=-3.66 AngleYaw=0、Location=1、1007 Status=0
-- 1002 里没有 MapID 字段（只有 MapUpdateState）-> 平台无法自动识别当前地图，必须现场确认
+真机只读探测发现：X30 1002 的 Location 我们一直按"1=定位正常"解析，
+官方文档（1本机监控.md）明确 定位正常=0，定位丢失=1。
+后果：定位真丢时平台显示"定位正常"，还会放行导航——最危险的一类错误。
 
-改动：
-- scripts/probe_x30_readonly.py：1002/2001/1007 只读探测
-- scripts/import_x30_map.py：把 8890 老平台的真实场站地图导入平台地图库
-  （402x287 @0.1m/px, origin -20.7,-10.7，取自 /api/patrol/map），并设为激活地图
-- config 新增 x30_map_id（默认 1），X30 适配器 goto/_execute_order 下发 1003 时带 MapID
-- scripts/x30_pick_test_point.py：读当前位姿 + 用真实地图栅格校验，挑出 30 个可通行候选点
-- 修复 map_check 的图片根路径（原来少了一层 server/），栅格校验现在真的生效
-- docs/X30巡航原理与平台对接.md：
-  · 你现在的 6 步手柄流程 vs 协议层实际发生什么
-  · 手柄"设点/保存路径"是示教 UI，不是协议要求；平台可自己存点位逐点发 1003
-  · X30（waypoint 逐点）与 JCROB（order 整单）的对比表
-  · 真机测试 5 步与 4 个已校验的候选点
-  · 还缺：MapID 确认向导、定位强校验、地图上点选点位
+- adapter: located = (Location == "0")，缺失时为 None（未知）
+- 新增 tests/test_x30_location.py 3 例（0/1/缺失）
+- 真机当前状态：MotionState=0（趴下）、Location=1（定位丢失）、电量 97、
+  /location_status 也是 1，与修复后的判断一致
+- scripts/import_x30_current_map.py：SFTP 拉取机器人当前地图（jueying.pgm，1051x1351 @0.1，
+  origin -57.9,-53）并导入平台地图库，替换原来从 8890 导入的旧图（402x287）
+- 清理 SSH 探测临时脚本
 
-验证：pytest 134 通过
+验证：pytest 137 通过

@@ -76,7 +76,8 @@ class DeepRoboticsX30Adapter:
         state = MOTION_STATES.get(str(r.get("MotionState", "")), r.get("MotionState", "未知"))
         return {
             "status": state,
-            "located": str(r.get("Location", "")).strip() == "1",
+            "located": (str(r.get("Location", "")).strip() == "0"
+                    if str(r.get("Location", "")).strip() in ("0", "1") else None),
             "raw": r,
         }
 
