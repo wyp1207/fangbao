@@ -79,6 +79,7 @@ class DeepRoboticsX30Adapter:
             "located": (str(r.get("Location", "")).strip() == "0"
                     if str(r.get("Location", "")).strip() in ("0", "1") else None),
             "raw": r,
+            "motion_state": str(r.get("MotionState", "")).strip(),
         }
 
     async def get_info(self) -> dict:
@@ -248,6 +249,22 @@ class DeepRoboticsX30Adapter:
     async def set_initial_pose(self, x: float, y: float, yaw: float = 0.0) -> dict:
         """重置定位（协议 2101）。断电/被搬动/地图切换后必须做，否则导航会跑偏。"""
         return await self._call(self.client.init_loc, x, y, yaw)
+
+    def toggle_motion(self) -> dict:
+        """开始/停止运动（踏步 <-> 站立），toggle 语义，回读 MotionState 为准。"""
+        from app.adapters.deeprobotics.protocol import CMD_START_STOP, send_motion
+
+        return send_motion(CMD_START_STOP, value=0)
+
+    def move_axis(self, forward: int = 0, left: int = 0, yaw: int = 0) -> dict:
+        """一帧三轴速度（-1000..1000，|值|<=655 机器人视为 0）。"""
+        from app.adapters.deeprobotics.protocol import send_motion
+
+        out = {}
+        for code, val in ((0x21010130, forward), (0x21010131, left),
+                          (0x21010135, yaw)):
+            out[hex(code)] = send_motion(code, value=int(val))
+        return out
 
     async def stand(self) -> dict:
         """起立/趴下是切换指令：趴下时发起立，站立时发就是趴下。"""

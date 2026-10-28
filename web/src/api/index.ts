@@ -239,6 +239,11 @@ export const api = {
     request<{ count: number; points: { ts: string; x: number; y: number; theta: number }[];
       distance_m: number; from: string | null; to: string | null }>(
       `/telemetry/poses?robot_id=${robotId}&hours=${hours}&points=${points}`),
+  motionMode: (id: number, action: 'stand' | 'lie' | 'start' | 'stop') =>
+    request<{ ok: boolean; action: string; raw?: unknown }>(`/robots/${id}/motion-mode`,
+      { method: 'POST', body: { action } }),
+  move: (id: number, body: { forward?: number; left?: number; yaw?: number }) =>
+    request<{ ok: boolean }>(`/robots/${id}/move`, { method: 'POST', body }),
   robotGoto: (id: number, body: { x: number; y: number; yaw?: number; max_m?: number; confirmed?: boolean }) =>
     request<{ ok: boolean; x: number; y: number; distance_m: number | null; map_id: number | null }>(
       `/robots/${id}/goto`, { method: 'POST', body }),
