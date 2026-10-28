@@ -32,6 +32,23 @@ function ageText(v: number | null | undefined): string {
   if (v < 0) return '无数据'
   return v >= 60 ? `${(v / 60).toFixed(1)} 分钟` : `${Math.round(v)} 秒`
 }
+// 现场自检：一次点完，直接告诉现场"是平台、网络还是设备的问题"
+const selfChecks = ref<{ name: string; ok: boolean; detail: string; hint?: string }[]>([])
+const selfRunAt = ref('')
+const selfBusy = ref(false)
+
+async function runSelfCheck() {
+  selfBusy.value = true
+  try {
+    const r = await api.selfCheck()
+    selfChecks.value = r.checks
+    selfRunAt.value = r.ts.replace('T', ' ')
+    lastAt.value = new Date().toLocaleTimeString('zh-CN')
+  } finally {
+    selfBusy.value = false
+  }
+}
+
 let timer = 0
 
 async function load() {
