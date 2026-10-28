@@ -308,14 +308,20 @@ def pause(db, run: TaskRun, adapter) -> TaskRun:
     if run.status != "running":
         raise BadRequest("只有执行中的任务能暂停", code="BAD_STATUS")
     # 机器人可能不支持 pause（JCROB 明确不支持）；平台侧照样暂停巡航循环
+    from app.services import cruise as cruise_mod
+
+    cruising = (cruise_mod.runner is not None
+                and run.id in cruise_mod.runner.running())
     try:
         _call(adapter.pause)
     except Exception as exc:  # noqa: BLE001
+        if not cruising:
+            # 单点下发任务没法在平台侧暂停：必须如实报错，不能假装成功
+            raise PlatformError("这台机器人不支持暂停，只能取消任务",
+                                code="NOT_SUPPORTED", status_code=501) from exc
         log.info("适配器不支持暂停，仅暂停平台侧巡航：%s", exc)
 
-    from app.services import cruise as cruise_mod
-
-    if cruise_mod.runner is not None:
+    if cruising:
         cruise_mod.runner.pause(run.id)
     run.paused_at = datetime.now()
     db.commit()
@@ -350,7 +356,8 @@ def _confirm_stopped(adapter, timeout_s: float = 8.0) -> bool:
         try:
             order = _call(adapter.get_order)
             state = str((order or {}).get("state", "")).upper()
-            if state in ("RUNNING", "PAUSED"):
+            if state in ("RUNNING", "PAUSED", "UNKNOWN", ""):
+                # UNKNOWN = 机器人任务列表为空（JCROB），不能当成"已停"
                 _t.sleep(1.0)
                 continue
             return True

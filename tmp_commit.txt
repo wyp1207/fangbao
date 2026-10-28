@@ -1,23 +1,20 @@
-fix(audit): 按独立审计修 8 处确定性缺陷（不是真机问题）
+fix(audit2): 修复审计指出的 X30 回归与三处半修复
 
-Claude Code 独立审计（docs/reviews/independent-audit-20261028.md）结论："只差真机联调"不成立。
-本轮把其中代码/部署层的确定性缺陷修掉：
+复审计（docs/reviews/audit-round2-full.md）指出上一轮修复引入 P0 回归，本轮修掉：
 
-1. 重启恢复死代码：main.py 用未定义的 _SL -> NameError 被吞，残留 running 永不处理
-   -> 抽成 task_dispatch.mark_stale_runs()，main 调用；新增回归测试
-2. 取消不确认停车：cancel 后直接写 cancelled
-   -> 回读 get_order 最多 8s；仍 RUNNING 时写 failed 并提示"已发取消但仍在执行"
-3. 人工接管只改数据库：不发停车命令
-   -> 接管前先 adapter.cancel()，返回值写审计 robot_cancel_sent
-4. 巡航暂停不生效：runner 只检查 stop
-   -> 增加 _pause 事件 + _wait_if_paused；pause/resume 同时驱动适配器（不支持也平台侧停）
-5. 点位资源锁抢不到仍执行动作
-   -> 抢不到直接标 failed 跳过该点，避免两车挤点位
-6. X30 多点位只执行第一个动作
-   -> dispatch 串行执行所有动作，逐点等 1007 落地（最多 240s）
-7. 报警升级：搁置中仍升级 / 无 tier=2 通道也标记 escalated
-   -> 查询排除搁置；无通道直接返回，不再吞掉升级
-8. 工程基线：CI 与 deploy.sh 引用的 server/requirements.txt 不存在
-   -> 补文件；README 去掉"只读阶段"陈旧描述；模板一键下发从 501 改成真正创建+下发
+1. X30 多点下发回归（P0）
+   上一版把 photo/thermal/wait 当"非导航"跳过 -> 模板一条导航都不发；且同步返回 FINISHED
+   -> 轮询线程不再补步骤。改为：后台线程逐点下发，每个带坐标的动作都发 1003，
+   逐点等 1007；dispatch 立即返回 RUNNING。
+   新增 2 个回归测试：模板两个动作必须产生两次 nav_goal；dispatch 必须返回 RUNNING。
+2. 取消把 UNKNOWN 当已停（JCROB 空任务列表）-> UNKNOWN 继续等，不谎报 cancelled
+3. 暂停静默成功 -> 非巡航任务遇到 NotSupported 直接 501；巡航才允许"平台侧暂停"
+4. 接管不回读 -> 接管后 _confirm_stopped，审计/响应改 robot_stopped
+5. MySQL 自动备份 -> 从 JC_DB_URL 解析 host/port/user/password/db 调 mysqldump；
+   镜像加 default-mysql-client；compose 挂载 /app/data/backups
+6. go2rtc 进 compose（之前不在编排里，默认后端连不上）+ 配置模板 deploy/go2rtc.yaml
+   + JC_GO2RTC_BASE 指向 jc-go2rtc
+7. X30 地图接口空实现（避免 /robots/{id}/maps 500）、钉钉加签 URL、短信通道强制 URL、
+   tier=2 前端入口、sms 标签诚实化（不承诺语音）
 
-验证：pytest 125 通过（新增 5 例：重启恢复/取消两态/暂停开关/模板下发）
+验证：pytest 127 通过（新增 2 例）

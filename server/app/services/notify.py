@@ -35,7 +35,7 @@ TYPE_LABELS = {
     "dingtalk": "钉钉机器人",
     "generic": "通用 Webhook",
     "email": "邮件（SMTP）",
-    "sms": "短信/语音网关（HTTP）",
+    "sms": "短信网关（HTTP，可对接语音网关）",
 }
 
 
@@ -78,10 +78,29 @@ def _payload_generic(alarm: dict, cfg: dict) -> dict:
 
 # ---------------- 发送 ----------------
 
+def _dingtalk_signed_url(url: str, secret: str) -> str:
+    """钉钉自定义机器人"加签"：sign = base64(HMAC-SHA256(secret, ts + "\n" + secret))。
+
+    不做这一步，开了加签的群会直接拒收（审计指出）。
+    """
+    import base64
+    import urllib.parse
+
+    ts = str(int(time.time() * 1000))
+    raw = "%s\n%s" % (ts, secret)
+    digest = hmac.new(secret.encode(), raw.encode(), hashlib.sha256).digest()
+    sign = urllib.parse.quote_plus(base64.b64encode(digest))
+    sep = "&" if "?" in url else "?"
+    return "%s%stimestamp=%s&sign=%s" % (url, sep, ts, sign)
+
+
 def _send_http(channel, alarm: dict, cfg: dict) -> tuple[bool, str]:
     url = (cfg.get("url") or "").strip()
     if not url:
         return False, "未配置 URL"
+
+    if channel.type == "dingtalk" and (cfg.get("sign_secret") or "").strip():
+        url = _dingtalk_signed_url(url, cfg["sign_secret"].strip())
 
     if channel.type == "wecom":
         body = _payload_wecom(alarm, cfg)

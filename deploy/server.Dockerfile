@@ -19,7 +19,7 @@ RUN if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
 
 # ffmpeg 是录制与抓帧的硬依赖，不能省
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        curl tzdata ffmpeg \
+        curl tzdata ffmpeg default-mysql-client \
     && rm -rf /var/lib/apt/lists/*
 
 # 用环境变量而不是 -i：pip 的构建隔离子进程不认命令行参数，只认 PIP_INDEX_URL

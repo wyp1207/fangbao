@@ -198,14 +198,17 @@ def takeover_robot(
             res = rt.adapter.cancel()
             if hasattr(res, "__await__"):
                 res = run_async(res)
-            stopped = True
+            # 发取消 ≠ 停：回读一次
+            from app.services.task_dispatch import _confirm_stopped
+
+            stopped = _confirm_stopped(rt.adapter)
     except Exception:  # noqa: BLE001
         stopped = False
 
     n = takeover(db, robot_id, reason=reason)
     audit(db=db, action="robot.takeover", target=f"robot:{robot_id}", user=me,
-          detail={"cancelled_runs": n, "reason": reason, "robot_cancel_sent": stopped})
-    return {"ok": True, "cancelled": n, "reason": reason, "robot_cancel_sent": stopped}
+          detail={"cancelled_runs": n, "reason": reason, "robot_stopped": stopped})
+    return {"ok": True, "cancelled": n, "reason": reason, "robot_stopped": stopped}
 
 
 @router.get("/runtime")

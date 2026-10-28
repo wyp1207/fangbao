@@ -1,0 +1,21 @@
+# go2rtc 配置模板：把现场相机的 RTSP 地址填到 streams 下
+# 平台里"视频源"的 stream_name 要和这里的 key 一致（如 camera_02、dog_ptz）
+log:
+  level: info
+
+api:
+  listen: ":1984"
+
+rtsp:
+  listen: ":8554"
+
+webrtc:
+  listen: ":8555"
+  candidates:
+    - 192.168.8.40:8555
+
+streams:
+  # 示例：可见光（换流名要与平台一致）
+  camera_02: rtsp://admin:password@192.168.1.14:554/h264/ch1/main/av_stream
+  # 热成像/云台同理
+  # dog_ptz: rtsp://admin:password@192.168.1.64:554/Streaming/Channels/101

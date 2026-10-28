@@ -207,12 +207,20 @@ async def lifespan(app: FastAPI):
                 if url.startswith("mysql"):
                     # MySQL：调用 mysqldump（生产 compose 用的是 MySQL，SQLite 分支对它无效）
                     import subprocess
+                    from urllib.parse import unquote, urlparse
 
+                    u = urlparse(url)
                     out_dir = Path("data") / "backups"
                     out_dir.mkdir(parents=True, exist_ok=True)
                     dst = out_dir / ("auto-%s.sql" % _dt.now().strftime("%Y%m%d"))
-                    subprocess.run("mysqldump --single-transaction --quick jc_robot > %s" % dst,
-                                   shell=True, check=True, timeout=600)
+                    cmd = ["mysqldump", "--single-transaction", "--quick",
+                           "-h", u.hostname or "127.0.0.1",
+                           "-P", str(u.port or 3306),
+                           "-u", unquote(u.username or "root"),
+                           "-p" + unquote(u.password or ""),
+                           (u.path or "/").lstrip("/") or "jcrob"]
+                    with open(dst, "wb") as fh:
+                        subprocess.run(cmd, stdout=fh, check=True, timeout=600)
                 else:
                     src = Path(url.split("///")[-1])
                     if not src.is_absolute():

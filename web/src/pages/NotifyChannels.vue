@@ -38,7 +38,7 @@ const busy = ref<number | null>(null)
 const editing = ref<Channel | null>(null)
 const creating = ref(false)
 const form = ref({
-  name: '', type: 'wecom', url: '', min_level: 'critical', min_interval_min: 10,
+  name: '', type: 'wecom', url: '', tier: 1, min_level: 'critical', min_interval_min: 10,
   note: '',
   // email 专用
   host: '', port: 465, user: '', password: '', to: '', tls: true,
@@ -80,7 +80,7 @@ async function load() {
 
 function openCreate() {
   form.value = {
-    name: '', type: 'wecom', url: '', min_level: 'critical', min_interval_min: 10,
+    name: '', type: 'wecom', url: '', tier: 1, min_level: 'critical', min_interval_min: 10,
     note: '', host: '', port: 465, user: '', password: '', to: '', tls: true,
   }
   creating.value = true
@@ -91,6 +91,7 @@ function openEdit(c: Channel) {
   form.value = {
     name: c.name, type: c.type,
     url: String(cfg.url ?? ''),
+    tier: Number((c as unknown as { tier?: number }).tier ?? 1),
     min_level: c.min_level, min_interval_min: c.min_interval_min, note: c.note ?? '',
     host: String(cfg.host ?? ''), port: Number(cfg.port ?? 465),
     user: String(cfg.user ?? ''), password: String(cfg.password ?? ''),
@@ -112,6 +113,7 @@ function payload() {
     name: form.value.name.trim(),
     type: form.value.type,
     config: cfg,
+    tier: form.value.tier,
     min_level: form.value.min_level,
     min_interval_min: form.value.min_interval_min,
     note: form.value.note || null,
@@ -291,6 +293,11 @@ onMounted(load)
           <label class="fld">
             <span>触发级别</span>
             <DarkSelect v-model="form.min_level" :options="levelOptions" width="100%" />
+          </label>
+          <label class="chk">
+            <input type="checkbox" :checked="form.tier === 2"
+                   @change="form.tier = ($event.target as HTMLInputElement).checked ? 2 : 1" />
+            升级通道（tier=2，告警超过 N 分钟未确认时发这里）
           </label>
           <label class="fld">
             <span>静默期（分钟）</span>
