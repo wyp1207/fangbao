@@ -1,10 +1,16 @@
-feat(3d): 栅格清理 + 阈值滑杆（豆包评审第一条：脏栅格是程序化 3D 第一杀手）
+feat(realtime): 位姿 WebSocket 推送（200ms 一帧）+ 前端插值，替代 1s 轮询观感
 
-- 墙体生成前加 3x3 多数滤波 + 去孤立点（邻居<2 不建）；墙体实例 2194 -> 2136，锯齿明显减少
-- 新增阈值滑杆 30–120（现场可调，换地图/换灯光不用改代码）
-- 墙体/描边一起开关；地面抬高到 -0.01 避免 z-fighting
-- 豆包短问答结论并入方案文档：B 方案只补 5–10 个关键 GLB（不做全站复刻）；
-  高度分层（建筑/围栏/门洞）列为 P1；核显三优化已在文档
+- 后端 GET /api/v1/ws/robot/{id}（WebSocket）：
+  · 复用 httpOnly cookie 的 JWT 鉴权，未登录 1008 关闭
+  · 每 200ms 推送 {pose{x,y,theta,theta_rad}, status{status,located}, battery, online, age_s}
+  · 数据源是 registry 缓存（车端 1Hz），推得快只是让前端拿到"最接近当前"的一帧
+- 前端 stores/robot.ts：
+  · startWs/stopWs，断线 3 秒重连；onmessage 合并 pose/status/battery
+  · wsConnected 状态供页面显示
+- Twin 页面：挂载连 WS、卸载断开；HUD 显示 "WS 200ms" / "轮询 1s"；位姿继续 lerp
+- vite proxy 与生产 nginx：/api 开启 ws upgrade、读超时 3600s
 
-实测：/twin 无 page error，FPS 18（无头软件渲染），截图已更新
-豆包评审：docs/reviews/model_review_20261028-123800.md
+实测（Playwright）：HUD 显示 "WS 200ms"；连续采样位姿 (0.05,1.00) -> (-0.41,0.97) 平滑变化；
+截图 docs/screenshots/twin-ws.png
+
+测试：新增 test_ws_pose.py 2 例（未登录被拒、登录后连续收到 3 帧）；pytest 129 通过
