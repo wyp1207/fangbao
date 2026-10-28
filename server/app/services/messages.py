@@ -115,6 +115,11 @@ def _row_hash(prev: str | None, row) -> str:
     return hashlib.sha256(((prev or "") + "|" + _canonical(row)).encode()).hexdigest()
 
 
+# 审计哈希链必须串行写：并发时两个请求会读到同一个 last_hash，
+# 生成两条 prev_hash 相同的记录，链就断了（联调压测实测出现 broken_at）。
+_AUDIT_LOCK = threading.Lock()
+
+
 def audit(db: Session, *, action: str, target: str | None = None,
           user: Any = None, detail: dict | None = None,
           client_ip: str | None = None, success: bool = True,
@@ -123,6 +128,7 @@ def audit(db: Session, *, action: str, target: str | None = None,
     from app.models.operation_log import OperationLog
 
     try:
+        _AUDIT_LOCK.acquire()
         row = OperationLog(
             # 截到秒：MySQL DATETIME 默认不带微秒，存进去会丢，
             # 校验时复算就对不上（线上曾因此误报"内容被改"）
@@ -148,6 +154,8 @@ def audit(db: Session, *, action: str, target: str | None = None,
     except Exception:  # noqa: BLE001 - 审计失败不影响业务，但要留在日志里
         import logging
         logging.getLogger(__name__).exception("写审计失败 action=%s", action)
+    finally:
+        _AUDIT_LOCK.release()
 
 
 def audit_list(db: Session, *, limit: int = 100, offset: int = 0,

@@ -1,0 +1,194 @@
+[
+  {
+    "id": "C1",
+    "module": "前端契约",
+    "name": "登录返回 csrf/user、下发 cookie",
+    "ok": true,
+    "ms": 49,
+    "detail": "user=admin roles=None"
+  },
+  {
+    "id": "C2",
+    "module": "前端契约",
+    "name": "无 CSRF 的写请求被拒",
+    "ok": true,
+    "ms": 56,
+    "detail": "403 CSRF_FAILED"
+  },
+  {
+    "id": "C3",
+    "module": "前端契约",
+    "name": "非法入参返回结构化 4xx",
+    "ok": true,
+    "ms": 79,
+    "detail": "400 keys=['code', 'message']"
+  },
+  {
+    "id": "C4",
+    "module": "前端契约",
+    "name": "前端外壳可访问",
+    "ok": true,
+    "ms": 18,
+    "detail": "410 bytes"
+  },
+  {
+    "id": "H1",
+    "module": "硬件输入",
+    "name": "运动指令下发（模拟按键）",
+    "ok": true,
+    "ms": 276,
+    "detail": "400 NOT_SUPPORTED（该机型没有此动作，符合预期）"
+  },
+  {
+    "id": "H2",
+    "module": "硬件输入",
+    "name": "环境 WS 状态可读",
+    "ok": true,
+    "ms": 65,
+    "detail": "supported=True connected=False"
+  },
+  {
+    "id": "B1",
+    "module": "业务闭环",
+    "name": "模板→任务→巡航→done",
+    "ok": true,
+    "ms": 18217,
+    "detail": "run=43 {'total': 3, 'ok': 3, 'failed': 0}"
+  },
+  {
+    "id": "B2",
+    "module": "业务闭环",
+    "name": "关告警联动关工单",
+    "ok": true,
+    "ms": 97,
+    "detail": "alarm 210 -> wo 166 closed"
+  },
+  {
+    "id": "B3",
+    "module": "业务闭环",
+    "name": "巡检计划增改删",
+    "ok": true,
+    "ms": 87,
+    "detail": "plan 2 create/update/delete"
+  },
+  {
+    "id": "D1",
+    "module": "数据库",
+    "name": "order_id 唯一",
+    "ok": true,
+    "ms": 6,
+    "detail": "no duplicates"
+  },
+  {
+    "id": "D2",
+    "module": "数据库",
+    "name": "无孤儿步骤",
+    "ok": true,
+    "ms": 0,
+    "detail": "0 orphan"
+  },
+  {
+    "id": "D3",
+    "module": "数据库",
+    "name": "审计哈希链完整",
+    "ok": true,
+    "ms": 82,
+    "detail": "checked=1137"
+  },
+  {
+    "id": "D4",
+    "module": "数据库",
+    "name": "统计接口与库一致",
+    "ok": true,
+    "ms": 76,
+    "detail": "api=215 db=217"
+  },
+  {
+    "id": "R1",
+    "module": "规则引擎",
+    "name": "阈值分支→级别/优先级",
+    "ok": true,
+    "ms": 119,
+    "detail": "levels={'warn', 'critical'} priority=P1"
+  },
+  {
+    "id": "R2",
+    "module": "规则引擎",
+    "name": "搁置期间抑制新告警",
+    "ok": true,
+    "ms": 152,
+    "detail": "alarm 219 shelved, no new alarm"
+  },
+  {
+    "id": "G1",
+    "module": "网关",
+    "name": "未登录 401",
+    "ok": true,
+    "ms": 27,
+    "detail": "401"
+  },
+  {
+    "id": "G2",
+    "module": "网关",
+    "name": "未知路由 4xx",
+    "ok": true,
+    "ms": 14,
+    "detail": "404"
+  },
+  {
+    "id": "G3",
+    "module": "网关",
+    "name": "路径穿越被拒",
+    "ok": true,
+    "ms": 62,
+    "detail": "404"
+  },
+  {
+    "id": "G4",
+    "module": "网关",
+    "name": "SQL 注入无效",
+    "ok": true,
+    "ms": 56,
+    "detail": "total=0"
+  },
+  {
+    "id": "A1",
+    "module": "并发/时延",
+    "name": "列表 p95<500ms",
+    "ok": true,
+    "ms": 409,
+    "detail": "p50=7ms p95=11ms"
+  },
+  {
+    "id": "A2",
+    "module": "并发/时延",
+    "name": "同任务 8 并发只成功 1",
+    "ok": true,
+    "ms": 404,
+    "detail": "8 concurrent -> 1 ok, others [400, 409]"
+  },
+  {
+    "id": "A3",
+    "module": "幂等",
+    "name": "重复上报不新建",
+    "ok": true,
+    "ms": 68,
+    "detail": "second created=false"
+  },
+  {
+    "id": "A4",
+    "module": "稳定性",
+    "name": "18 次请求无 5xx",
+    "ok": true,
+    "ms": 5196,
+    "detail": "12 rounds x 3 endpoints, no 5xx"
+  },
+  {
+    "id": "A5",
+    "module": "数据一致性",
+    "name": "并发写审计后链仍完整",
+    "ok": true,
+    "ms": 20267,
+    "detail": "checked=1181 ok=true after 6 concurrent writes"
+  }
+]
