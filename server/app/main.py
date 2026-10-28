@@ -191,6 +191,40 @@ async def lifespan(app: FastAPI):
     telemetry_janitor.start()
 
     # 搁置到期恢复：单独一个 60 秒的轻量循环（保留期清理是 6 小时一次，太粗）
+    def _backup_janitor():
+        """每天 02:00 自动备份一次库（沿用 scripts/backup_db.py 的 sqlite backup API）。"""
+        import time as _t
+        from datetime import datetime as _dt
+
+        while True:
+            now = _dt.now()
+            wait = ((2 - now.hour) % 24) * 3600 + (0 - now.minute) * 60 - now.second
+            _t.sleep(max(60, wait))
+            try:
+                import sqlite3
+                from pathlib import Path
+
+                from app.core.config import get_settings as _gs
+
+                src = Path(str(_gs().db_url).split("///")[-1])
+                if not src.is_absolute():
+                    src = Path(__file__).resolve().parents[2] / src
+                out_dir = src.parent / "backups"
+                out_dir.mkdir(parents=True, exist_ok=True)
+                dst = out_dir / ("auto-%s.db" % _dt.now().strftime("%Y%m%d"))
+                with sqlite3.connect(src) as sdb, sqlite3.connect(dst) as ddb:
+                    sdb.backup(ddb)
+                # 只留最近 14 天
+                olds = sorted(out_dir.glob("auto-*.db"))[:-14]
+                for old in olds:
+                    old.unlink()
+                log.info("每日备份完成：%s", dst.name)
+            except Exception:  # noqa: BLE001
+                log.exception("每日备份失败")
+
+    _bk = _th.Thread(target=_backup_janitor, daemon=True)
+    _bk.start()
+
     def _dispatch_janitor():
         import time as _t
         from app.services.device_auth import purge_nonces
@@ -321,8 +355,13 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         except Exception:
             log.exception("请求异常 rid=%s %s %s", rid, request.method, request.url.path)
             raise
-        log.info("rid=%s %s %s -> %s %sms", rid, request.method, request.url.path,
-                 response.status_code, int((_t.time() - t0) * 1000))
+        cost = int((_t.time() - t0) * 1000)
+        if cost >= 800:
+            log.warning("慢请求 rid=%s %s %s -> %s %sms", rid, request.method,
+                        request.url.path, response.status_code, cost)
+        else:
+            log.info("rid=%s %s %s -> %s %sms", rid, request.method, request.url.path,
+                     response.status_code, cost)
         response.headers["X-Request-Id"] = rid
         return response
 

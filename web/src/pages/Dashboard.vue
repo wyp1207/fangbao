@@ -1849,11 +1849,25 @@ async function logout() {
 
 .loc-banner {
   grid-column: 1 / -1;
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 14px; border-radius: 8px; font-size: 13px;
+  position: sticky; top: 0; z-index: 30;
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; border-radius: 10px; font-size: 14px; font-weight: 600;
+  letter-spacing: .5px;
 }
-.loc-banner b { flex: none; letter-spacing: 1px; }
+.loc-banner b { flex: none; padding: 2px 8px; border-radius: 4px; background: rgba(0,0,0,.35); }
 .loc-banner span { flex: 1; }
-.loc-banner.danger { background: rgba(255, 86, 86, .12); border: 1px solid rgba(255, 86, 86, .45); color: #ffb4b4; }
-.loc-banner.warn { background: rgba(255, 190, 60, .12); border: 1px solid rgba(255, 190, 60, .45); color: #ffd98a; }
+.loc-banner.danger {
+  background: linear-gradient(90deg, rgba(255,60,60,.28), rgba(255,60,60,.10));
+  border: 1px solid rgba(255,86,86,.75); color: #ffd7d7;
+  animation: loc-pulse 1.6s ease-in-out infinite;
+}
+.loc-banner.warn {
+  background: linear-gradient(90deg, rgba(255,190,60,.22), rgba(255,190,60,.06));
+  border: 1px solid rgba(255,190,60,.60); color: #ffe7b0;
+}
+@keyframes loc-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,86,86,.35); }
+  50% { box-shadow: 0 0 0 6px rgba(255,86,86,0); }
+}
+
 </style>
