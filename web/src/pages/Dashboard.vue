@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import Twin from '@/pages/Twin.vue'
 import MapCanvas from '@/components/MapCanvas.vue'
 import ScadaPanel from '@/components/ScadaPanel.vue'
 import VideoBox from '@/components/VideoBox.vue'
@@ -492,6 +493,8 @@ const galileo = computed(() => robot.snapshot?.galileo ?? {})
 const unacked = computed(() => robot.alarms.filter((a) => !a.acked_at))
 const acked = computed(() => robot.alarms.filter((a) => a.acked_at))
 const imageUrl = computed(() => (robot.currentMap ? api.mapPng(1, robot.currentMap) : ''))
+// 地图面板 2D/3D 切换：2D 负责点选，3D 负责看空间关系（GLM/豆包建议的共存方式）
+const viewMode = ref<'2d' | '3d'>('2d')
 
 const clock = computed(() => {
   const d = now.value
@@ -822,11 +825,17 @@ async function logout() {
         >
           <div class="map-frame">
             <MapCanvas
+              v-show="viewMode === '2d'"
               :map-meta="mapMeta" :image-url="imageUrl" :points="points"
               :pose="pose" :stale="robot.stale || !robot.online" :trail="trail"
             />
+            <Twin v-if="viewMode === '3d'" compact />
             <span class="scan" />
             <span class="radar" />
+            <div class="view-toggle">
+              <button :class="{ on: viewMode === '2d' }" @click="viewMode = '2d'">2D</button>
+              <button :class="{ on: viewMode === '3d' }" @click="viewMode = '3d'">3D</button>
+            </div>
           </div>
           <p v-if="mapError" class="red small">{{ mapError }}</p>
         </ScadaPanel>
@@ -1870,4 +1879,14 @@ async function logout() {
   50% { box-shadow: 0 0 0 6px rgba(255,86,86,0); }
 }
 
+.view-toggle {
+  position: absolute; right: 10px; top: 10px; display: flex; gap: 2px; z-index: 5;
+  background: rgba(3, 16, 26, .8); border: 1px solid rgba(0, 168, 255, .35);
+  border-radius: 6px; overflow: hidden;
+}
+.view-toggle button {
+  padding: 3px 10px; font-size: 12px; color: #8fd8ff; background: transparent; border: 0;
+  cursor: pointer;
+}
+.view-toggle button.on { background: rgba(0, 168, 255, .25); color: #fff; }
 </style>

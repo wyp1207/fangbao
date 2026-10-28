@@ -55,6 +55,13 @@ SCHEMA: dict[str, dict[str, Any]] = {
         "effect": "关闭时下发/暂停/取消一律 403，并说明缺什么；真机联调通过并签授权后再开",
     },
 
+    "map.strict_check": {
+        "label": "地图严格校验", "type": "bool", "default": False,
+        "group": "地图",
+        "effect": "开启后：任务里的点位地图必须与当前激活地图一致，否则拒绝下发。"
+                  "真机确认 map_id 字段后再开；现在是警告模式",
+    },
+
     "security.idle_minutes": {
         "label": "空闲多久自动退出（分钟）", "type": "int", "default": 5, "min": 1, "max": 240,
         "group": "平台",

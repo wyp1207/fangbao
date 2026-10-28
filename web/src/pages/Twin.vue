@@ -20,6 +20,7 @@ import { api } from '@/api'
 import { useRobotStore } from '@/stores/robot'
 import { toast } from '@/composables/useToast'
 
+const props = defineProps<{ compact?: boolean }>()
 const robot = useRobotStore()
 const box = ref<HTMLDivElement | null>(null)
 const fps = ref(0)
@@ -39,6 +40,11 @@ const playing = ref(false)
 const playSpeed = ref(4)
 const playTime = ref('')
 const playDistance = ref(0)
+// 点哪去哪
+const gotoHint = ref('')
+const planPts = ref<{ x: number; y: number }[]>([])
+let targetMark: THREE.Group | null = null
+let planLineRef: THREE.Line | null = null
 let playTimer = 0
 const loading = ref(true)
 const err = ref('')
@@ -415,7 +421,7 @@ function updateAlarms(list: { id: number; message: string; level: string; metric
     scene.add(alarmGroup)
     return
   }
-  const recent = (list ?? []).slice(0, 6)
+  const recent = (list ?? []).slice(0, props.compact ? 2 : 6)
   recent.forEach((a, i) => {
     const angle = (i / Math.max(1, recent.length)) * Math.PI * 2
     const ax = Number(pose.x) + Math.cos(angle) * (1.2 + i * 0.4)
@@ -434,9 +440,11 @@ function updateAlarms(list: { id: number; message: string; level: string; metric
     ring.rotation.x = -Math.PI / 2
     ring.position.set(ax, 0.03, ay)
     alarmGroup!.add(ring)
-    const lbl = new CSS2DObject(label(a.message.slice(0, 16), a.level === 'critical' ? 'danger' : 'warn'))
-    lbl.position.set(ax, 2.6, ay)
-    alarmGroup!.add(lbl)
+    if (!props.compact) {
+      const lbl = new CSS2DObject(label(a.message.slice(0, 16), a.level === 'critical' ? 'danger' : 'warn'))
+      lbl.position.set(ax, 2.6, ay)
+      alarmGroup!.add(lbl)
+    }
   })
   scene.add(alarmGroup)
 }
@@ -608,6 +616,128 @@ function togglePlay() {
   if (playing.value && playIndex.value >= playPoints.value.length - 1) playIndex.value = 0
 }
 
+function screenToGround(ev: MouseEvent): { x: number; y: number } | null {
+  if (!renderer || !camera) return null
+  const rect = renderer.domElement.getBoundingClientRect()
+  const ndc = new THREE.Vector2(
+    ((ev.clientX - rect.left) / rect.width) * 2 - 1,
+    -((ev.clientY - rect.top) / rect.height) * 2 + 1,
+  )
+  const ray = new THREE.Raycaster()
+  ray.setFromCamera(ndc, camera)
+  const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
+  const hit = new THREE.Vector3()
+  if (!ray.ray.intersectPlane(plane, hit)) return null
+  return { x: hit.x, y: hit.z }
+}
+
+async function onStageClick(ev: MouseEvent) {
+  const p = screenToGround(ev)
+  if (!p) return
+  const pose = robot.pose as { x?: number; y?: number } | null
+  const dist = pose?.x != null ? Math.hypot(p.x - Number(pose.x), p.y - Number(pose.y)) : null
+  gotoHint.value = `目标 ${p.x.toFixed(2)}, ${p.y.toFixed(2)}` + (dist ? `（${dist.toFixed(1)}m）` : '')
+  showTarget(p.x, p.y, pose)
+  if (!window.confirm(`让机器人去 ${p.x.toFixed(2)}, ${p.y.toFixed(2)}？` +
+                      (dist ? `\n距离约 ${dist.toFixed(1)} 米` : ''))) return
+  try {
+    await api.robotGoto(Number(robot.deviceId), { x: p.x, y: p.y, yaw: 0 })
+    toast('已下发，机器人开始前往', 'ok', 4000)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    if (msg.includes('确认') || msg.includes('NEED_CONFIRM')) {
+      if (window.confirm(`距离较远（${dist?.toFixed(1) ?? '?'}m），确认派车？`)) {
+        try {
+          await api.robotGoto(Number(robot.deviceId), { x: p.x, y: p.y, yaw: 0, confirmed: true })
+          toast('已下发（已二次确认）', 'ok', 4000)
+          return
+        } catch (e2) {
+          toast(e2 instanceof Error ? e2.message : '下发失败', 'danger')
+          return
+        }
+      }
+    } else {
+      toast(msg, 'danger', 6000)
+    }
+  }
+}
+
+function showTarget(x: number, y: number, pose: { x?: number; y?: number } | null) {
+  if (!scene) return
+  if (targetMark) {
+    scene.remove(targetMark)
+    targetMark.traverse((o) => (o as THREE.Mesh).geometry?.dispose?.())
+  }
+  targetMark = new THREE.Group()
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(0.35, 0.5, 28),
+    new THREE.MeshBasicMaterial({ color: 0xffd166, side: THREE.DoubleSide, transparent: true, opacity: 0.95 }),
+  )
+  ring.rotation.x = -Math.PI / 2
+  ring.position.set(x, 0.05, y)
+  targetMark.add(ring)
+  const pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.02, 0.02, 2.2, 8),
+    new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.65 }),
+  )
+  pole.position.set(x, 1.1, y)
+  targetMark.add(pole)
+  if (pose?.x != null && pose?.y != null) {
+    const geo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(Number(pose.x), 0.1, Number(pose.y)),
+      new THREE.Vector3(x, 0.1, y),
+    ])
+    const line = new THREE.Line(geo, new THREE.LineDashedMaterial({
+      color: 0xffd166, dashSize: 0.35, gapSize: 0.25, transparent: true, opacity: 0.9,
+    }))
+    line.computeLineDistances()
+    targetMark.add(line)
+  }
+  scene.add(targetMark)
+}
+
+async function loadPlan() {
+  try {
+    const runs = await api.taskRuns({ status: 'running', limit: 1 })
+    const rows = (runs as unknown as { items?: any[] }).items ?? (runs as unknown as any[])
+    const run = rows[0]
+    if (!run) return
+    const detail = await api.taskRun(run.id)
+    const steps = (detail as unknown as { steps?: any[] }).steps ?? []
+    const maps = await api.libraryMaps()
+    const mapRows = (maps as unknown as { items?: any[] }).items ?? (maps as unknown as any[])
+    const mid = mapRows.find((m: any) => m.is_active)?.id ?? mapRows[0]?.id
+    if (!mid) return
+    const pts = await api.libraryPoints(mid)
+    const ptRows = (pts as unknown as { items?: any[] }).items ?? (pts as unknown as any[])
+    const byId = new Map<number, any>(ptRows.map((p: any) => [p.id, p]))
+    planPts.value = steps
+      .map((s) => byId.get(s.point_id))
+      .filter(Boolean)
+      .map((p: any) => ({ x: Number(p.x), y: Number(p.y) }))
+    drawPlan()
+  } catch { /* 没有运行中任务就不画 */ }
+}
+
+function drawPlan() {
+  if (!scene) return
+  if (planLineRef) {
+    scene.remove(planLineRef)
+    planLineRef.geometry.dispose()
+    ;(planLineRef.material as THREE.Material).dispose()
+    planLineRef = null
+  }
+  if (planPts.value.length < 2) return
+  const arr: THREE.Vector3[] = planPts.value.map((p) => new THREE.Vector3(p.x, 0.12, p.y))
+  const geo = new THREE.BufferGeometry().setFromPoints(arr)
+  planLineRef = new THREE.Line(geo, new THREE.LineDashedMaterial({
+    color: 0x66d9ff, dashSize: 0.5, gapSize: 0.3, transparent: true, opacity: 0.9,
+  }))
+  planLineRef.computeLineDistances()
+  planLineRef.frustumCulled = false
+  scene.add(planLineRef)
+}
+
 function applyHeight() {
   if (!wallMesh || !wallBase) return
   const dummy = new THREE.Object3D()
@@ -649,7 +779,9 @@ function onResize() {
 onMounted(async () => {
   robot.setDevice(robot.deviceId)
   robot.startWs()
-  void loadPlayback()
+  if (!props.compact) void loadPlayback()
+  void loadPlan()
+  renderer?.domElement.addEventListener('click', onStageClick)
   await build()
   updateAlarms(robot.alarms)
   window.addEventListener('resize', onResize)
@@ -661,6 +793,7 @@ onBeforeUnmount(() => {
   robot.stopWs()
   cancelAnimationFrame(raf)
   window.removeEventListener('resize', onResize)
+  renderer?.domElement.removeEventListener('click', onStageClick)
   window.clearInterval(playTimer)
   controls?.dispose()
   renderer?.dispose()
@@ -670,7 +803,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="twin">
+  <div class="twin" :class="{ compact: props.compact }">
     <div ref="box" class="stage">
       <div v-if="loading" class="hint">正在把栅格地图拉成 3D…</div>
       <div v-if="err" class="hint err">{{ err }}</div>
@@ -681,7 +814,7 @@ onBeforeUnmount(() => {
         <span>FPS：{{ fps }}</span>
         <span>{{ robot.wsConnected ? 'WS 200ms' : '轮询 1s' }}</span>
       </div>
-      <div class="ctrl">
+      <div v-if="!props.compact" class="ctrl">
         <label><input v-model="wallsOn" type="checkbox" @change="(wallMesh && (wallMesh.visible = wallsOn)) || (wallEdges && (wallEdges.visible = wallsOn))" /> 墙体</label>
         <label><input v-model="pointsOn" type="checkbox" @change="pointGroup && (pointGroup.visible = pointsOn)" /> 点位</label>
         <label><input v-model="alarmsOn" type="checkbox" @change="alarmGroup && (alarmGroup.visible = alarmsOn)" /> 告警</label>
@@ -696,7 +829,7 @@ onBeforeUnmount(() => {
         <button class="btn btn-xs" @click="resetCamera">复位视角</button>
       </div>
 
-      <div class="play">
+      <div v-if="!props.compact" class="play">
         <span class="tag">轨迹回放</span>
         <select v-model.number="playHours" @change="loadPlayback">
           <option :value="1">最近 1 小时</option>
@@ -723,6 +856,8 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .twin { position: absolute; inset: 0; }
+.twin.compact { position: relative; height: 100%; }
+.twin.compact .hud { font-size: 10px; padding: 4px 8px; gap: 8px; }
 .stage { position: relative; width: 100%; height: 100%; background: #050810; overflow: hidden; }
 .hud {
   position: absolute; left: 14px; top: 12px; display: flex; gap: 14px; align-items: center;
