@@ -30,6 +30,7 @@ services:
       # 录像 / 地图 / 上传 / 日志全部落在 /data，容器重建不丢
       - /data/jcrob-platform/recordings:/app/data/recordings
       - /data/jcrob-platform/maps:/app/data/maps
+      - /data/jcrob-platform/backups:/app/data/backups
       - /data/jcrob-platform/logs:/app/logs
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
@@ -93,6 +94,14 @@ services:
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
+
+  jc-go2rtc:
+    image: alexxit/go2rtc:latest
+    container_name: jc-go2rtc
+    restart: unless-stopped
+    volumes:
+      - ./go2rtc.yaml:/config/go2rtc.yaml:ro
+    networks: [jc-net]
 
 networks:
   jc-net:

@@ -132,47 +132,64 @@ class DeepRoboticsX30Adapter:
         }
 
     # ---- 写 ----
-    async def dispatch(self, order: dict) -> dict:
-        """逐个动作执行：导航点等它到，再下一个。
+    def dispatch(self, order: dict) -> dict:
+        """后台串行执行所有点位，立即返回 RUNNING（1003 是长阻塞接口，不能等）。
 
-        以前只取 actions[0]，模板里多点位会被静默丢掉（审计发现）。
-        X30 的 1003 一次只能给一个目标，所以这里串行下发，每点等 1007 落地。
+        上一版把 photo/thermal/wait 当"非导航"跳过 → 模板一条导航都不发；
+        且同步返回 FINISHED → 轮询线程不再补步骤状态。这里改成后台线程逐点跑。
         """
         actions = order.get("actions") or []
         if not actions:
             return {"id": "", "state": "FAILED"}
 
-        results = []
-        for act in actions:
-            params = {p.get("key"): p.get("value") for p in act.get("actionParameters", [])}
-            kind = str(act.get("actionType") or "nav").lower()
-            if kind in ("photo", "video", "thermal", "wait"):
-                # 非导航动作：拍照/测温由平台侧到点后再做，这里只记一笔
-                results.append({"action": kind, "skipped": True})
-                continue
+        import threading
 
+        t = threading.Thread(target=self._run_order_bg, args=(order,),
+                             daemon=True, name="x30-order")
+        t.start()
+        return {"id": str(order.get("orderId") or ""), "state": "RUNNING",
+                "raw": {"accepted": True, "points": len(actions)}}
+
+    def _run_order_bg(self, order: dict) -> None:
+        import asyncio
+        import logging
+
+        log = logging.getLogger(__name__)
+        try:
+            asyncio.run(self._execute_order(order))
+        except Exception:  # noqa: BLE001
+            log.exception("X30 多点任务执行失败 order=%s", order.get("orderId"))
+
+    async def _execute_order(self, order: dict) -> None:
+        import asyncio
+        import logging
+
+        log = logging.getLogger(__name__)
+        for act in order.get("actions") or []:
+            params = {p.get("key"): p.get("value") for p in act.get("actionParameters", [])}
+            if params.get("x") is None or params.get("y") is None:
+                continue          # 没有坐标的动作（纯拍照）不在车端执行
             x = _num(params.get("x")) or 0.0
             y = _num(params.get("y")) or 0.0
             yaw = _num(params.get("yaw")) or 0.0
-            r = await self._call(self.client.nav_goal, x, y, yaw)
-            if "_error" in r:
-                return {"id": order.get("orderId", ""), "state": "FAILED",
-                        "raw": r, "done": results}
-            # 等这个点跑完（最多 240 秒），否则多点会互相打断
-            import asyncio
-
+            try:
+                await self._call(self.client.nav_goal, x, y, yaw)
+            except (TimeoutError, OSError):
+                # 1003 要等任务跑完才回；超时=已受理，进度靠 1007
+                log.info("X30 nav_goal 超时（按已受理处理）x=%s y=%s", x, y)
             for _ in range(80):
-                st = await self._call(self.client.nav_status)
+                try:
+                    st = await self._call(self.client.nav_status)
+                except Exception:  # noqa: BLE001
+                    await asyncio.sleep(3)
+                    continue
                 status = str(st.get("Status", ""))
                 if status == "0":
-                    results.append({"action": kind, "x": x, "y": y, "ok": True})
                     break
                 if status == "-1":
-                    return {"id": order.get("orderId", ""), "state": "FAILED",
-                            "raw": st, "done": results}
+                    log.warning("X30 点位失败 x=%s y=%s raw=%s", x, y, st)
+                    return
                 await asyncio.sleep(3)
-        return {"id": order.get("orderId", ""), "state": "FINISHED",
-                "raw": {"points": results}}
 
     async def goto(self, x: float, y: float, yaw: float = 0.0) -> dict:
         # 1003 的响应要等任务跑完才回（官方文档 2.2 的【注意】）。
@@ -210,6 +227,20 @@ class DeepRoboticsX30Adapter:
         return await self._call(capture_frame, stream, get_settings().go2rtc_base)
 
     # ---- 现场动作 ----
+    # ---- 地图/点位：X30 的地图由导航主机管理，平台侧暂不读写 ----
+    # 返回空而不是抛异常：前端会显示"没有点位"，而不是 500。
+    async def get_nav_points(self) -> list:
+        return []
+
+    async def get_current_map(self) -> dict:
+        return {}
+
+    async def get_map_png(self) -> bytes:
+        return b""
+
+    async def list_maps(self) -> list:
+        return []
+
     async def set_initial_pose(self, x: float, y: float, yaw: float = 0.0) -> dict:
         """重置定位（协议 2101）。断电/被搬动/地图切换后必须做，否则导航会跑偏。"""
         return await self._call(self.client.init_loc, x, y, yaw)
