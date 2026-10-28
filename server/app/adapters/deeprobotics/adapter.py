@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+from app.core.config import get_settings
 from app.adapters.deeprobotics.protocol import (
     MOTION_LIE, MOTION_STAND, MOTION_STATES, NAV_STATES, X30Client,
 )
@@ -173,7 +174,8 @@ class DeepRoboticsX30Adapter:
             y = _num(params.get("y")) or 0.0
             yaw = _num(params.get("yaw")) or 0.0
             try:
-                await self._call(self.client.nav_goal, x, y, yaw)
+                await self._call(self.client.nav_goal, x, y, yaw,
+                                 map_id=int(get_settings().x30_map_id or 1))
             except (TimeoutError, OSError):
                 # 1003 要等任务跑完才回；超时=已受理，进度靠 1007
                 log.info("X30 nav_goal 超时（按已受理处理）x=%s y=%s", x, y)
@@ -195,7 +197,8 @@ class DeepRoboticsX30Adapter:
         # 1003 的响应要等任务跑完才回（官方文档 2.2 的【注意】）。
         # 这里用短超时发出去就算"已受理"，进度靠 1007 轮询。
         try:
-            r = await self._call(self.client.nav_goal, x, y, yaw)
+            r = await self._call(self.client.nav_goal, x, y, yaw,
+                                 map_id=int(get_settings().x30_map_id or 1))
         except (TimeoutError, OSError):
             return {"id": "x30-nav", "state": "RUNNING", "raw": {"accepted": True}}
         return {"id": "x30-nav", "state": "FAILED" if "_error" in r else "RUNNING", "raw": r}

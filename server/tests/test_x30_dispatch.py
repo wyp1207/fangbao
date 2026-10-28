@@ -13,7 +13,7 @@ class _FakeClient:
         self.port = 30000
         self.last_magic = b""
 
-    def nav_goal(self, x, y, yaw):
+    def nav_goal(self, x, y, yaw, map_id=1):
         self.goals.append((x, y, yaw))
         return {"ok": 1}
 

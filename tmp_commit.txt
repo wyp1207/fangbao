@@ -1,12 +1,22 @@
-feat(3d): CAD 线框风格（对标客户参考图）
+feat(x30): 真机只读探测通过 + 导入真实场站地图 + MapID 可配
 
-- 黑底 + 细白/冰蓝线框 + 等轴测默认视角
-- CAD 模式隐藏地面贴图、历史轨迹、告警光环，只留墙体线与点位标签，接近工程图观感
-- 左下角加 X/Y 坐标轴标记（对齐 CAD 图习惯）
-- 底部「CAD 线框」开关默认开；关掉回到纹理 + Bloom 的"数字孪生"风格
-- 无面、无 Bloom：软件渲染下 FPS 14 -> 29（真实核显会更高）
+实测（只读，未发任何运动指令）：
+- 192.168.1.106:30000 已通：MotionState=0（趴下）、Electricity=100、
+  PosX=9.52 PosY=-3.66 AngleYaw=0、Location=1、1007 Status=0
+- 1002 里没有 MapID 字段（只有 MapUpdateState）-> 平台无法自动识别当前地图，必须现场确认
 
-文档补：CAD 风格说明 + 真实 CAD 导入路径（DWG/DXF -> GLB 1-2 天；PDF/图片 -> 栅格底图 0.5 天；
-点云 PCD -> 现成脚本 1 天；不给模型 -> 用机器人自扫地图 0 成本）
+改动：
+- scripts/probe_x30_readonly.py：1002/2001/1007 只读探测
+- scripts/import_x30_map.py：把 8890 老平台的真实场站地图导入平台地图库
+  （402x287 @0.1m/px, origin -20.7,-10.7，取自 /api/patrol/map），并设为激活地图
+- config 新增 x30_map_id（默认 1），X30 适配器 goto/_execute_order 下发 1003 时带 MapID
+- scripts/x30_pick_test_point.py：读当前位姿 + 用真实地图栅格校验，挑出 30 个可通行候选点
+- 修复 map_check 的图片根路径（原来少了一层 server/），栅格校验现在真的生效
+- docs/X30巡航原理与平台对接.md：
+  · 你现在的 6 步手柄流程 vs 协议层实际发生什么
+  · 手柄"设点/保存路径"是示教 UI，不是协议要求；平台可自己存点位逐点发 1003
+  · X30（waypoint 逐点）与 JCROB（order 整单）的对比表
+  · 真机测试 5 步与 4 个已校验的候选点
+  · 还缺：MapID 确认向导、定位强校验、地图上点选点位
 
-截图：docs/screenshots/twin-cad.png
+验证：pytest 134 通过
