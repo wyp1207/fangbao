@@ -1,20 +1,12 @@
-feat(goto): 首页地图 2D/3D 切换 + 点哪去哪 + 目标路径 + 地图校验
+feat(3d): CAD 线框风格（对标客户参考图）
 
-按 GLM/豆包评审实现（docs/reviews/model_review_20261028-135528.md、-135610.md）：
+- 黑底 + 细白/冰蓝线框 + 等轴测默认视角
+- CAD 模式隐藏地面贴图、历史轨迹、告警光环，只留墙体线与点位标签，接近工程图观感
+- 左下角加 X/Y 坐标轴标记（对齐 CAD 图习惯）
+- 底部「CAD 线框」开关默认开；关掉回到纹理 + Bloom 的"数字孪生"风格
+- 无面、无 Bloom：软件渲染下 FPS 14 -> 29（真实核显会更高）
 
-1. 首页实时地图加 2D/3D 切换（3D 复用 Twin compact），两视图共用 SLAM 坐标
-2. 点哪去哪 POST /api/v1/robots/{id}/goto
-   - 写开关、在线、非急停、电量>=20%、无运行中任务
-   - 地图校验：目标必须在地图范围内且非障碍栅格（services/map_check.py）
-   - 距离上限默认 50m，超限要求 confirmed=true 二次确认
-   - 审计 robot.goto（坐标/距离/地图 id）
-   - 前端：3D 点地面 -> 黄色目标环 + 虚线 -> 二次确认 -> 下发
-3. 目标顺序线（平台虚线）：读取运行中任务的点位顺序绘制，和实际轨迹（车端实线）区分
-4. 任务下发前地图校验：
-   - 点位地图与激活地图不一致：默认警告（map.strict_check=false），开启后 409 POINT_MAP_MISMATCH
-   - 点位栅格非法始终 409 POINT_INVALID
-   - 新增设置项 map.strict_check（默认关，真机确认 map_id 后再开）
-5. 3D compact 模式：隐藏控制条/回放面板，告警只留 2 个且不带文字，避免首页拥挤
+文档补：CAD 风格说明 + 真实 CAD 导入路径（DWG/DXF -> GLB 1-2 天；PDF/图片 -> 栅格底图 0.5 天；
+点云 PCD -> 现成脚本 1 天；不给模型 -> 用机器人自扫地图 0 成本）
 
-实测：首页切 3D 后 canvas 2 个、无 page error；截图 docs/screenshots/dashboard-3d.png
-测试：新增 test_robot_goto.py 3 例（写开关/越界/超距确认）；pytest 134 通过；UI 冒烟 36 路由 0 问题
+截图：docs/screenshots/twin-cad.png

@@ -31,6 +31,7 @@ const height = ref(2.4)
 const threshold = ref(60)
 const layerOn = ref(true)
 const fxOn = ref(true)
+const cadMode = ref(true)  // CAD 线框风：黑底 + 细白线 + 等轴测（对齐客户给的 CAD 图）
 const fxLabel = ref('光效')
 // ---- 轨迹回放 ----
 const playHours = ref(24)
@@ -127,7 +128,7 @@ async function build() {
 
     // ---------- 场景 ----------
     scene = new THREE.Scene()
-    scene.background = new THREE.Color(0x050810)
+    scene.background = new THREE.Color(0x000000)
     scene.fog = new THREE.FogExp2(0x050810, 0.012)
 
     const worldW = meta.w * meta.res
@@ -171,15 +172,23 @@ async function build() {
       color: 0x8fb6d6, depthWrite: false,
     })
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(worldW, worldH), groundMat)
+    ground.userData.isGround = true
     ground.rotation.x = -Math.PI / 2
     ground.position.set(cx, -0.01, cy)
+    ground.visible = !cadMode.value
     scene.add(ground)
 
-    const grid = new THREE.GridHelper(Math.max(worldW, worldH), Math.round(Math.max(worldW, worldH)), 0x0a4a6a, 0x072434)
+    const grid = new THREE.GridHelper(Math.max(worldW, worldH), Math.round(Math.max(worldW, worldH)), cadMode.value ? 0x1d2a33 : 0x0a4a6a, cadMode.value ? 0x11181d : 0x072434)
     grid.position.set(cx, 0.005, cy)
     ;(grid.material as THREE.Material).transparent = true
     ;(grid.material as THREE.Material).opacity = 0.55
     scene.add(grid)
+    // CAD 风的坐标轴标记（原点 X/Y），对齐客户 CAD 图左下角的 X 标记
+    const axes = new THREE.AxesHelper(5)
+    axes.position.set(meta.ox, 0.02, meta.oy)
+    axes.name = 'axes'
+    axes.visible = cadMode.value
+    scene.add(axes)
 
     // 后处理：Bloom（半分辨率）+ 扫描线；低端机可一键关
     composer = new EffectComposer(renderer)
@@ -205,6 +214,7 @@ async function build() {
     buildRobot()
     buildTrail()
     updateAlarms(robot.alarms)
+    setCadMode(cadMode.value)   // 初始应用一次 CAD 模式（隐藏轨迹/贴图）
     loop()
   } catch (e) {
     err.value = e instanceof Error ? e.message : String(e)
@@ -305,11 +315,16 @@ function buildWalls(data: Uint8ClampedArray, w: number, h: number) {
     wallMesh!.setMatrixAt(i, dummy.matrix)
   })
   wallMesh.instanceMatrix.needsUpdate = true
+  mat.visible = !cadMode.value          // CAD 模式只要线框，不要面
   wallMesh.visible = wallsOn.value
   scene.add(wallMesh)
 
   const edgeGeo = new THREE.EdgesGeometry(boxGeo)
-  const edgeMat = new THREE.LineBasicMaterial({ color: 0x3ee0ff, transparent: true, opacity: 0.5 })
+  const edgeMat = new THREE.LineBasicMaterial({
+    color: cadMode.value ? 0xdfe9ef : 0x3ee0ff,
+    transparent: true,
+    opacity: cadMode.value ? 0.95 : 0.5,
+  })
   wallEdges = new THREE.InstancedMesh(edgeGeo as unknown as THREE.BufferGeometry, edgeMat, cells.length)
   cells.forEach((_, i) => {
     const m4 = new THREE.Matrix4()
@@ -345,12 +360,14 @@ function buildPoints(list: any[]) {
     )
     ring.rotation.x = -Math.PI / 2
     ring.position.y = 0.02
+    ring.visible = !cadMode.value
     g.add(ring)
     const pole = new THREE.Mesh(
       new THREE.CylinderGeometry(0.012, 0.012, 0.9, 6),
       new THREE.MeshBasicMaterial({ color: 0x37d6ff, transparent: true, opacity: 0.7 }),
     )
     pole.position.y = 0.45
+    pole.visible = !cadMode.value
     g.add(pole)
     const lbl = new CSS2DObject(label(p.name))
     lbl.position.y = 1.15
@@ -754,6 +771,46 @@ function applyHeight() {
   wallMesh.instanceMatrix.needsUpdate = true
 }
 
+function isometricCamera() {
+  if (!camera || !controls) return
+  const worldW = meta.w * meta.res
+  const worldH = meta.h * meta.res
+  const cx = meta.ox + worldW / 2
+  const cy = meta.oy + worldH / 2
+  const d = Math.max(worldW, worldH)
+  camera.position.set(cx + d * 0.75, d * 0.72, cy + d * 0.75)
+  controls.target.set(cx, 0, cy)
+  controls.update()
+}
+
+function setCadMode(on: boolean) {
+  cadMode.value = on
+  if (!scene) return
+  scene.background = new THREE.Color(on ? 0x000000 : 0x050810)
+  scene.fog = on ? null : new THREE.FogExp2(0x050810, 0.012)
+  if (wallMesh) (wallMesh.material as THREE.Material).visible = !on
+  if (wallEdges) {
+    const m = wallEdges.material as THREE.LineBasicMaterial
+    m.color.set(on ? 0xdfe9ef : 0x3ee0ff)
+    m.opacity = on ? 0.95 : 0.5
+  }
+  const ground = scene.children.find((o) => o.userData.isGround) as THREE.Mesh | undefined
+  if (ground) ground.visible = !on
+  const axes = scene.getObjectByName('axes')
+  if (axes) axes.visible = on
+  // CAD 模式下隐藏轨迹/回放，保持工程图干净
+  if (playGroup) playGroup.visible = !on
+  if (trail) trail.visible = !on
+  pointGroup?.traverse((o) => {
+    const mesh = o as THREE.Mesh
+    if (mesh.geometry?.type === 'RingGeometry' || mesh.geometry?.type === 'CylinderGeometry') {
+      mesh.visible = !on
+    }
+  })
+  if (on) isometricCamera()
+  else resetCamera()
+}
+
 function resetCamera() {
   if (!camera || !controls || !scene) return
   const worldW = meta.w * meta.res
@@ -824,6 +881,7 @@ onBeforeUnmount(() => {
         <label class="range">阈值 {{ threshold }}
           <input v-model.number="threshold" type="range" min="30" max="120" step="5" @change="rebuildWalls" />
         </label>
+        <label><input v-model="cadMode" type="checkbox" @change="setCadMode(cadMode)" /> CAD 线框</label>
         <label><input v-model="layerOn" type="checkbox" @change="rebuildWalls" /> 高度分层</label>
         <label><input v-model="fxOn" type="checkbox" /> 光效</label>
         <button class="btn btn-xs" @click="resetCamera">复位视角</button>
