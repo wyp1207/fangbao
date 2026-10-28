@@ -105,7 +105,7 @@ def test_deep_health(auth_client):
 def test_notify_channel_validation(auth_client):
     """通道类型/必填项校验：坏数据要 400，不要落库。"""
     bad_type = auth_client.post("/api/v1/notify/channels",
-                                json={"name": "x", "type": "sms", "config": {}})
+                                json={"name": "x", "type": "fax", "config": {}})
     assert bad_type.status_code == 400
 
     no_url = auth_client.post("/api/v1/notify/channels",

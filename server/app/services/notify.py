@@ -34,6 +34,7 @@ TYPE_LABELS = {
     "dingtalk": "钉钉机器人",
     "generic": "通用 Webhook",
     "email": "邮件（SMTP）",
+    "sms": "短信/语音网关（HTTP）",
 }
 
 
@@ -59,6 +60,17 @@ def _payload_dingtalk(alarm: dict, cfg: dict) -> dict:
             "markdown": {"title": f"告警 #{alarm.get('id')}", "text": _text(alarm)}}
 
 
+def _payload_sms(alarm: dict, cfg: dict) -> dict:
+    """短信/语音网关：不同厂商字段不同，这里用最通用的 to/text + alarm 原文。
+
+    对接时把 url 指到厂商的 HTTP 接口；若厂商要签名，用 cfg["headers"] 传。
+    """
+    to = cfg.get("to") or []
+    if isinstance(to, str):
+        to = [x.strip() for x in to.split(",") if x.strip()]
+    return {"to": to, "text": _text(alarm), "alarm": alarm}
+
+
 def _payload_generic(alarm: dict, cfg: dict) -> dict:
     return {"event": "alarm", "alarm": alarm, "text": _text(alarm)}
 
@@ -74,6 +86,8 @@ def _send_http(channel, alarm: dict, cfg: dict) -> tuple[bool, str]:
         body = _payload_wecom(alarm, cfg)
     elif channel.type == "dingtalk":
         body = _payload_dingtalk(alarm, cfg)
+    elif channel.type == "sms":
+        body = _payload_sms(alarm, cfg)
     else:
         body = _payload_generic(alarm, cfg)
 
