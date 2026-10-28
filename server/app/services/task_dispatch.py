@@ -210,6 +210,41 @@ def dispatch(db, run: TaskRun, adapter) -> TaskRun:
     except Exception:  # noqa: BLE001
         pass
 
+    # 点位必须属于当前地图，否则坐标对不上（GLM/豆包都点名的翻车点）
+    from app.models.map_library import PointDraft
+    from app.services.map_check import check_point_free, current_map_id
+
+    map_id = current_map_id(db, None)
+    from app.models.robot import Robot as _Robot
+
+    robot_row = db.get(_Robot, run.robot_id) if run.robot_id else None
+    if robot_row is not None:
+        map_id = current_map_id(db, robot_row)
+    for st in db.query(TaskRunStep).filter(TaskRunStep.run_id == run.id).all():
+        if not st.point_id:
+            continue
+        pt = db.get(PointDraft, st.point_id)
+        if pt is None:
+            continue
+        if map_id is not None and pt.map_id != map_id:
+            try:
+                from app.api.v1.settings import load_all
+        
+                strict = bool(load_all().get('map.strict_check'))
+            except Exception:  # noqa: BLE001
+                strict = False
+            if strict:
+                raise PlatformError(
+                    f"点位「{pt.name}」属于地图 #{pt.map_id}，当前激活地图是 #{map_id}，"
+                    f"先切图或改点位",
+                    code="POINT_MAP_MISMATCH", status_code=409)
+            log.warning('点位 %s 地图 #%s 与激活地图 #%s 不一致（未开严格校验）',
+                        pt.name, pt.map_id, map_id)
+        ok, why = check_point_free(db, pt.map_id, pt.x, pt.y)
+        if not ok:
+            raise PlatformError(f"点位「{pt.name}」不可达：{why}",
+                                code="POINT_INVALID", status_code=409)
+
     gate = preflight(db, run, adapter)
     if not gate["ok"]:
         raise PlatformError(gate["reason"], code="PREFLIGHT_FAILED", status_code=409)

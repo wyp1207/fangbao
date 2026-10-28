@@ -239,6 +239,9 @@ export const api = {
     request<{ count: number; points: { ts: string; x: number; y: number; theta: number }[];
       distance_m: number; from: string | null; to: string | null }>(
       `/telemetry/poses?robot_id=${robotId}&hours=${hours}&points=${points}`),
+  robotGoto: (id: number, body: { x: number; y: number; yaw?: number; max_m?: number; confirmed?: boolean }) =>
+    request<{ ok: boolean; x: number; y: number; distance_m: number | null; map_id: number | null }>(
+      `/robots/${id}/goto`, { method: 'POST', body }),
   selfCheck: () => request<{ ok: boolean; ts: string; checks: { name: string; ok: boolean;
     detail: string; hint?: string }[] }>('/system/self-check'),
   deviceKeys: () => request<{ id: number; robot_id: number; key_id: string; enabled: boolean;
