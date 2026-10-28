@@ -1,17 +1,12 @@
-feat(ops): 现场自检接口 + 系统状态页「运行自检」
+feat(notify): 新增短信/语音网关通道（HTTP），补齐"夜间无人盯屏"缺口
 
-给交付/运维用：接不上设备时点一下，直接分清是平台、网络还是设备问题。
-检查项：数据库 / 审计链（抽查 500 条）/ 每台设备端口 / go2rtc / 磁盘余量 / 写开关，
-每项给「明细 + 处理建议」，离线设备只标异常不抛 500。
+- notify.py 新增 type=sms：POST {to, text, alarm} 到配置的网关 URL，
+  沿用已有的时间戳+HMAC 签名头（X-Jcrob-Timestamp / X-Jcrob-Signature）
+- 前端通知通道下拉新增「短信/语音网关（HTTP）」，带填写提示
+- 测试：起本地假网关接收 POST，断言 to 拆分、text 含告警内容、签名/时间戳头存在
+- 顺带修 test_notify_channel_validation：sms 现在是合法类型，改用 fax 验证拒绝路径
 
-实测（当前环境）：
-  数据库 PASS 0ms
-  审计链 PASS checked=500
-  设备 JCROB-01（192.168.1.100:3546）FAIL TimeoutError（现场未通，符合预期）
-  设备 绝影 X30（192.168.1.106:30000）FAIL TimeoutError
-  设备 模拟器（127.0.0.1:3546）PASS 0ms
-  go2rtc PASS HTTP 200 27ms
-  磁盘 PASS 剩余 16.9%（43.5GB）
-  写开关 PASS 已关闭（提示去设置里打开）
+评估文档补「评估之后已补掉」表：设备一机一密、备份/恢复演练、部署脚本、现场自检、
+短信通道、request_id、3 分钟浸泡结果。
 
-验证：pytest 119 通过（新增 1 例结构/容错测试）
+验证：pytest 120 通过；联调 24/24

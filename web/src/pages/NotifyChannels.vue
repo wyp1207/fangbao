@@ -49,6 +49,7 @@ const typeOptions = [
   { value: 'dingtalk', label: '钉钉机器人' },
   { value: 'generic', label: '通用 Webhook' },
   { value: 'email', label: '邮件（SMTP）' },
+  { value: 'sms', label: '短信/语音网关（HTTP）' },
 ]
 const levelOptions = [
   { value: 'warn', label: '提醒及以上' },
