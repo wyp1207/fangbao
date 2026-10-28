@@ -11,6 +11,11 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js'
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { api } from '@/api'
 import { useRobotStore } from '@/stores/robot'
 import { toast } from '@/composables/useToast'
@@ -23,6 +28,9 @@ const pointsOn = ref(true)
 const alarmsOn = ref(true)
 const height = ref(2.4)
 const threshold = ref(60)
+const layerOn = ref(true)
+const fxOn = ref(true)
+const fxLabel = ref('光效')
 // ---- 轨迹回放 ----
 const playHours = ref(24)
 const playPoints = ref<{ ts: string; x: number; y: number; theta: number }[]>([])
@@ -42,6 +50,8 @@ let scene: THREE.Scene | null = null
 let camera: THREE.PerspectiveCamera | null = null
 let controls: OrbitControls | null = null
 let wallMesh: THREE.InstancedMesh | null = null
+let composer: EffectComposer | null = null
+let bloomPass: UnrealBloomPass | null = null
 let playGroup: THREE.Group | null = null
 let playLine: THREE.Line | null = null
 let pointGroup: THREE.Group | null = null
@@ -56,6 +66,7 @@ const lerpPos = new THREE.Vector3()
 const lerpYaw = { v: 0 }
 const trailPts: THREE.Vector3[] = []
 let wallBase: Float32Array | null = null
+let heights: Float32Array | null = null
 let wallEdges: THREE.InstancedMesh | null = null
 let gridData: { data: Uint8ClampedArray; w: number; h: number } | null = null
 let wallCount = 0
@@ -164,6 +175,25 @@ async function build() {
     ;(grid.material as THREE.Material).opacity = 0.55
     scene.add(grid)
 
+    // 后处理：Bloom（半分辨率）+ 扫描线；低端机可一键关
+    composer = new EffectComposer(renderer)
+    composer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))
+    composer.setSize(box.value.clientWidth, box.value.clientHeight)
+    composer.addPass(new RenderPass(scene, camera))
+    bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(box.value.clientWidth / 2, box.value.clientHeight / 2), 0.6, 0.4, 0.7)
+    composer.addPass(bloomPass)
+    const scan = new ShaderPass({
+      uniforms: { tDiffuse: { value: null }, time: { value: 0 } },
+      vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+      fragmentShader: `uniform sampler2D tDiffuse; uniform float time; varying vec2 vUv;
+        void main(){ vec4 c = texture2D(tDiffuse, vUv);
+          c.rgb += 0.028 * sin(vUv.y * 900.0 + time * 2.0);
+          gl_FragColor = c; }`,
+    })
+    composer.addPass(scan)
+    composer.addPass(new OutputPass())
+
     buildWalls(data, img.width, img.height)
     buildPoints(pointRows)
     buildRobot()
@@ -213,6 +243,18 @@ function buildWalls(data: Uint8ClampedArray, w: number, h: number) {
   for (const [col, row] of keep) {
     if (col % step === 0 && row % step === 0) cells.push([col, row])
   }
+  // 局部密度：5x5 内占据格越多越"厚"，给不同高度（建筑高、围墙中、栏杆矮）
+  const density = (col: number, row: number): number => {
+    let n = 0
+    for (let dr = -2; dr <= 2; dr += 1) {
+      for (let dc = -2; dc <= 2; dc += 1) {
+        const c = col + dc
+        const r = row + dr
+        if (c >= 0 && r >= 0 && c < w && r < h && clean[r * w + c]) n += 1
+      }
+    }
+    return n
+  }
   if (cells.length > 16000) {
     for (let i = cells.length - 1; i > 0; i -= 2) cells.splice(i, 1)
   }
@@ -236,6 +278,7 @@ function buildWalls(data: Uint8ClampedArray, w: number, h: number) {
     color: 0x1d3d59, emissive: 0x0c2940, emissiveIntensity: 0.65,
     roughness: 0.75, metalness: 0.2, transparent: true, opacity: 0.72,
   })
+  heights = new Float32Array(cells.length)
   wallCount = cells.length
   info.value.walls = cells.length
   wallMesh = new THREE.InstancedMesh(boxGeo, mat, cells.length)
@@ -245,8 +288,13 @@ function buildWalls(data: Uint8ClampedArray, w: number, h: number) {
     const [x, y] = pxToWorld(col, row)
     wallBase![i * 2] = x
     wallBase![i * 2 + 1] = y
-    dummy.position.set(x, height.value / 2, y)
-    dummy.scale.set(1, height.value, 1)
+    const n = density(col, row)
+    // 5x5 里 25 格：<=7 稀疏（栏杆/设备边），8-16 墙，>16 实心块/建筑
+    const ratio = layerOn.value ? (n <= 7 ? 0.35 : n <= 16 ? 0.75 : 1.0) : 1.0
+    const h = height.value * ratio
+    heights![i] = h
+    dummy.position.set(x, h / 2, y)
+    dummy.scale.set(1, h, 1)
     dummy.updateMatrix()
     wallMesh!.setMatrixAt(i, dummy.matrix)
   })
@@ -395,6 +443,8 @@ function updateAlarms(list: { id: number; message: string; level: string; metric
 
 let lastTick = performance.now()
 let frames = 0
+let lowFpsSamples = 0
+let fxAutoDisabled = false
 function loop() {
   if (!alive) return
   raf = requestAnimationFrame(loop)
@@ -404,6 +454,17 @@ function loop() {
     fps.value = Math.round((frames * 1000) / (now - lastTick))
     frames = 0
     lastTick = now
+    // 低端机保护：连续偏低就自动关光效（可手动再开）
+    if (fxOn.value && !fxAutoDisabled && fps.value > 0 && fps.value < 20) {
+      lowFpsSamples += 1
+      if (lowFpsSamples >= 6) {
+        fxOn.value = false
+        fxAutoDisabled = true
+        toast('检测到帧率偏低，已自动关闭光效（可在底部重新打开）', 'warn', 5000)
+      }
+    } else if (fps.value >= 20) {
+      lowFpsSamples = 0
+    }
   }
   controls?.update()
 
@@ -461,7 +522,13 @@ function loop() {
     applyPlayIndex()
   }
 
-  if (renderer && scene && camera) renderer.render(scene, camera)
+  if (fxOn.value && composer) {
+    const scan = composer.passes.find((p) => (p as ShaderPass).uniforms?.time)
+    if (scan) (scan as ShaderPass).uniforms.time.value = now / 1000
+    composer.render()
+  } else if (renderer && scene && camera) {
+    renderer.render(scene, camera)
+  }
   if (labelRenderer && scene && camera) labelRenderer.render(scene, camera)
 }
 
@@ -547,8 +614,10 @@ function applyHeight() {
   for (let i = 0; i < wallCount; i++) {
     const x = wallBase[i * 2]
     const y = wallBase[i * 2 + 1]
-    dummy.position.set(x, height.value / 2, y)
-    dummy.scale.set(1, height.value, 1)
+    const ratio = heights && heights[i] ? heights[i] / 2.4 : 1
+    const h = height.value * Math.min(1, Math.max(0.3, ratio))
+    dummy.position.set(x, h / 2, y)
+    dummy.scale.set(1, h, 1)
     dummy.updateMatrix()
     wallMesh.setMatrixAt(i, dummy.matrix)
   }
@@ -573,6 +642,7 @@ function onResize() {
   camera.aspect = w / h
   camera.updateProjectionMatrix()
   renderer.setSize(w, h)
+  composer?.setSize(w, h)
   labelRenderer.setSize(w, h)
 }
 
@@ -621,6 +691,8 @@ onBeforeUnmount(() => {
         <label class="range">阈值 {{ threshold }}
           <input v-model.number="threshold" type="range" min="30" max="120" step="5" @change="rebuildWalls" />
         </label>
+        <label><input v-model="layerOn" type="checkbox" @change="rebuildWalls" /> 高度分层</label>
+        <label><input v-model="fxOn" type="checkbox" /> 光效</label>
         <button class="btn btn-xs" @click="resetCamera">复位视角</button>
       </div>
 

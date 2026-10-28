@@ -1,19 +1,18 @@
-feat(3d): 轨迹回放（24h、1215 点）+ 历史位姿接口
+feat(3d): 高度分层 + Bloom/扫描线（可开关，低帧率自动降级）
 
-后端：GET /api/v1/telemetry/poses?robot_id&hours&points
-- 只取有 x/y 的采样，按时间升序
-- 定位跳变 >5m 视为重定位：断开线段，不画"穿墙直线"
-- 等间隔抽稀到 points（默认 1200，最大 5000）
-- 返回 count/points[{ts,x,y,theta}]/distance_m/from/to；空数据也返回 distance_m=0
+高度分层：
+- 按 5x5 邻域占据密度分三档：稀疏（栏杆/设备边）0.35x、一般墙体 0.75x、实心块/建筑 1.0x
+- 墙体实例各自高度，不再"一刀切 2.4m"，门洞与矮墙看起来正常
+- 底部新增「高度分层」开关，可回到统一高度
 
-前端 Twin：
-- 「轨迹回放」面板：1h/6h/24h/3d 切换、播放/暂停、1x-30x 变速、时间滑块、时间标签、点数/里程
-- 历史轨迹线青色，回放标记用线框方块，和实时机器人（橙色实心）区分
-- 播放时逐帧推进索引；拖动滑块立即定位
-- 修复：数组下标必须是整数（浮点索引会取到 undefined 导致播放不动）
+光效：
+- EffectComposer：RenderPass -> UnrealBloomPass（半分辨率、strength .6/threshold .7）-> 扫描线 ShaderPass -> OutputPass
+- 「光效」开关，随时可关
+- 低端机保护：连续 6 次 FPS<20 自动关闭光效并 toast 提示（可手动再开）
 
-实测（Playwright）：24h 载入 1215 点 / 7116.6m；点播放后时间从 13:26:49 前进到 13:30:22；
-截图 docs/screenshots/twin-playback.png
+实测（无头 SwiftShader）：
+- 光效开 FPS 约 5、关 FPS 约 14；自动降级逻辑实测触发（HUD 从 5 变 14）
+- 真实核显/独显待现场实测，不拿软件渲染数据当结论
+- 截图 docs/screenshots/twin-fx.png
 
-测试：新增 test_telemetry_poses.py 2 例（空数据不 500、字段与时间升序）；pytest 131 通过
-UI 冒烟 36 路由 0 问题
+UI 冒烟 36 路由 0 问题；pytest 131 通过
