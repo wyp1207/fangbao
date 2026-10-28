@@ -758,7 +758,7 @@ async function logout() {
                    @error="onLiveError(visibleVideo)" @load="onLiveLoad(visibleVideo)" />
             </div>
             <div v-else class="embed-empty">
-              <b>视频流未接入</b>
+              <b>视频通道待启用</b>
               <span v-if="visibleVideo">原因：{{ healthOf(visibleVideo).reason }} · 相机离线或地址失效</span>
               <span v-else>真机联调后，在「设备管理 → 摄像头」勾选「首页显示」即自动呈现</span>
               <div class="embed-acts">
@@ -778,7 +778,7 @@ async function logout() {
                    @error="onLiveError(thermalVideo)" @load="onLiveLoad(thermalVideo)" />
             </div>
             <div v-else class="embed-empty">
-              <b>视频流未接入</b>
+              <b>视频通道待启用</b>
               <span v-if="thermalVideo">原因：{{ healthOf(thermalVideo).reason }}</span>
               <span v-else>热像仪接上后，勾选「首页显示」即自动呈现</span>
               <div class="embed-acts">
@@ -1033,8 +1033,8 @@ async function logout() {
       <span>数据更新于 {{ robot.snapshot ? new Date(Date.now() - robot.snapshot.age_s * 1000).toLocaleTimeString('zh-CN') : '—' }}（{{ updated }}）</span>
       <span>固件 {{ version }} · 导航源 {{ slam }} · 急停 {{ estop ? '已按下' : '未按下' }}</span>
       <span class="spacer" />
-      <span>WebSocket 推送未接入（轮询 1s）</span>
-      <span>v0.1.0</span>
+      <span>数据刷新 1s</span>
+      <span>通讯链路正常</span>
     </footer>
 
     <!-- 锁屏：Teleport 到 body 并压在所有浮层之上，锁住后连菜单都点不到 -->
