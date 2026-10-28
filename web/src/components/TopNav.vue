@@ -95,6 +95,8 @@ onBeforeUnmount(() => {
   window.removeEventListener("resize", close)
   window.removeEventListener("scroll", close, true)
 })
+
+// 三维孪生入口
 </script>
 
 <template>
