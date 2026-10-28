@@ -55,7 +55,9 @@ def motion(
     from app.adapters.registry import build_for
     import asyncio
 
-    adapter, _ = build_for(robot)
+    from app.core.config import get_settings
+
+    adapter, _ = build_for(robot, settings=get_settings())
     fn = getattr(adapter, action, None)
     if fn is None:
         raise BadRequest(f"适配器 {robot.adapter} 不支持 {action}", code="NOT_SUPPORTED")

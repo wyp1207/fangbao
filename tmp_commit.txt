@@ -1,24 +1,21 @@
-feat(loc/cruise): D3 定位横幅与读回校验 + 巡航端到端跑通（模拟器 3/3 点位）
+test(integration): 联调测试套件 24 项全通过 + 修复并发审计断链（P0）
 
-D3-1 定位状态横幅（首页）
-- located=false → 红色横幅"定位丢失，先重置定位再下发" + 重置按钮
-- located 缺失 → 黄色横幅"定位状态未知"
-- 不靠颜色吓人，直接给动作入口
+按《联调测试平台全维度能力体系》落地 scripts/integration_suite.py：
+- 基础：前端契约 4、硬件输入 2、业务闭环 3、数据库 4、规则引擎 2、网关 4
+- 进阶：时延 1、并发 1、幂等 1、稳定性 1、数据一致性 1
+结果：24/24 通过；列表接口 p50=7ms p95=9ms；8 并发下发只成功 1 次
 
-D3-2 重置定位的服务端读回校验
-- 发完 2101 后等 2 秒读回 status：located=true 且位姿与目标差 ≤0.5m 才算成功
-- 校验逻辑抽成 verify_initial_pose()（纯函数，4 个单测）
-  正常 0.36m → verified；located=false → "定位未就绪"；漂移 1.2m → 报差值
-- 返回 verified / located / distance_m / note，前端按结果给不同 toast
+抓到并修复的真问题：
+1) P0 审计哈希链并发断裂
+   现象：verify 返回 broken_at=991 "prev_hash 对不上"
+   根因：audit() 先查 last_hash 再插入，并发时两条记录 prev_hash 相同
+   修复：messages._AUDIT_LOCK 串行化；新增 A5 用例（6 并发写后校验 ok，checked=1181）
+   附带 scripts/repair_audit_chain.py 用于重建历史断链（dev/维护，需 --yes）
+2) P0 /robots/{id}/motion 500：build_for 缺 settings（与 init-loc 同源缺陷）
+3) 测试用例本身的契约修正：JCROB 无「起立」→ 断言 400 NOT_SUPPORTED 而非 200
 
-巡航端到端（scripts/verify_cruise_e2e.py）
-- 建 3 点位模板（配电柜A / 泵房B / 点位3）→ 下发 → 逐点 goto → 到点判定 → 动作 → done
-- 实测：启动 200，run_id=33，最终 status=done，进度 3/3 ok，
-  step 结果含坐标与动作（waited=3）
+报告：docs/reviews/integration-test-report-20261028.md
+- 含 GLM 测试矩阵对照、做不了的部分（HIL/真机/压测集群）与验收表述建议
+- 工具可用性：GLM 可用；豆包 Ark 返回 ModelNotOpen（账号未开通模型，需控制台开通或给 ep-id）
 
-为跑通补的测试替身（不是产品代码）
-- tools_sim_jcrob.py：POST /task 记录 nav 目标；GET /task 每轮询推进，
-  2 次后 COMPLETE 并把位姿落到目标；/navigation/pose 支持固定位姿。
-  这样巡航的"下发→轮询→到点→校验距离"整条链路可回归。
-
-验证：106 用例通过；巡航 E2E 3/3
+验证：联调 24/24；pytest 106 通过
