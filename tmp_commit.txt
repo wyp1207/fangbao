@@ -1,15 +1,21 @@
-fix(x30): Location 语义写反（0=正常/1=丢失），真机抓到 P0
+feat(x30): 真机基础运动打通 + 平台车体控制（起立/开始运动/方向盘/停止）
 
-真机只读探测发现：X30 1002 的 Location 我们一直按"1=定位正常"解析，
-官方文档（1本机监控.md）明确 定位正常=0，定位丢失=1。
-后果：定位真丢时平台显示"定位正常"，还会放行导航——最危险的一类错误。
+真机实测（只读+用户确认场地清空后的小幅动作）：
+- 起立 UDP 0x31010202：MotionState 0→1→2（脚本与平台 API 各一次）
+- 开始运动 0x31010201：2→4（踏步）
+- 前进 0x21010130（forward=0.3，10Hz 重发 1s）：位姿变化，松手零速
+- 停止运动：一次没回站立，需再发/等待（已记录待优化）
 
-- adapter: located = (Location == "0")，缺失时为 None（未知）
-- 新增 tests/test_x30_location.py 3 例（0/1/缺失）
-- 真机当前状态：MotionState=0（趴下）、Location=1（定位丢失）、电量 97、
-  /location_status 也是 1，与修复后的判断一致
-- scripts/import_x30_current_map.py：SFTP 拉取机器人当前地图（jueying.pgm，1051x1351 @0.1，
-  origin -57.9,-53）并导入平台地图库，替换原来从 8890 导入的旧图（402x287）
-- 清理 SSH 探测临时脚本
+平台能力：
+- POST /robots/{id}/motion-mode {stand|lie|start|stop}：写开关 + 审计
+- POST /robots/{id}/move {forward,left,yaw}：归一化 [-1,1] -> 轴值（跳过 |655| 死区），
+  每帧独立、松手发 0；MotionState 不在 2/3/4 直接 409；审计 2 秒节流
+- 适配器新增 toggle_motion / move_axis；状态里补 motion_state 原始值
+- 首页「实时控制 -> 车体控制」换成方向盘：▲▼◀▶ + 转向 + 停止，按住走、松手停
 
-验证：pytest 137 通过
+实测记录写进 docs/X30巡航原理与平台对接.md 第 8 节：
+- 抓到的 P0（Location 语义反）已单独提交
+- 意外收获：1002 原始返回带 X0/Y0/H/Res，机器人自己会上报当前地图几何，可用于地图一致性校验
+- 巡航仍卡在定位丢失：现场需 start_nav.sh + RViz 2D Pose Estimate
+
+验证：pytest 137 通过；UI 冒烟 36 路由 0 问题；截图 docs/screenshots/dashboard-motion.png

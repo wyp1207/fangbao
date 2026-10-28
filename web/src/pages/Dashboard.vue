@@ -168,6 +168,54 @@ function openVideo(which: string) {
   toast(`${which}通道未接入：真机联调后按 RTSP / WebRTC 接入`, 'warn', 3000)
 }
 const busyMotion = ref(false)
+// ---- 车体基础运动（按住走，松手停；每 100ms 一帧）----
+const motionState = computed(() => String((robot.snapshot?.status as { motion_state?: string } | undefined)?.motion_state ?? ''))
+const canMove = computed(() => ['2', '3', '4'].includes(motionState.value) && auth.canWrite)
+const moving = ref('')
+let moveTimer = 0
+
+async function moveMode(action: 'stand' | 'lie' | 'start' | 'stop') {
+  try {
+    await api.motionMode(Number(deviceId.value), action)
+    toast(action === 'start' ? '已开始运动（踏步）' : action === 'stop' ? '已停止运动' : '指令已下发', 'ok', 2500)
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : '指令失败', 'danger')
+  }
+}
+
+function moveStart(dir: string) {
+  if (!canMove.value) {
+    toast('先起立并「开始运动」，且写开关要开', 'warn', 3500)
+    return
+  }
+  moving.value = dir
+  stopMoveTimer()
+  const send = () => {
+    const body = dir === 'fwd' ? { forward: 0.6 }
+      : dir === 'back' ? { forward: -0.6 }
+      : dir === 'left' ? { left: 0.5 }
+      : dir === 'right' ? { left: -0.5 }
+      : dir === 'yawL' ? { yaw: -0.5 }
+      : { yaw: 0.5 }
+    void api.move(Number(deviceId.value), body).catch(() => {})
+  }
+  send()
+  moveTimer = window.setInterval(send, 100)
+}
+
+function moveEnd() {
+  stopMoveTimer()
+  if (!moving.value) return
+  moving.value = ''
+  void api.move(Number(deviceId.value), { forward: 0, left: 0, yaw: 0 }).catch(() => {})
+}
+
+function stopMoveTimer() {
+  if (moveTimer) {
+    window.clearInterval(moveTimer)
+    moveTimer = 0
+  }
+}
 // 重置定位弹窗（断电/搬动/换图后要用）
 const locOpen = ref(false)
 const locForm = ref({ x: 0, y: 0, yaw: 0 })
@@ -672,6 +720,7 @@ onMounted(async () => {
   }, 1000))
 })
 onBeforeUnmount(() => {
+  stopMoveTimer()
   robot.stop()
   timers.forEach((t) => window.clearInterval(t))
   timers = []
@@ -800,12 +849,36 @@ async function logout() {
             <button :class="{ on: controlTab === 'chassis' }" @click="controlTab = 'chassis'">车体控制</button>
           </div>
           <div class="ctrl-body">
-            <div class="stick" title="点击查看为什么不能操作" @click="tryControl"><span class="knob" /></div>
+            <div v-if="controlTab === 'chassis'" class="move-pad">
+              <button class="mp up" :class="{ on: moving === 'fwd' }"
+                      @pointerdown.prevent="moveStart('fwd')" @pointerup.prevent="moveEnd"
+                      @pointerleave="moveEnd">▲</button>
+              <button class="mp left" :class="{ on: moving === 'left' }"
+                      @pointerdown.prevent="moveStart('left')" @pointerup.prevent="moveEnd"
+                      @pointerleave="moveEnd">◀</button>
+              <button class="mp stop" @click="moveEnd">停</button>
+              <button class="mp right" :class="{ on: moving === 'right' }"
+                      @pointerdown.prevent="moveStart('right')" @pointerup.prevent="moveEnd"
+                      @pointerleave="moveEnd">▶</button>
+              <button class="mp down" :class="{ on: moving === 'back' }"
+                      @pointerdown.prevent="moveStart('back')" @pointerup.prevent="moveEnd"
+                      @pointerleave="moveEnd">▼</button>
+              <button class="mp yl" :class="{ on: moving === 'yawL' }"
+                      @pointerdown.prevent="moveStart('yawL')" @pointerup.prevent="moveEnd"
+                      @pointerleave="moveEnd">↺</button>
+              <button class="mp yr" :class="{ on: moving === 'yawR' }"
+                      @pointerdown.prevent="moveStart('yawR')" @pointerup.prevent="moveEnd"
+                      @pointerleave="moveEnd">↻</button>
+              <span class="mp-hint">MotionState={{ motionState || '—' }} · 按住走，松手停</span>
+            </div>
+            <div v-else class="stick" title="点击查看为什么不能操作" @click="tryControl"><span class="knob" /></div>
             <div class="ctrl-meta">
               <div v-if="canStand" class="pose-actions">
                 <button class="btn" :disabled="busyMotion" @click="doMotion('stand')">起立</button>
               <button class="btn" @click="openInitLoc">重置定位</button>
                 <button class="btn" :disabled="busyMotion" @click="doMotion('lie')">趴下</button>
+              <button class="btn" @click="moveMode('start')">开始运动</button>
+              <button class="btn" @click="moveMode('stop')">停止运动</button>
               </div>
               <p v-else class="dim small">这台设备不支持起立/趴下</p>
               <div><span>电压</span><b>{{ num(galileo.power, 1) }} V</b></div>
@@ -1889,4 +1962,24 @@ async function logout() {
   cursor: pointer;
 }
 .view-toggle button.on { background: rgba(0, 168, 255, .25); color: #fff; }
+.move-pad {
+  position: relative; width: 168px; height: 168px; margin: 0 auto;
+  display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr);
+}
+.move-pad .mp {
+  border: 1px solid rgba(0, 168, 255, .45); background: rgba(0, 60, 100, .35);
+  color: #9fe0ff; font-size: 18px; border-radius: 8px; margin: 3px; cursor: pointer;
+}
+.move-pad .mp.on { background: rgba(0, 200, 255, .45); color: #fff; }
+.move-pad .up { grid-area: 1 / 2; }
+.move-pad .left { grid-area: 2 / 1; }
+.move-pad .stop { grid-area: 2 / 2; font-size: 13px; }
+.move-pad .right { grid-area: 2 / 3; }
+.move-pad .down { grid-area: 3 / 2; }
+.move-pad .yl { grid-area: 1 / 1; font-size: 14px; }
+.move-pad .yr { grid-area: 1 / 3; font-size: 14px; }
+.move-pad .mp-hint {
+  grid-area: 3 / 1 / 4 / 4; font-size: 10px; color: #7fb8d4; text-align: center;
+  align-self: end; padding-bottom: 6px;
+}
 </style>
