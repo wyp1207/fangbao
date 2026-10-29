@@ -30,7 +30,50 @@ const points = ref<NavPoint[]>([])
 const trail = ref<{ x: number; y: number }[]>([])
 const mapError = ref('')
 const now = ref(new Date())
-const controlTab = ref<'ptz' | 'chassis'>('ptz')
+const controlTab = ref<'ptz' | 'chassis'>('chassis')
+// 云台：海康 ISAPI（settings.ptz.enabled）。X30 本体 SDK 不管云台。
+const ptzOn = ref(false)
+const ptzBusy = ref(false)
+let ptzTimer = 0
+
+async function loadPtzFlag() {
+  try {
+    const res = await api.settings()
+    ptzOn.value = Boolean((res.values as Record<string, unknown>)['ptz.enabled'])
+  } catch { ptzOn.value = false }
+}
+
+async function ptzMove(dir: 'up' | 'down' | 'left' | 'right' | 'zoom_in' | 'zoom_out') {
+  if (ptzBusy.value) return
+  ptzBusy.value = true
+  try {
+    await api.ptzMove(dir, 150)
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : '云台指令失败', 'danger')
+  } finally {
+    ptzBusy.value = false
+  }
+}
+
+function ptzHoldStart(dir: 'up' | 'down' | 'left' | 'right') {
+  ptzMove(dir)
+  window.clearInterval(ptzTimer)
+  ptzTimer = window.setInterval(() => { void ptzMove(dir) }, 250)
+}
+
+function ptzHoldEnd() {
+  window.clearInterval(ptzTimer)
+  ptzTimer = 0
+}
+
+async function ptzCenter() {
+  try {
+    await api.ptzStop()
+    toast('云台已停止', 'ok', 2000)
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : '云台归位失败', 'danger')
+  }
+}
 
 // ---- 全屏 ----
 // 首页内嵌视频：取第一路可用视频源（可见光/热红外分开挑）
@@ -103,6 +146,7 @@ function onDevice(v: string) {
   // 换设备就刷新视频与地图，避免还显示上一台的画面
   void api.videos(Number(deviceId.value)).then((rows) => { videoRows.value = rows as never }).catch(() => undefined)
   void loadEnv()
+  void loadPtzFlag()
   void loadVideoHealth()
   void loadTrend()
   void loadCaps()
@@ -187,6 +231,7 @@ function moveEnd() {
 }
 
 function stopMoveTimer() {
+  window.clearInterval(ptzTimer)
   if (moveTimer) {
     window.clearInterval(moveTimer)
     moveTimer = 0
@@ -665,6 +710,7 @@ onMounted(async () => {
   robot.start()
   void api.videos(Number(deviceId.value)).then((rows) => { videoRows.value = rows as never }).catch(() => undefined)
   void loadEnv()
+  void loadPtzFlag()
   void loadVideoHealth()
   void loadTrend()
   void loadCaps()
@@ -828,8 +874,32 @@ async function logout() {
           </div>
         </ScadaPanel>
 
-        <ScadaPanel title="车体控制" class="h-ctrl">
-          <div class="ctrl-body">
+        <ScadaPanel title="实时控制" class="h-ctrl">
+          <div v-if="ptzOn" class="ctrl-tabs">
+            <button :class="{ on: controlTab === 'ptz' }" @click="controlTab = 'ptz'">云台控制</button>
+            <button :class="{ on: controlTab === 'chassis' }" @click="controlTab = 'chassis'">车体控制</button>
+          </div>
+          <div v-if="controlTab === 'ptz' && ptzOn" class="ctrl-body">
+            <div class="ptz-pad">
+              <button class="mp up" @pointerdown.prevent="ptzHoldStart('up')"
+                      @pointerup.prevent="ptzHoldEnd" @pointerleave="ptzHoldEnd">▲</button>
+              <button class="mp left" @pointerdown.prevent="ptzHoldStart('left')"
+                      @pointerup.prevent="ptzHoldEnd" @pointerleave="ptzHoldEnd">◀</button>
+              <button class="mp stop" @click="ptzCenter">停</button>
+              <button class="mp right" @pointerdown.prevent="ptzHoldStart('right')"
+                      @pointerup.prevent="ptzHoldEnd" @pointerleave="ptzHoldEnd">▶</button>
+              <button class="mp down" @pointerdown.prevent="ptzHoldStart('down')"
+                      @pointerup.prevent="ptzHoldEnd" @pointerleave="ptzHoldEnd">▼</button>
+              <button class="mp zi" @click="ptzMove('zoom_in')">＋</button>
+              <button class="mp zo" @click="ptzMove('zoom_out')">－</button>
+            </div>
+            <div class="ctrl-meta">
+              <p class="dim small">海康双光谱 · ISAPI Digest</p>
+              <p class="dim small">单次脉冲 150ms；按住连续转，松手停</p>
+              <p class="dim small">写开关：{{ auth.canWrite ? '已开启' : '已关闭（只读）' }}</p>
+            </div>
+          </div>
+          <div v-show="controlTab === 'chassis' || !ptzOn" class="ctrl-body">
             <div v-if="motionState" class="move-pad">
               <button class="mp up" :class="{ on: moving === 'fwd' }"
                       @pointerdown.prevent="moveStart('fwd')" @pointerup.prevent="moveEnd"
@@ -2014,4 +2084,20 @@ async function logout() {
 .ctrl-meta .pose-actions .btn {
   width: 100%; padding: 5px 6px; font-size: 12px; white-space: nowrap;
 }
+.ptz-pad {
+  position: relative; width: 150px; height: 150px; margin: 0 auto;
+  display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr);
+}
+.ptz-pad .mp {
+  border: 1px solid rgba(0, 168, 255, .45); background: rgba(0, 60, 100, .35);
+  color: #9fe0ff; font-size: 18px; border-radius: 8px; margin: 3px; cursor: pointer;
+}
+.ptz-pad .mp:active { background: rgba(0, 200, 255, .45); color: #fff; }
+.ptz-pad .up { grid-area: 1 / 2; }
+.ptz-pad .left { grid-area: 2 / 1; }
+.ptz-pad .stop { grid-area: 2 / 2; font-size: 13px; }
+.ptz-pad .right { grid-area: 2 / 3; }
+.ptz-pad .down { grid-area: 3 / 2; }
+.ptz-pad .zi { grid-area: 1 / 1; font-size: 15px; }
+.ptz-pad .zo { grid-area: 1 / 3; font-size: 15px; }
 </style>

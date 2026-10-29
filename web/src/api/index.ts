@@ -244,6 +244,10 @@ export const api = {
       { method: 'POST', body: { action } }),
   move: (id: number, body: { forward?: number; left?: number; yaw?: number }) =>
     request<{ ok: boolean }>(`/robots/${id}/move`, { method: 'POST', body }),
+  ptzStatus: () => request<{ ok: boolean; detail: string }>('/ptz/status'),
+  ptzMove: (direction: 'up' | 'down' | 'left' | 'right' | 'zoom_in' | 'zoom_out', pulse_ms = 150) =>
+    request<{ ok: boolean; direction: string }>(`/ptz/move`, { method: 'POST', body: { direction, pulse_ms } }),
+  ptzStop: () => request<{ ok: boolean }>('/ptz/stop', { method: 'POST', body: {} }),
   robotGoto: (id: number, body: { x: number; y: number; yaw?: number; max_m?: number; confirmed?: boolean }) =>
     request<{ ok: boolean; x: number; y: number; distance_m: number | null; map_id: number | null }>(
       `/robots/${id}/goto`, { method: 'POST', body }),

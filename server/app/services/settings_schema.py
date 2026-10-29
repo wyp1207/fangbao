@@ -55,6 +55,27 @@ SCHEMA: dict[str, dict[str, Any]] = {
         "effect": "关闭时下发/暂停/取消一律 403，并说明缺什么；真机联调通过并签授权后再开",
     },
 
+    "ptz.enabled": {
+        "label": "启用云台控制", "type": "bool", "default": False, "group": "云台",
+        "effect": "打开后首页「实时控制」出现云台页签；走海康 ISAPI，X30 本体 SDK 不管云台",
+    },
+    "ptz.host": {
+        "label": "云台相机 IP", "type": "str", "default": "192.168.1.64", "group": "云台",
+        "effect": "海康双光谱相机地址（现场实测 192.168.1.64 可达）",
+    },
+    "ptz.username": {
+        "label": "云台账号", "type": "str", "default": "admin", "group": "云台",
+        "effect": "ISAPI Digest 认证账号",
+    },
+    "ptz.password": {
+        "label": "云台密码", "type": "str", "default": "", "group": "云台",
+        "effect": "ISAPI Digest 认证密码；只写不读，接口不回显",
+    },
+    "ptz.channel": {
+        "label": "云台通道", "type": "int", "default": 1, "min": 1, "max": 8, "group": "云台",
+        "effect": "一般可见光通道 1；双光谱机型热成像可能是 2",
+    },
+
     "map.strict_check": {
         "label": "地图严格校验", "type": "bool", "default": False,
         "group": "地图",
