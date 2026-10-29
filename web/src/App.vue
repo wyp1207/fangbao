@@ -6,6 +6,7 @@ import { useIdleSessionGuard } from '@/composables/useIdleSession'
 import FaultBanner from '@/components/FaultBanner.vue'
 import ForcePasswordChange from '@/components/ForcePasswordChange.vue'
 import ToastHost from '@/components/ToastHost.vue'
+import LockScreen from '@/components/LockScreen.vue'
 
 const auth = useAuthStore()
 const platform = usePlatformStore()
@@ -21,5 +22,6 @@ useIdleSessionGuard()
   <router-view />
   <FaultBanner v-if="auth.user && platform.bannerOnFault" />
   <ForcePasswordChange />
+  <LockScreen />
   <ToastHost />
 </template>

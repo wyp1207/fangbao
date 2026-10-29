@@ -15,10 +15,12 @@ import { usePlatformStore } from '@/stores/platform'
 import { ApiError } from '@/api/client'
 import { panelsFor } from '@/components/panels/registry'
 import { useRobotStore } from '@/stores/robot'
+import { useLockStore } from '@/stores/lock'
 import { api, type MapMeta, type NavPoint } from '@/api'
 import logoUrl from '@/assets/logo.png'
 
 const robot = useRobotStore()
+const lockStore = useLockStore()
 const auth = useAuthStore()
 const platform = usePlatformStore()
 const router = useRouter()
@@ -29,32 +31,6 @@ const trail = ref<{ x: number; y: number }[]>([])
 const mapError = ref('')
 const now = ref(new Date())
 const controlTab = ref<'ptz' | 'chassis'>('ptz')
-
-// ---- 锁屏 ----
-const locked = ref(false)
-const lockPwd = ref('')
-const lockBusy = ref(false)
-const lockError = ref('')
-
-function lockScreen() {
-  lockPwd.value = ""
-  lockError.value = ""
-  locked.value = true
-}
-
-async function unlock() {
-  lockBusy.value = true
-  lockError.value = ""
-  try {
-    await api.verifyPassword(lockPwd.value)
-    locked.value = false
-    lockPwd.value = ""
-  } catch (e) {
-    lockError.value = e instanceof Error ? e.message : "密码不正确"
-  } finally {
-    lockBusy.value = false
-  }
-}
 
 // ---- 全屏 ----
 // 首页内嵌视频：取第一路可用视频源（可见光/热红外分开挑）
@@ -537,6 +513,10 @@ const locBanner = computed(() => {
 })
 
 const pose = computed(() => robot.pose)
+const poseYawDeg = computed(() => {
+  const p = robot.pose as { theta_rad?: number } | null
+  return p ? (Number(p.theta_rad ?? 0) * 57.3).toFixed(1) : '—'
+})
 const galileo = computed(() => robot.snapshot?.galileo ?? {})
 const unacked = computed(() => robot.alarms.filter((a) => !a.acked_at))
 const acked = computed(() => robot.alarms.filter((a) => a.acked_at))
@@ -765,7 +745,7 @@ async function logout() {
         <div class="field"><label>当前场站</label><DarkSelect :model-value="site" :options="sites" width="190px" @update:model-value="onSite" /></div>
         <div class="field"><label>当前设备</label><DarkSelect :model-value="deviceId" :options="deviceOptions" width="170px" @update:model-value="onDevice" /></div>
         <span class="tool-icons">
-          <button class="ti" type="button" title="锁定屏幕" @click="lockScreen">
+          <button class="ti" type="button" title="锁定屏幕" @click="lockStore.lock()">
             <svg viewBox="0 0 16 16" aria-hidden="true">
               <rect x="3" y="7" width="10" height="7" rx="1.2" />
               <path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7" />
@@ -794,7 +774,12 @@ async function logout() {
       <div class="sb-right">
         <div class="stat"><label>电量</label><b class="gold"><AnimatedNumber :value="battery" suffix="%" /></b><span class="battery"><i :style="{ width: (battery ?? 0) + '%' }" /></span></div>
         <div class="stat"><label>在线状态</label><b :class="robot.online ? 'green' : 'red'">{{ robot.online ? '在线' : '离线' }}</b></div>
-        <div class="stat"><label>重定位状态</label><b class="green">{{ robot.online ? '定位成功' : '未知' }}</b></div>
+        <div class="stat">
+          <label>定位状态</label>
+          <button class="loc-chip" :class="locBanner?.tone || 'ok'" @click="openInitLoc">
+            <i class="dot" />{{ locBanner ? (locBanner.tone === 'danger' ? '定位丢失' : '状态未知') : '定位正常' }}
+          </button>
+        </div>
         <div class="stat"><label>机器人状态</label><b class="gold">{{ mode }}</b></div>
         <div class="stat"><label>服务器状态</label><b class="green">已连接</b></div>
       </div>
@@ -985,11 +970,6 @@ async function logout() {
       </main>
 
       <aside class="col right">
-        <div v-if="locBanner" class="loc-banner" :class="locBanner.tone">
-        <b>定位</b><span>{{ locBanner.text }}</span>
-        <button class="btn btn-xs" @click="openInitLoc">重置定位</button>
-      </div>
-
       <ScadaPanel title="告警统计" tone="gold" class="h-donut stack-panel" :right="`近7日 ${trendTotal} 条`">
           <div class="donut-row" title="点击查看未确认告警" @click="goAlarms('unacked')">
             <svg viewBox="0 0 100 100" class="donut">
@@ -1119,27 +1099,34 @@ async function logout() {
       <span>通讯链路正常</span>
     </footer>
 
-    <!-- 锁屏：Teleport 到 body 并压在所有浮层之上，锁住后连菜单都点不到 -->
-    <Teleport to="body">
-    <div v-if="locked" class="lock-mask">
-      <div class="lock-box">
-        <div class="lock-icon">🔒</div>
-        <h3>屏幕已锁定</h3>
-        <p class="dim">输入当前账号密码解锁</p>
-        <input
-          class="lock-input" type="password" v-model="lockPwd"
-          placeholder="密码" @keyup.enter="unlock" autofocus
-        />
-        <p v-if="lockError" class="red small">{{ lockError }}</p>
-        <div class="lock-actions">
-          <button class="btn btn-sm" @click="logout">退出登录</button>
-          <button class="btn btn-sm primary" :disabled="lockBusy" @click="unlock">解锁</button>
-        </div>
-        <p class="dim small" style="margin-top:10px">锁定期间无法操作大屏；忘记密码请让管理员在「用户管理」里重置</p>
-      </div>
-    </div>
-    </Teleport>
+    
   </div>
+
+    <!-- 定位弹窗：不占右栏，避免把环境数据挤掉 -->
+    <Teleport to="body">
+      <div v-if="locOpen" class="loc-modal" @click.self="locOpen = false">
+        <div class="loc-card">
+          <header><b>定位</b><button class="x" @click="locOpen = false">✕</button></header>
+          <p class="loc-state" :class="locBanner?.tone || 'ok'">
+            {{ locBanner?.text || '定位正常：位姿可信' }}
+          </p>
+          <div class="loc-now">
+            当前位姿：<b>{{ pose ? `${Number(pose.x).toFixed(2)}, ${Number(pose.y).toFixed(2)}` : '—' }}</b>
+            · 朝向 <b>{{ poseYawDeg }}°</b>
+          </div>
+          <div class="loc-form">
+            <label>X<input v-model.number="locForm.x" type="number" step="0.01" /></label>
+            <label>Y<input v-model.number="locForm.y" type="number" step="0.01" /></label>
+            <label>朝向(rad)<input v-model.number="locForm.yaw" type="number" step="0.01" /></label>
+          </div>
+          <p class="loc-tip">断电重启、被搬动、换地图后必须重置；发送后会回读校验位姿是否收敛。</p>
+          <footer>
+            <button class="btn btn-sm" @click="locOpen = false">取消</button>
+            <button class="btn btn-sm primary" @click="saveInitLoc">重置定位</button>
+          </footer>
+        </div>
+      </div>
+    </Teleport>
 </template>
 
 <style scoped>
@@ -1982,4 +1969,42 @@ async function logout() {
   grid-area: 3 / 1 / 4 / 4; font-size: 10px; color: #7fb8d4; text-align: center;
   align-self: end; padding-bottom: 6px;
 }
+
+/* 定位状态小胶囊 + 弹窗（不占右栏） */
+.loc-chip {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  background: transparent; border: 1px solid rgba(0, 168, 255, .4);
+  color: #bfe9ff; border-radius: 12px; padding: 2px 9px; font-size: 12px;
+}
+.loc-chip .dot { width: 7px; height: 7px; border-radius: 50%; background: #39e08a; }
+.loc-chip.warn { border-color: rgba(255, 190, 60, .6); color: #ffe0a3; }
+.loc-chip.warn .dot { background: #ffbe3c; }
+.loc-chip.danger { border-color: rgba(255, 86, 86, .7); color: #ffc9c9; }
+.loc-chip.danger .dot { background: #ff5656; }
+.loc-modal {
+  position: fixed; inset: 0; z-index: 9000; display: grid; place-items: center;
+  background: rgba(2, 10, 20, .72); backdrop-filter: blur(4px);
+}
+.loc-card {
+  width: 420px; padding: 18px 20px; border-radius: 10px; color: #dff0ff;
+  background: linear-gradient(180deg, #0b2747, #071a30);
+  border: 1px solid rgba(0, 168, 255, .45); box-shadow: 0 0 28px rgba(0, 150, 255, .25);
+}
+.loc-card header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.loc-card header b { font-size: 16px; letter-spacing: 2px; }
+.loc-card .x { background: none; border: 0; color: #8fb6d4; font-size: 16px; cursor: pointer; }
+.loc-state { font-size: 12px; margin: 6px 0 10px; padding: 6px 8px; border-radius: 6px; background: rgba(0, 255, 170, .08); }
+.loc-state.warn { background: rgba(255, 190, 60, .12); color: #ffe0a3; }
+.loc-state.danger { background: rgba(255, 86, 86, .12); color: #ffc9c9; }
+.loc-now { font-size: 12px; color: #a9d8f5; margin-bottom: 12px; }
+.loc-form { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.loc-form label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: #8fb6d4; }
+.loc-form input {
+  padding: 6px 8px; border-radius: 5px; border: 1px solid rgba(0, 168, 255, .35);
+  background: rgba(0, 20, 36, .9); color: #e6f6ff; font-size: 13px;
+}
+.loc-tip { font-size: 11px; color: #7fa8c4; margin: 10px 0 0; }
+.loc-card footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+/* 实时消息整体下移 2mm，地图相应放大 */
+.rt { margin-top: 2mm; height: 228px; }
 </style>
