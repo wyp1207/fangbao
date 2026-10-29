@@ -61,3 +61,7 @@ web/_*.mjs
 
 # 数据库备份（体积大，不入库）
 server/data/backups/
+
+# 浏览器临时 profile（Playwright/Chrome）
+render3d/
+.chrome/

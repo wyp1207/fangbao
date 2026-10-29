@@ -1,7 +1,6 @@
 import { onBeforeUnmount, onMounted } from 'vue'
 import { api } from '@/api'
-import { triggerUnauthorized } from '@/api/client'
-import { useAuthStore } from '@/stores/auth'
+import { useLockStore } from '@/stores/lock'
 import { toast } from '@/composables/useToast'
 
 /**
@@ -50,20 +49,13 @@ export function useIdleSessionGuard() {
   async function check() {
     const idle = (Date.now() - lastActive) / 60000
     if (idle < idleMinutes) return
-    lastActive = Date.now()      // 先推后，避免同一分钟重复触发
+    lastActive = Date.now()
 
-    // 空闲超时 = 主动退出，而不是"问一下还登录着吗"。
-    // 之前只探活，服务端 token 还有效就什么都不做，设置形同虚设（QA 实测发现）。
-    try {
-      await api.logout()
-    } catch {
-      // 服务端已经失效也无所谓，本地照样清状态
-    }
-    try { sessionStorage.removeItem('jc_signed_in') } catch { /* ignore */ }
-    const auth = useAuthStore()
-    auth.user = null
-    triggerUnauthorized()        // 复用全局跳转（回登录页并带 expired=1）
-    toast(`已空闲 ${Math.round(idleMinutes)} 分钟，自动退出登录`, 'warn', 6000)
+    // 空闲超时 = 锁屏，不是退出登录。
+    // 值班大屏半夜没人看，退出登录等于把现场画面关掉；锁屏既保护操作权限又能继续显示。
+    const lock = useLockStore()
+    lock.lock(Math.round(idleMinutes))
+    toast(`已空闲 ${Math.round(idleMinutes)} 分钟，屏幕已锁定`, 'warn', 6000)
   }
 
   onMounted(() => {

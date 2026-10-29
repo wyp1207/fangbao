@@ -63,9 +63,9 @@ SCHEMA: dict[str, dict[str, Any]] = {
     },
 
     "security.idle_minutes": {
-        "label": "空闲多久自动退出（分钟）", "type": "int", "default": 5, "min": 1, "max": 240,
+        "label": "空闲多久自动锁屏（分钟）", "type": "int", "default": 5, "min": 1, "max": 240,
         "group": "平台",
-        "effect": "超过这么久没有鼠标/键盘操作，前端会核一次会话；已过期就退回登录页。值班大屏建议 10–30 分钟",
+        "effect": "超过这么久没有鼠标/键盘操作，前端会锁屏（输密码解锁，不断开连接）。值班大屏建议 10–30 分钟",
     },
 
     "sensor.keep_days": {
