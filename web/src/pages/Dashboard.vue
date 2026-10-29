@@ -828,13 +828,9 @@ async function logout() {
           </div>
         </ScadaPanel>
 
-        <ScadaPanel title="实时控制" class="h-ctrl">
-          <div class="ctrl-tabs">
-            <button v-if="hasPanel('ptz')" :class="{ on: controlTab === 'ptz' }" @click="controlTab = 'ptz'">云台控制</button>
-            <button :class="{ on: controlTab === 'chassis' }" @click="controlTab = 'chassis'">车体控制</button>
-          </div>
+        <ScadaPanel title="车体控制" class="h-ctrl">
           <div class="ctrl-body">
-            <div v-if="controlTab === 'chassis'" class="move-pad">
+            <div v-if="motionState" class="move-pad">
               <button class="mp up" :class="{ on: moving === 'fwd' }"
                       @pointerdown.prevent="moveStart('fwd')" @pointerup.prevent="moveEnd"
                       @pointerleave="moveEnd">▲</button>
@@ -854,22 +850,22 @@ async function logout() {
               <button class="mp yr" :class="{ on: moving === 'yawR' }"
                       @pointerdown.prevent="moveStart('yawR')" @pointerup.prevent="moveEnd"
                       @pointerleave="moveEnd">↻</button>
-              <span class="mp-hint">MotionState={{ motionState || '—' }} · 按住走，松手停</span>
             </div>
-            <div v-else class="stick" title="点击查看为什么不能操作" @click="tryControl"><span class="knob" /></div>
+            <div v-else class="ctrl-empty">
+              <b>这台设备没有车体控制接口</b>
+              <span>车体控制目前只接了 X30（起立/行走/转向）。轮式机型走任务下发，不在这里遥控。</span>
+            </div>
+
             <div class="ctrl-meta">
               <div v-if="canStand" class="pose-actions">
                 <button class="btn" :disabled="busyMotion" @click="doMotion('stand')">起立</button>
-              <button class="btn" @click="openInitLoc">重置定位</button>
                 <button class="btn" :disabled="busyMotion" @click="doMotion('lie')">趴下</button>
-              <button class="btn" @click="moveMode('start')">开始运动</button>
-              <button class="btn" @click="moveMode('stop')">停止运动</button>
+                <button class="btn" @click="moveMode('start')">开始运动</button>
+                <button class="btn" @click="moveMode('stop')">停止运动</button>
               </div>
-              <p v-else class="dim small">这台设备不支持起立/趴下</p>
-              <div><span>电压</span><b>{{ num(galileo.power, 1) }} V</b></div>
-              <div><span>速度</span><b>{{ num(galileo.currentSpeedX) }} m/s</b></div>
-              <div><span>角速度</span><b>{{ num(galileo.currentSpeedTheta, 3) }} rad/s</b></div>
-              <p class="dim">写操作未开放（需真机联调 + 现场授权签字）</p>
+              <p v-else class="dim small">该机型不支持起立/趴下（轮式没有这个动作）</p>
+              <p class="dim small" v-if="motionState">MotionState={{ motionState }} · 按住走，松手停</p>
+              <p class="dim small">写开关：{{ auth.canWrite ? '已开启' : '已关闭（只读）' }} · 急停在车身上</p>
             </div>
           </div>
         </ScadaPanel>
@@ -1372,7 +1368,7 @@ async function logout() {
 .grow { flex: 1; min-height: 0; }
 .left .panel.grow { flex: 1 1 0; }   /* 可见光/热红外等高 */
 .col.center { display: grid; grid-template-rows: minmax(0, 1fr) auto; }
-.h-ctrl { height: 172px; flex: none; }
+.h-ctrl { height: 190px; flex: none; }
 .h-donut { height: 208px; flex: none; }
 .h-points { flex: 0 0 auto; height: auto; min-height: 0; padding-bottom: 6px; }
 /* 右栏：环境面板吃掉剩余高度（内容居中），点位列表按内容高，底部不留大片空白 */
@@ -1950,7 +1946,7 @@ async function logout() {
 }
 .view-toggle button.on { background: rgba(0, 168, 255, .25); color: #fff; }
 .move-pad {
-  position: relative; width: 168px; height: 168px; margin: 0 auto;
+  position: relative; width: 150px; height: 150px; margin: 0 auto;
   display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr);
 }
 .move-pad .mp {
@@ -2006,5 +2002,16 @@ async function logout() {
 .loc-tip { font-size: 11px; color: #7fa8c4; margin: 10px 0 0; }
 .loc-card footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 /* 实时消息整体下移 2mm，地图相应放大 */
-.rt { margin-top: 2mm; height: 228px; }
+.rt { margin-top: 2mm; height: 190px; }
+.ctrl-empty {
+  flex: 1; display: flex; flex-direction: column; gap: 4px; justify-content: center;
+  padding: 8px 12px; border: 1px dashed rgba(0, 168, 255, .3); border-radius: 8px;
+  color: #9fd6ee; font-size: 12px;
+}
+.ctrl-empty b { color: #cfeaff; font-size: 13px; }
+.ctrl-empty span { color: #7fa8c4; }
+.ctrl-meta .pose-actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.ctrl-meta .pose-actions .btn {
+  width: 100%; padding: 5px 6px; font-size: 12px; white-space: nowrap;
+}
 </style>
