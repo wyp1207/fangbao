@@ -639,7 +639,7 @@ const unacked = computed(() => robot.alarms.filter((a) => !a.acked_at))
 const acked = computed(() => robot.alarms.filter((a) => a.acked_at))
 const imageUrl = computed(() => (robot.currentMap ? api.mapPng(1, robot.currentMap) : ''))
 // 地图面板 2D/3D 切换：2D 负责点选，3D 负责看空间关系（GLM/豆包建议的共存方式）
-const viewMode = ref<'2d' | '3d'>('2d')
+const viewMode = ref<'2d' | '3d'>('3d')
 
 const clock = computed(() => {
   const d = now.value
@@ -1089,8 +1089,6 @@ async function logout() {
               :pose="pose" :stale="robot.stale || !robot.online" :trail="trail"
             />
             <Twin v-if="viewMode === '3d'" compact />
-            <span class="scan" />
-            <span class="radar" />
             <div class="view-toggle">
               <button :class="{ on: viewMode === '2d' }" @click="viewMode = '2d'">2D</button>
               <button :class="{ on: viewMode === '3d' }" @click="viewMode = '3d'">3D</button>
@@ -1647,24 +1645,9 @@ async function logout() {
   overflow: hidden;
 }
 
-/* 地图扫码 */
+/* 地图扫码（已移除循环转圈/扫描层：用户要求删掉白色旋转屏障） */
 .map-frame { position: relative; flex: 1 1 auto; min-height: 0; }
 .map-frame :deep(.map-wrap) { position: absolute; inset: 0; height: auto; min-height: 0; }
-.scan {
-  position: absolute; left: 0; right: 0; height: 34%;
-  background: linear-gradient(180deg, transparent, rgba(120, 230, 255, 0.16), transparent);
-  animation: sweep 5s linear infinite; pointer-events: none;
-}
-@keyframes sweep { 0% { top: -35%; } 100% { top: 100%; } }
-/* 雷达扫描扇面 */
-.radar {
-  position: absolute; inset: 0; pointer-events: none;
-  background: conic-gradient(from 0deg at 50% 50%, rgba(120, 255, 220, 0.22), transparent 22%, transparent 100%);
-  animation: radar 6s linear infinite;
-  mix-blend-mode: screen;
-  opacity: 0.45;
-}
-@keyframes radar { to { transform: rotate(360deg); } }
 
 /* 环形图 */
 .donut-row { display: flex; align-items: center; gap: 12px; position: relative; flex: none; }
