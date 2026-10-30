@@ -58,6 +58,10 @@ const statusOptions = [
 ]
 const templateOptions = computed(() => templates.value.map((t) => ({ value: String(t.id), label: t.name })))
 
+function exportReport(id: number) {
+  window.open(api.taskReportUrl(id), '_blank')
+}
+
 async function load() {
   loading.value = true
   try {
@@ -254,6 +258,8 @@ async function takeover(r: { id: number; robot_id?: number }) {
             <td>
               <div class="row-actions">
                 <button class="btn btn-xs" @click="openDetail(r)">详情</button>
+              <button class="btn btn-xs" title="导出这趟巡检的 xlsx 报告"
+                      @click="exportReport(r.id)">报告</button>
                 <button v-if="r.status === 'planned'" class="btn btn-xs"
                         :disabled="!auth.canWrite" @click="dispatch(r)">单点下发</button>
                 <button v-if="['planned','failed','cancelled'].includes(r.status)" class="btn btn-xs primary"

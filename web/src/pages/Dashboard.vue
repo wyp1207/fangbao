@@ -704,8 +704,21 @@ function ageSeconds(ts?: string | null): number | null {
   return Math.max(0, Math.round((Date.now() - t) / 1000))
 }
 
-const envCells = computed(() =>
-  envSensors.value.map((s) => {
+const envCells = computed(() => {
+  // 同类传感器合并成一格：取最新的一条，标注数量，避免出现 3 个"可燃气体"
+  const byKind = new Map<string, { s: typeof envSensors.value[number]; count: number }>()
+  for (const s of envSensors.value) {
+    const hit = byKind.get(s.kind)
+    if (!hit) {
+      byKind.set(s.kind, { s, count: 1 })
+      continue
+    }
+    hit.count += 1
+    const oldT = hit.s.ts ? new Date(hit.s.ts).getTime() : 0
+    const newT = s.ts ? new Date(s.ts).getTime() : 0
+    if (newT > oldT) hit.s = s
+  }
+  return Array.from(byKind.values()).map(({ s, count }) => {
     const age = ageSeconds(s.ts)
     const stale = age !== null && age > 120
     let ageText = ''
@@ -717,14 +730,15 @@ const envCells = computed(() =>
     }
     return {
       label: KIND_TEXT[s.kind] ?? s.name,
+      count,
       unit: s.unit,
       value: stale || s.value === null ? null : fmtEnv(s.value),
       stale,
       age,
       ageText,
     }
-  }),
-)
+  })
+})
 
 const envCount = computed(() => envSensors.value.length)
 
@@ -1188,7 +1202,8 @@ async function logout() {
           </div>
         </ScadaPanel>
 
-        <ScadaPanel title="环境数据" tone="cyan" class="grow" :right="envCount ? `${envCount} 项` : '未接入'">
+        <ScadaPanel title="环境数据" tone="cyan" class="grow"
+                    :right="envCount ? `${envCells.length} 类 · ${envCount} 个` : '未接入'">
           <div class="env-grid">
             <div v-for="e in envCells" :key="e.label" class="env-cell" :class="{ stale: e.stale }">
               <span class="env-label">
@@ -2199,7 +2214,7 @@ async function logout() {
 .loc-tip { font-size: 11px; color: #7fa8c4; margin: 10px 0 0; }
 .loc-card footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 /* 实时消息整体下移 2mm，地图相应放大 */
-.rt { margin-top: 2mm; height: 190px; }
+.rt { margin-top: 1mm; height: 218px; }
 .ctrl-empty {
   flex: 1; display: flex; flex-direction: column; gap: 4px; justify-content: center;
   padding: 8px 12px; border: 1px dashed rgba(0, 168, 255, .3); border-radius: 8px;
@@ -2243,14 +2258,14 @@ async function logout() {
 
 /* 今日任务状态：文字必须完整；时间不截断 */
 .rt-right { min-width: 0; }
-.rt-tag { font-size: 13px; }
+.rt-tag { font-size: 11px; padding: 1px 8px; }
 .rt-line {
-  display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 6px;
-  align-items: start; line-height: 1.35; padding: 2px 0;
+  display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 6px;
+  align-items: baseline; line-height: 1.3; padding: 2px 0;
 }
-.rt-line span { color: #8fc4e6; font-size: 12px; white-space: normal; }
+.rt-line span { color: #8fc4e6; font-size: 11.5px; white-space: nowrap; }
 .rt-line b {
-  color: #eaf7ff; font-size: 14px; font-weight: 600;
+  color: #eaf7ff; font-size: 13px; font-weight: 600;
   white-space: normal; overflow: visible; text-overflow: clip;
   word-break: break-all; overflow-wrap: anywhere;
 }
@@ -2278,4 +2293,7 @@ async function logout() {
 }
 .env-age { font-style: normal; font-size: 10px; color: #7fa8c4; margin-left: 4px; }
 .env-cell.stale .env-value { color: #8fa6b8; }
+.env-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.env-count { font-style: normal; font-size: 10px; color: #7fd0ff; margin-left: 3px; }
+.env-age { font-style: normal; font-size: 10px; color: #7fa8c4; }
 </style>
