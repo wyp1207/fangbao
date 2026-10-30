@@ -178,7 +178,10 @@ def _go2rtc_url(stream_name: str) -> str | None:
     if not base:
         return None
     # 和 detask(8123) 一致：H265 相机走 _web 变体（约 0.5s 延迟、每路约 0.3 核）
-    name = f"{stream_name}_web" if _has_web_variant(stream_name, base) else stream_name
+    # 探测必须用服务端能访问的绝对地址：public_base 在部署时是 "/go2rtc" 这种相对前缀，
+    # urllib 解析不了，会误判"没有 _web"，浏览器拿到 H265 原名流就黑屏。
+    probe_base = getattr(settings, "go2rtc_base", "") or base
+    name = f"{stream_name}_web" if _has_web_variant(stream_name, probe_base) else stream_name
     mode = getattr(get_settings(), "video_play_mode", "webrtc") or "webrtc"
     return f"{base.rstrip('/')}/stream.html?src={name}&mode={mode}"
 
@@ -380,12 +383,28 @@ def videos_health(
     ids: str | None = Query(None, description="只探这几路，逗号分隔（首页只探显示的两路）"),
     _: User = Depends(require_roles("admin", "operator", "viewer")),
 ) -> dict:
-    """每路流实际能不能出画面（不是"配置了没有"，是真抓一帧）。"""
-    from app.services.snapshot import probe_frame
+    """每路流实际能不能出画面（不是"配置了没有"，是真抓一帧）。
+
+    额外返回网关状态：go2rtc 挂了的时候，每路都失败，但原因不是"相机掉线"，
+    用户需要一眼看出是"视频网关不可达"而不是平台坏了。
+    """
+    from app.services.snapshot import probe_direct, probe_frame
 
     from app.db.session import SessionLocal
 
     base = getattr(get_settings(), "go2rtc_base", "") or ""
+
+    gateway: dict = {"base": base, "reachable": False, "error": "未配置 JC_GO2RTC_BASE"}
+    if base:
+        import urllib.request
+
+        try:
+            with urllib.request.urlopen(f"{base.rstrip('/')}/api", timeout=1.5) as resp:
+                gateway = {"base": base, "reachable": resp.status == 200, "error": ""}
+        except Exception as exc:  # noqa: BLE001
+            gateway = {"base": base, "reachable": False,
+                       "error": f"{exc.__class__.__name__}: {exc}"}
+
     with SessionLocal() as db:
         q = db.query(VideoSource).filter(VideoSource.show_on_dashboard.is_(True))
         if robot_id is not None:
@@ -394,14 +413,22 @@ def videos_health(
             want = [int(x) for x in ids.split(",") if x.strip().isdigit()]
             if want:
                 q = q.filter(VideoSource.id.in_(want))
-        rows = [(v.id, v.name, v.stream_name or "") for v in q.all()]
+        rows = [(v.id, v.name, v.stream_name or "", v.url or "") for v in q.all()]
 
     # 探测在会话外做（每路最多 2 次 × 2.5s，不能占连接）
     out = []
-    for vid, name, stream in rows:
+    for vid, name, stream, direct_url in rows:
         ok, reason = probe_frame(stream, base)
+        if not ok:
+            # 中继不可用时，直接连相机再试一次：相机通就不算"视频不可用"
+            ok2, reason2 = probe_direct(direct_url)
+            if ok2:
+                ok, reason = True, "直连正常（中继不可用）"
+            elif base and not gateway["reachable"]:
+                reason = f"视频网关不可达（{base}）"
         out.append({"id": vid, "name": name, "stream": stream, "ok": ok, "reason": reason})
-    return {"ok": True, "videos": out}
+    return {"ok": True, "gateway": gateway, "videos": out}
+
 
 
 @router.get("/{video_id}/mjpeg")

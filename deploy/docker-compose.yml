@@ -18,7 +18,11 @@ services:
       JC_DB_URL: mysql+pymysql://jcrob:${JC_DB_PASSWORD:-changeme}@jc-mysql:3306/jcrob?charset=utf8mb4
       # 浏览器侧走 nginx 同源反代，不用暴露 go2rtc 的 1984
       JC_GO2RTC_PUBLIC_BASE: /go2rtc
+      # 后端探活/取流走宿主上已在跑的 go2rtc（35 路真实流）；容器内直连相机仍可兜底
+      JC_GO2RTC_BASE: ${JC_GO2RTC_BASE:-http://192.168.8.40:1984}
       TZ: Asia/Shanghai
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       jc-mysql:
         condition: service_healthy
@@ -96,6 +100,9 @@ services:
       options: { max-size: "10m", max-file: "3" }
 
   jc-go2rtc:
+    # 默认不启动：8.40 宿主机已有 go2rtc（35 路真实流），再起一个只会造成
+    # "两套中继、配置各一半"的混乱。需要自带中继时用 profiles 显式开启。
+    profiles: ["standalone-relay"]
     image: alexxit/go2rtc:latest
     container_name: jc-go2rtc
     restart: unless-stopped
