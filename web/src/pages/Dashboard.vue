@@ -30,7 +30,7 @@ const points = ref<NavPoint[]>([])
 const trail = ref<{ x: number; y: number }[]>([])
 const mapError = ref('')
 const now = ref(new Date())
-const controlTab = ref<'ptz' | 'chassis'>('chassis')
+const controlTab = ref<'ptz' | 'chassis'>('ptz')
 // 云台：海康 ISAPI（settings.ptz.enabled）。X30 本体 SDK 不管云台。
 const ptzOn = ref(false)
 const ptzBusy = ref(false)
@@ -526,6 +526,30 @@ const runStats = computed(() => {
   return st
 })
 const currentRun = computed(() => runs.value.find((r) => r.status === 'running') ?? null)
+
+const activeRun = computed(() => runs.value.find((r) => r.status === 'running') ?? null)
+
+function goTaskCenter() {
+  void router.push('/tasks')
+}
+
+async function runAction(kind: 'pause' | 'resume' | 'cancel') {
+  const run = activeRun.value
+  if (!run) return
+  try {
+    if (kind === 'pause') await api.pauseTaskRun(run.id)
+    else if (kind === 'resume') await api.resumeTaskRun(run.id)
+    else {
+      if (!window.confirm(`取消任务「${run.name}」？`)) return
+      await api.cancelTaskRun(run.id)
+    }
+    toast(kind === 'cancel' ? '已取消' : kind === 'pause' ? '已暂停' : '已继续', 'ok', 2500)
+    await loadRuns()
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : '指令失败', 'danger', 5000)
+  }
+}
+
 const runStatusText = computed(() => {
   const map: Record<string, string> = {
     planned: '待执行', running: '正在执行', done: '已完成', failed: '失败', cancelled: '已取消',
@@ -655,7 +679,8 @@ type EnvSummary = Record<string, { name: string; unit: string; value: number | n
 const env = ref<EnvSummary>({})
 
 // 环境面板只显示"这台设备上真有"的传感器（X30 有 SF6/温湿度，JCROB 可能是噪声）
-const envSensors = ref<{ id: number; name: string; kind: string; unit: string; value: number | null }[]>([])
+const envSensors = ref<{ id: number; name: string; kind: string; unit: string;
+  value: number | null; ts?: string | null }[]>([])
 
 // 传感器类型 → 卡片上的短标签（自动建的传感器名字带设备前缀，太长）
 const KIND_TEXT: Record<string, string> = {
@@ -672,12 +697,33 @@ function fmtEnv(v: number | null): string {
   return v.toFixed(2)                      // 7.60
 }
 
+function ageSeconds(ts?: string | null): number | null {
+  if (!ts) return null
+  const t = new Date(ts).getTime()
+  if (!Number.isFinite(t)) return null
+  return Math.max(0, Math.round((Date.now() - t) / 1000))
+}
+
 const envCells = computed(() =>
-  envSensors.value.map((s) => ({
-    label: KIND_TEXT[s.kind] ?? s.name,
-    unit: s.unit,
-    value: s.value === null ? null : fmtEnv(s.value),
-  })),
+  envSensors.value.map((s) => {
+    const age = ageSeconds(s.ts)
+    const stale = age !== null && age > 120
+    let ageText = ''
+    if (age !== null) {
+      if (age < 120) ageText = `${age} 秒前`
+      else if (age < 3600) ageText = `${Math.round(age / 60)} 分钟前`
+      else if (age < 86400) ageText = `${Math.round(age / 3600)} 小时前`
+      else ageText = `${Math.round(age / 86400)} 天前`
+    }
+    return {
+      label: KIND_TEXT[s.kind] ?? s.name,
+      unit: s.unit,
+      value: stale || s.value === null ? null : fmtEnv(s.value),
+      stale,
+      age,
+      ageText,
+    }
+  }),
 )
 
 const envCount = computed(() => envSensors.value.length)
@@ -711,6 +757,7 @@ async function loadEnv() {
       kind: s.kind,
       unit: s.unit,
       value: s.latest?.value ?? null,
+      ts: s.latest?.ts ?? null,
     }))
     void loadSpark()
   } catch {
@@ -981,9 +1028,23 @@ async function logout() {
                       @pointerdown.prevent="moveStart('yawR')" @pointerup.prevent="moveEnd"
                       @pointerleave="moveEnd">↻</button>
             </div>
-            <div v-else class="ctrl-empty">
-              <b>这台设备没有车体控制接口</b>
-              <span>车体控制目前只接了 X30（起立/行走/转向）。轮式机型走任务下发，不在这里遥控。</span>
+            <div v-else class="cmd-panel">
+              <div class="cmd-state" :class="{ warn: !activeRun }">
+                <i />
+                <span v-if="activeRun">
+                  执行中：{{ activeRun.name }}（#{{ activeRun.id }}）
+                </span>
+                <span v-else>当前无任务 · 已就绪</span>
+              </div>
+              <div class="cmd-grid">
+                <button class="btn" :disabled="!!activeRun" @click="goTaskCenter">下发任务</button>
+                <button class="btn" :disabled="!activeRun" @click="runAction('pause')">暂停</button>
+                <button class="btn" :disabled="!activeRun" @click="runAction('resume')">继续</button>
+                <button class="btn" :disabled="!activeRun" @click="runAction('cancel')">取消</button>
+              </div>
+              <span class="cmd-hint">
+                这台设备不支持遥控行走；上面按钮走任务接口，状态以车端回读为准。
+              </span>
             </div>
 
             <div class="ctrl-meta">
@@ -1068,7 +1129,7 @@ async function logout() {
               <div class="rt-tag">今日任务状态</div>
               <div class="rt-line"><span>任务名称</span><b>{{ currentRun?.name || '—' }}</b></div>
               <div class="rt-line"><span>任务状态</span><b>{{ runStatusText }}</b></div>
-              <div class="rt-line"><span>当前任务预估剩余时间</span><b>{{ runEta }}</b></div>
+              <div class="rt-line"><span>预估剩余</span><b>{{ runEta }}</b></div>
 
               <div class="rt-groups">
                 <div class="rt-grow">
@@ -1129,12 +1190,18 @@ async function logout() {
 
         <ScadaPanel title="环境数据" tone="cyan" class="grow" :right="envCount ? `${envCount} 项` : '未接入'">
           <div class="env-grid">
-            <div v-for="e in envCells" :key="e.label" class="env-cell">
-              <span class="env-label">{{ e.label }}</span>
+            <div v-for="e in envCells" :key="e.label" class="env-cell" :class="{ stale: e.stale }">
+              <span class="env-label">
+                {{ e.label }}
+                <em v-if="e.stale" class="env-stale" :title="`最后更新 ${e.age} 秒前`">离线</em>
+              </span>
               <span class="env-value" v-if="e.value !== null">
                 {{ e.value }}<small>{{ e.unit }}</small>
               </span>
-              <span class="env-value empty" v-else>--<small>{{ e.unit }}</small></span>
+              <span class="env-value empty" v-else>
+                --<small>{{ e.unit }}</small>
+                <em v-if="e.stale" class="env-age">{{ e.ageText }}</em>
+              </span>
             </div>
           </div>
           <div v-if="envCount" class="env-trend">
@@ -1506,7 +1573,7 @@ async function logout() {
 .col.right .points { overflow-y: auto; }
 .h-msg { height: 244px; flex: none; }
 .h-msg :deep(.panel-body) { padding: 0; }
-.msg-split { display: grid; grid-template-columns: 5.8fr 4.2fr; height: 100%; min-height: 0; }
+.msg-split { display: grid; grid-template-columns: 5.2fr 4.8fr; height: 100%; min-height: 0; }
 .msg-main { min-width: 0; overflow: auto; }
 .msg-side {
   padding: 4px 10px 8px; border-left: 1px solid rgba(111, 227, 255, .22);
@@ -2173,4 +2240,42 @@ async function logout() {
   background: rgba(120, 30, 30, .35); color: #ffb3b3; border: 0; padding: 0 5px;
   font-size: 12px; cursor: pointer;
 }
+
+/* 今日任务状态：文字必须完整；时间不截断 */
+.rt-right { min-width: 0; }
+.rt-tag { font-size: 13px; }
+.rt-line {
+  display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 6px;
+  align-items: start; line-height: 1.35; padding: 2px 0;
+}
+.rt-line span { color: #8fc4e6; font-size: 12px; white-space: normal; }
+.rt-line b {
+  color: #eaf7ff; font-size: 14px; font-weight: 600;
+  white-space: normal; overflow: visible; text-overflow: clip;
+  word-break: break-all; overflow-wrap: anywhere;
+}
+/* 点位多时面板内滚动，细滚动条 */
+.t-panel:has(.points) :deep(.t-body) { max-height: 214px; overflow-y: auto; }
+.points::-webkit-scrollbar, .t-panel:has(.points) :deep(.t-body)::-webkit-scrollbar { width: 4px; }
+.points::-webkit-scrollbar-thumb, .t-panel:has(.points) :deep(.t-body)::-webkit-scrollbar-thumb {
+  background: rgba(120, 200, 255, .35); border-radius: 2px;
+}
+/* 轮式指令面板 */
+.cmd-panel { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.cmd-state {
+  font-size: 13px; color: #cfeaff; background: rgba(0, 80, 130, .35);
+  border: 1px solid rgba(0, 168, 255, .3); border-radius: 6px; padding: 6px 9px;
+  display: flex; align-items: center; gap: 8px;
+}
+.cmd-state i { width: 8px; height: 8px; border-radius: 50%; background: #39e08a; }
+.cmd-state.warn i { background: #ffbe3c; }
+.cmd-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.cmd-grid .btn { padding: 7px 8px; font-size: 12.5px; }
+.cmd-hint { font-size: 11px; color: #7fa8c4; }
+.env-stale {
+  font-style: normal; font-size: 10px; color: #ffbe3c; border: 1px solid rgba(255, 190, 60, .5);
+  border-radius: 8px; padding: 0 5px; margin-left: 4px;
+}
+.env-age { font-style: normal; font-size: 10px; color: #7fa8c4; margin-left: 4px; }
+.env-cell.stale .env-value { color: #8fa6b8; }
 </style>
