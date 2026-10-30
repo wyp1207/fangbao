@@ -416,17 +416,26 @@ def videos_health(
         rows = [(v.id, v.name, v.stream_name or "", v.url or "") for v in q.all()]
 
     # 探测在会话外做（每路最多 2 次 × 2.5s，不能占连接）
-    out = []
-    for vid, name, stream, direct_url in rows:
+    # 并发探测：3 路串行要 3.6s（日志会报慢请求），并发后 ~1.3s
+    def _probe_one(row: tuple[int, str, str, str]) -> dict:
+        vid, name, stream, direct_url = row
         ok, reason = probe_frame(stream, base)
         if not ok:
             # 中继不可用时，直接连相机再试一次：相机通就不算"视频不可用"
-            ok2, reason2 = probe_direct(direct_url)
+            ok2, _reason2 = probe_direct(direct_url)
             if ok2:
                 ok, reason = True, "直连正常（中继不可用）"
             elif base and not gateway["reachable"]:
                 reason = f"视频网关不可达（{base}）"
-        out.append({"id": vid, "name": name, "stream": stream, "ok": ok, "reason": reason})
+        return {"id": vid, "name": name, "stream": stream, "ok": ok, "reason": reason}
+
+    if rows:
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=min(4, len(rows))) as ex:
+            out = list(ex.map(_probe_one, rows))
+    else:
+        out = []
     return {"ok": True, "gateway": gateway, "videos": out}
 
 

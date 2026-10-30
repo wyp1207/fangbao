@@ -28,7 +28,7 @@ const wallsOn = ref(true)
 const pointsOn = ref(true)
 const alarmsOn = ref(true)
 const height = ref(2.4)
-const threshold = ref(60)
+const threshold = ref(90)
 const layerOn = ref(true)
 const fxOn = ref(true)
 const cadMode = ref(true)  // CAD 线框风：黑底 + 细白线 + 等轴测（对齐客户给的 CAD 图）
@@ -100,24 +100,50 @@ async function build() {
   if (!box.value) return
   try {
     loading.value = true
-    const maps = await api.libraryMaps()
-    const rows = (maps as unknown as { items?: any[] }).items ?? (maps as unknown as any[])
-    const m = rows.find((x: any) => x.is_active) ?? rows[0]
-    if (!m) throw new Error('没有地图，先去地图管理导入')
-    meta = {
-      res: Number(m.resolution) || 0.05,
-      ox: Number(m.origin_x) || 0,
-      oy: Number(m.origin_y) || 0,
-      w: Number(m.width) || 900,
-      h: Number(m.height) || 600,
+    const deviceId = Number(robot.deviceId) || 1
+    // 和 2D 地图用同一张图：机器人当前地图优先，平台地图库只作回退。
+    // 之前 3D 只读地图库 active（可能是纯白占位图），导致 3D 没墙、点位也对不上。
+    let mapName = robot.currentMap || ''
+    let m: any = null
+    let imageUrl = ''
+    let pointRows: any[] = []
+    const robotMaps = (await api.maps(deviceId).catch(() => [])) as unknown as any[]
+    const mapRows = Array.isArray(robotMaps) ? robotMaps : ((robotMaps as any).items ?? [])
+    m = mapRows.find((x: any) => x.name === mapName) ?? mapRows[0] ?? null
+    if (m) {
+      mapName = m.name
+      meta = {
+        res: Number(m.resolution) || 0.05,
+        ox: Number(m.origin?.[0] ?? 0),
+        oy: Number(m.origin?.[1] ?? 0),
+        w: Number(m.width) || 900,
+        h: Number(m.height) || 600,
+      }
+      imageUrl = api.mapPng(deviceId, mapName)
+      const nav = await api.navPoints(deviceId, mapName, '').catch(() => ({ points: [] as any[] }))
+      pointRows = (nav as any).points ?? []
+    } else {
+      // 回退：平台地图库（没有机器人地图时）
+      const maps = await api.libraryMaps()
+      const rows = (maps as unknown as { items?: any[] }).items ?? (maps as unknown as any[])
+      m = rows.find((x: any) => x.is_active) ?? rows[0]
+      if (!m) throw new Error('没有地图：机器人没上报地图，平台地图库也是空的')
+      mapName = m.name
+      meta = {
+        res: Number(m.resolution) || 0.05,
+        ox: Number(m.origin_x) || 0,
+        oy: Number(m.origin_y) || 0,
+        w: Number(m.width) || 900,
+        h: Number(m.height) || 600,
+      }
+      imageUrl = api.libraryImageUrl(m.id)
+      const pts = await api.libraryPoints(m.id)
+      pointRows = (pts as unknown as { items?: any[] }).items ?? (pts as unknown as any[])
     }
-    info.value.map = `${m.name}（${meta.w}×${meta.h} @ ${meta.res}m/px）`
-
-    const pts = await api.libraryPoints(m.id)
-    const pointRows = (pts as unknown as { items?: any[] }).items ?? (pts as unknown as any[])
+    info.value.map = `${mapName}（${meta.w}×${meta.h} @ ${meta.res}m/px）`
     info.value.points = pointRows.length
 
-    const img = await loadImage(api.libraryImageUrl(m.id))
+    const img = await loadImage(imageUrl)
     const canvas = document.createElement('canvas')
     canvas.width = img.width
     canvas.height = img.height
@@ -139,8 +165,12 @@ async function build() {
     camera = new THREE.PerspectiveCamera(50, box.value.clientWidth / box.value.clientHeight, 0.1, 500)
     camera.position.set(cx, Math.max(worldW, worldH) * 0.95, cy + Math.max(worldW, worldH) * 0.9)
 
-    renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))
+    renderer = new THREE.WebGLRenderer({
+      antialias: !props.compact,
+      powerPreference: 'high-performance',
+    })
+    // 首页小窗默认不开抗锯齿、像素比压到 1：拖拽要跟手，画质够看
+    renderer.setPixelRatio(props.compact ? 1 : Math.min(window.devicePixelRatio, 1.5))
     renderer.setSize(box.value.clientWidth, box.value.clientHeight)
     renderer.shadowMap.enabled = false
     box.value.appendChild(renderer.domElement)
@@ -240,17 +270,17 @@ function buildWalls(data: Uint8ClampedArray, w: number, h: number) {
       for (let dr = -1; dr <= 1; dr++) {
         for (let dc = -1; dc <= 1; dc++) n += mask[(row + dr) * w + (col + dc)]
       }
-      if (n >= 5) clean[row * w + col] = 1
+      if (n >= 1) clean[row * w + col] = 1
     }
   }
-  // 3) 去孤立点：邻居 < 2 的格子不建墙
+  // 3) 去孤立点：邻居为 0 的格子不建墙（1px 墙线要保留，所以阈值从 2 降到 1）
   const keep: [number, number][] = []
   for (let row = 1; row < h - 1; row++) {
     for (let col = 1; col < w - 1; col++) {
       if (!clean[row * w + col]) continue
       const n = clean[row * w + col - 1] + clean[row * w + col + 1]
         + clean[(row - 1) * w + col] + clean[(row + 1) * w + col]
-      if (n >= 2) keep.push([col, row])
+      if (n >= 1) keep.push([col, row])
     }
   }
 
@@ -648,7 +678,18 @@ function screenToGround(ev: MouseEvent): { x: number; y: number } | null {
   return { x: hit.x, y: hit.z }
 }
 
+// 点哪去哪：只有"点一下"才算，拖拽旋转/平移不能弹确认框
+let downAt: { x: number; y: number } | null = null
+
+function onStageDown(ev: PointerEvent) {
+  downAt = { x: ev.clientX, y: ev.clientY }
+}
+
 async function onStageClick(ev: MouseEvent) {
+  if (!downAt) return
+  const moved = Math.hypot(ev.clientX - downAt.x, ev.clientY - downAt.y)
+  downAt = null
+  if (moved > 6) return            // 拖拽，不当作点击
   const p = screenToGround(ev)
   if (!p) return
   const pose = robot.pose as { x?: number; y?: number } | null
@@ -838,8 +879,12 @@ onMounted(async () => {
   robot.startWs()
   if (!props.compact) void loadPlayback()
   void loadPlan()
-  renderer?.domElement.addEventListener('click', onStageClick)
   await build()
+  // 必须在 build() 之后绑：renderer 是 build 里才创建的，之前绑会静默失败
+  if (renderer) {
+    renderer.domElement.addEventListener('pointerdown', onStageDown)
+    renderer.domElement.addEventListener('click', onStageClick)
+  }
   updateAlarms(robot.alarms)
   window.addEventListener('resize', onResize)
   toast('拖动旋转、滚轮缩放；机器人位姿每秒刷新并做插值', 'ok', 3500)
@@ -850,6 +895,7 @@ onBeforeUnmount(() => {
   robot.stopWs()
   cancelAnimationFrame(raf)
   window.removeEventListener('resize', onResize)
+  renderer?.domElement.removeEventListener('pointerdown', onStageDown)
   renderer?.domElement.removeEventListener('click', onStageClick)
   window.clearInterval(playTimer)
   controls?.dispose()
@@ -879,7 +925,7 @@ onBeforeUnmount(() => {
           <input v-model.number="height" type="range" min="0.5" max="5" step="0.1" @input="applyHeight" />
         </label>
         <label class="range">阈值 {{ threshold }}
-          <input v-model.number="threshold" type="range" min="30" max="120" step="5" @change="rebuildWalls" />
+          <input v-model.number="threshold" type="range" min="40" max="170" step="5" @change="rebuildWalls" />
         </label>
         <label><input v-model="cadMode" type="checkbox" @change="setCadMode(cadMode)" /> CAD 线框</label>
         <label><input v-model="layerOn" type="checkbox" @change="rebuildWalls" /> 高度分层</label>
@@ -921,6 +967,7 @@ onBeforeUnmount(() => {
   position: absolute; left: 14px; top: 12px; display: flex; gap: 14px; align-items: center;
   padding: 7px 12px; border-radius: 8px; background: rgba(5, 12, 20, .72);
   border: 1px solid rgba(0, 168, 255, .28); color: #8fd8ff; font-size: 12px; letter-spacing: .4px;
+  pointer-events: none;   /* HUD 不挡拖拽旋转 */
 }
 .ctrl {
   position: absolute; left: 14px; bottom: 14px; display: flex; gap: 14px; align-items: center;
