@@ -397,6 +397,7 @@ export const api = {
     const qs = Object.entries(params).filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&')
     return request<{ total: number; items: Record<string, unknown>[] }>(`/task-runs${qs ? '?' + qs : ''}`)
   },
+  taskReportUrl: (id: number) => `/api/v1/task-runs/${id}/report.xlsx`,
   taskRun: (id: number) => request<Record<string, unknown>>(`/task-runs/${id}`),
   createTaskRun: (body: Record<string, unknown>) =>
     request<Record<string, unknown>>('/task-runs', { method: 'POST', body }),
