@@ -950,8 +950,8 @@ async function logout() {
                    @error="onLiveError(visibleVideo)" @load="onLiveLoad(visibleVideo)" />
             </div>
             <div v-else class="embed-empty">
-              <b>视频通道待启用</b>
-              <span v-if="visibleVideo">原因：{{ healthOf(visibleVideo).reason }} · 相机离线或地址失效</span>
+              <b>{{ (visibleVideo && healthOf(visibleVideo).reason.includes('网关')) ? '视频网关不可达' : '视频通道待启用' }}</b>
+              <span v-if="visibleVideo">原因：{{ healthOf(visibleVideo).reason }}</span>
               <span v-else>真机联调后，在「设备管理 → 摄像头」勾选「首页显示」即自动呈现</span>
               <div class="embed-acts">
                 <button v-if="visibleVideo" class="btn btn-sm" @click="loadVideoHealth">重新探测</button>
@@ -970,7 +970,7 @@ async function logout() {
                    @error="onLiveError(thermalVideo)" @load="onLiveLoad(thermalVideo)" />
             </div>
             <div v-else class="embed-empty">
-              <b>视频通道待启用</b>
+              <b>{{ (thermalVideo && healthOf(thermalVideo).reason.includes('网关')) ? '视频网关不可达' : '视频通道待启用' }}</b>
               <span v-if="thermalVideo">原因：{{ healthOf(thermalVideo).reason }}</span>
               <span v-else>热像仪接上后，勾选「首页显示」即自动呈现</span>
               <div class="embed-acts">

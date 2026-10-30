@@ -69,6 +69,32 @@ def save_photo_bytes(data: bytes, source: str = "sdk") -> dict:
     }
 
 
+def probe_direct(url: str, timeout: float = 6.0) -> tuple[bool, str]:
+    """绕过中继，直接连相机 RTSP 抓一帧（判断"相机本身通不通"）。
+
+    为什么需要：探活以前只走 go2rtc，导致中继一挂就误判"视频不可用"，
+    实际上 ffmpeg 直连相机是好的。这里给健康检查一条不依赖中继的路。
+    """
+    import shutil
+    import subprocess
+
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        return False, "服务端没有 ffmpeg"
+    if not url:
+        return False, "没有视频地址"
+    cmd = [ffmpeg, "-v", "error", "-rtsp_transport", "tcp", "-i", url,
+           "-frames:v", "1", "-f", "image2", "-vcodec", "mjpeg", "-q:v", "6", "-"]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, timeout=timeout, check=False)
+    except subprocess.TimeoutExpired:
+        return False, "直连相机超时"
+    if len(proc.stdout) >= 1024:
+        return True, f"直连 {len(proc.stdout)}B"
+    err = (proc.stderr or b"").decode("utf-8", "replace").strip().splitlines()
+    return False, (err[-1][:120] if err else "直连无画面")
+
+
 def probe_frame(stream: str, base: str, timeout: float = 2.5) -> tuple[bool, str]:
     """只探测流是否出帧，不落盘（首页用它决定显示视频还是"未接入"）。"""
     if not stream or not base:
