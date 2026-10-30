@@ -34,6 +34,8 @@ const controlTab = ref<'ptz' | 'chassis'>('chassis')
 // 云台：海康 ISAPI（settings.ptz.enabled）。X30 本体 SDK 不管云台。
 const ptzOn = ref(false)
 const ptzBusy = ref(false)
+const ptzPresets = ref<{ preset_id: number; name: string }[]>([])
+const ptzPresetBusy = ref(false)
 let ptzTimer = 0
 
 async function loadPtzFlag() {
@@ -64,6 +66,52 @@ function ptzHoldStart(dir: 'up' | 'down' | 'left' | 'right') {
 function ptzHoldEnd() {
   window.clearInterval(ptzTimer)
   ptzTimer = 0
+}
+
+async function loadPtzPresets() {
+  try {
+    const res = await api.ptzPresets()
+    ptzPresets.value = res.items ?? []
+  } catch { ptzPresets.value = [] }
+}
+
+async function ptzGoto(presetId: number) {
+  try {
+    await api.ptzGotoPreset(presetId)
+    toast(`已转到预置位 ${presetId}`, 'ok', 2500)
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : '调用预置位失败', 'danger')
+  }
+}
+
+async function ptzSaveCurrent() {
+  if (ptzPresetBusy.value) return
+  const used = new Set(ptzPresets.value.map((p) => p.preset_id))
+  let next = 1
+  while (used.has(next) && next <= 256) next += 1
+  const name = window.prompt(`把当前位置存为预置位（编号 ${next}），起个名字：`, `机位 ${next}`)
+  if (!name) return
+  ptzPresetBusy.value = true
+  try {
+    await api.ptzSavePreset(next, name.slice(0, 32))
+    await loadPtzPresets()
+    toast('预置位已保存', 'ok', 2500)
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : '保存失败', 'danger')
+  } finally {
+    ptzPresetBusy.value = false
+  }
+}
+
+async function ptzDelete(presetId: number, name: string) {
+  if (!window.confirm(`删除预置位「${name || presetId}」？`)) return
+  try {
+    await api.ptzDeletePreset(presetId)
+    await loadPtzPresets()
+    toast('已删除', 'ok', 2000)
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : '删除失败', 'danger')
+  }
 }
 
 async function ptzCenter() {
@@ -876,7 +924,7 @@ async function logout() {
 
         <ScadaPanel title="实时控制" class="h-ctrl">
           <div v-if="ptzOn" class="ctrl-tabs">
-            <button :class="{ on: controlTab === 'ptz' }" @click="controlTab = 'ptz'">云台控制</button>
+            <button :class="{ on: controlTab === 'ptz' }" @click="controlTab = 'ptz'; loadPtzPresets()">云台控制</button>
             <button :class="{ on: controlTab === 'chassis' }" @click="controlTab = 'chassis'">车体控制</button>
           </div>
           <div v-if="controlTab === 'ptz' && ptzOn" class="ctrl-body">
@@ -894,9 +942,21 @@ async function logout() {
               <button class="mp zo" @click="ptzMove('zoom_out')">－</button>
             </div>
             <div class="ctrl-meta">
-              <p class="dim small">海康双光谱 · ISAPI Digest</p>
-              <p class="dim small">单次脉冲 150ms；按住连续转，松手停</p>
-              <p class="dim small">写开关：{{ auth.canWrite ? '已开启' : '已关闭（只读）' }}</p>
+              <div class="preset-head">
+                <b>预置位</b>
+                <button class="btn btn-xs" :disabled="ptzPresetBusy" @click="ptzSaveCurrent">
+                  存当前
+                </button>
+              </div>
+              <div v-if="ptzPresets.length" class="preset-list">
+                <span v-for="p in ptzPresets" :key="p.preset_id" class="preset-chip">
+                  <button class="pc-go" :title="`转到预置位 ${p.preset_id}`" @click="ptzGoto(p.preset_id)">
+                    {{ p.name || `#${p.preset_id}` }}
+                  </button>
+                  <button class="pc-del" title="删除" @click="ptzDelete(p.preset_id, p.name)">×</button>
+                </span>
+              </div>
+              <p v-else class="dim small">还没有预置位：调好角度后点「存当前」</p>
             </div>
           </div>
           <div v-show="controlTab === 'chassis' || !ptzOn" class="ctrl-body">
@@ -1438,7 +1498,7 @@ async function logout() {
 .grow { flex: 1; min-height: 0; }
 .left .panel.grow { flex: 1 1 0; }   /* 可见光/热红外等高 */
 .col.center { display: grid; grid-template-rows: minmax(0, 1fr) auto; }
-.h-ctrl { height: 190px; flex: none; }
+.h-ctrl { height: 200px; flex: none; }
 .h-donut { height: 208px; flex: none; }
 .h-points { flex: 0 0 auto; height: auto; min-height: 0; padding-bottom: 6px; }
 /* 右栏：环境面板吃掉剩余高度（内容居中），点位列表按内容高，底部不留大片空白 */
@@ -2085,7 +2145,7 @@ async function logout() {
   width: 100%; padding: 5px 6px; font-size: 12px; white-space: nowrap;
 }
 .ptz-pad {
-  position: relative; width: 150px; height: 150px; margin: 0 auto;
+  position: relative; width: 140px; height: 140px; margin: 0 auto;
   display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr);
 }
 .ptz-pad .mp {
@@ -2100,4 +2160,17 @@ async function logout() {
 .ptz-pad .down { grid-area: 3 / 2; }
 .ptz-pad .zi { grid-area: 1 / 1; font-size: 15px; }
 .ptz-pad .zo { grid-area: 1 / 3; font-size: 15px; }
+.preset-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.preset-head b { font-size: 12px; color: #cfeaff; letter-spacing: 1px; }
+.preset-list { display: flex; flex-wrap: wrap; gap: 4px; max-height: 62px; overflow-y: auto; }
+.preset-chip { display: inline-flex; align-items: stretch; border: 1px solid rgba(0, 168, 255, .4); border-radius: 5px; overflow: hidden; }
+.preset-chip .pc-go {
+  background: rgba(0, 70, 110, .45); color: #bfe9ff; border: 0; padding: 3px 7px;
+  font-size: 11px; cursor: pointer; max-width: 92px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.preset-chip .pc-go:hover { background: rgba(0, 150, 210, .45); color: #fff; }
+.preset-chip .pc-del {
+  background: rgba(120, 30, 30, .35); color: #ffb3b3; border: 0; padding: 0 5px;
+  font-size: 12px; cursor: pointer;
+}
 </style>
