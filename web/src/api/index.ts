@@ -244,6 +244,15 @@ export const api = {
       { method: 'POST', body: { action } }),
   move: (id: number, body: { forward?: number; left?: number; yaw?: number }) =>
     request<{ ok: boolean }>(`/robots/${id}/move`, { method: 'POST', body }),
+  ptzPresets: () => request<{ ok: boolean; reason?: string;
+    items: { preset_id: number; name: string }[] }>('/ptz/presets'),
+  ptzSavePreset: (preset_id: number, name: string) =>
+    request<{ ok: boolean; preset_id: number; name: string }>('/ptz/presets',
+      { method: 'POST', body: { preset_id, name } }),
+  ptzGotoPreset: (preset_id: number) =>
+    request<{ ok: boolean }>(`/ptz/presets/${preset_id}/goto`, { method: 'POST', body: {} }),
+  ptzDeletePreset: (preset_id: number) =>
+    request<{ ok: boolean }>(`/ptz/presets/${preset_id}`, { method: 'DELETE' }),
   ptzStatus: () => request<{ ok: boolean; detail: string }>('/ptz/status'),
   ptzMove: (direction: 'up' | 'down' | 'left' | 'right' | 'zoom_in' | 'zoom_out', pulse_ms = 150) =>
     request<{ ok: boolean; direction: string }>(`/ptz/move`, { method: 'POST', body: { direction, pulse_ms } }),
