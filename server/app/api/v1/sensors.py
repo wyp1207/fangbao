@@ -324,10 +324,20 @@ def summary(
             select(SensorReading).where(SensorReading.sensor_id == s.id)
             .order_by(SensorReading.ts.desc()).limit(1)
         ).first()
+        age_s = None
+        if latest is not None:
+            from datetime import datetime, timezone
+
+            ts = latest.ts
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+            age_s = max(0, int((datetime.now(timezone.utc) - ts).total_seconds()))
         out[s.kind] = {
             "name": s.name, "unit": s.unit,
             "value": latest.value if latest else None,
             "ts": latest.ts.isoformat(timespec="seconds") if latest else None,
+            "age_s": age_s,
+            "stale": bool(age_s is not None and age_s > 120),
             "calibrated": any(v is not None for v in (s.warn_low, s.warn_high, s.crit_low, s.crit_high)),
         }
     return {"items": out, "count": len(out)}
