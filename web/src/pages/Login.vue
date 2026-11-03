@@ -84,8 +84,6 @@ async function submit() {
 
       <p class="hint">默认账号见 <code>server/.env.example</code>；生产环境首次登录后必须改密码。</p>
     </div>
-
-    <p class="footer">驾驶舱 / 地图点位 / 任务巡航 / 告警工单 / 实时视频 / 环境与测温</p>
   </div>
 </template>
 
