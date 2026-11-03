@@ -31,6 +31,9 @@ KINDS: dict[str, dict[str, Any]] = {
     "sf6": {"label": "SF6 浓度", "unit": "ppm"},
     "smoke": {"label": "烟雾", "unit": "%obs"},
     "temperature": {"label": "温度", "unit": "℃"},
+    # 历史口子：早期数据/外部导入用过 "temp"，保留别名，避免旧库里的传感器
+    # 在 summary 里被漏掉（现场出现过 9/10 对不上的情况）
+    "temp": {"label": "环境温度", "unit": "℃"},
     "humidity": {"label": "湿度", "unit": "%RH"},
     "pm": {"label": "PM2.5", "unit": "μg/m³"},
     "noise": {"label": "噪声", "unit": "dB"},

@@ -36,13 +36,20 @@ const ptzOn = ref(false)
 const ptzBusy = ref(false)
 const ptzPresets = ref<{ preset_id: number; name: string }[]>([])
 const ptzPresetBusy = ref(false)
+// 写开关以服务端设置为准：以前只看角色，服务端关着也会显示"已开启"，现场会误判
+const writeEnabled = ref(false)
 let ptzTimer = 0
 
 async function loadPtzFlag() {
   try {
     const res = await api.settings()
-    ptzOn.value = Boolean((res.values as Record<string, unknown>)['ptz.enabled'])
-  } catch { ptzOn.value = false }
+    const vals = res.values as Record<string, unknown>
+    ptzOn.value = Boolean(vals['ptz.enabled'])
+    writeEnabled.value = Boolean(vals['robot.write_enabled'])
+  } catch {
+    ptzOn.value = false
+    writeEnabled.value = false
+  }
 }
 
 async function ptzMove(dir: 'up' | 'down' | 'left' | 'right' | 'zoom_in' | 'zoom_out') {
@@ -1070,7 +1077,7 @@ async function logout() {
               </div>
               <p v-else class="dim small">该机型不支持起立/趴下（轮式没有这个动作）</p>
               <p class="dim small" v-if="motionState">MotionState={{ motionState }} · 按住走，松手停</p>
-              <p class="dim small">写开关：{{ auth.canWrite ? '已开启' : '已关闭（只读）' }} · 急停在车身上</p>
+              <p class="dim small">写开关：{{ writeEnabled ? '已开启' : '已关闭（只读）' }} · 急停在车身上</p>
             </div>
           </div>
         </ScadaPanel>
@@ -2251,6 +2258,7 @@ async function logout() {
   color: #eaf7ff; font-size: 13px; font-weight: 600;
   white-space: normal; overflow: visible; text-overflow: clip;
   word-break: break-all; overflow-wrap: anywhere;
+  text-align: right;            /* 数值居右，标签居左，一眼能扫 */
 }
 /* 点位多时面板内滚动，细滚动条 */
 .t-panel:has(.points) :deep(.t-body) { max-height: 214px; overflow-y: auto; }

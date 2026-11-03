@@ -14,7 +14,6 @@ import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRe
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
-import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { api } from '@/api'
 import { useRobotStore } from '@/stores/robot'
@@ -140,7 +139,7 @@ async function build() {
       const pts = await api.libraryPoints(m.id)
       pointRows = (pts as unknown as { items?: any[] }).items ?? (pts as unknown as any[])
     }
-    info.value.map = `${mapName}（${meta.w}×${meta.h} @ ${meta.res}m/px）`
+    info.value.map = `${mapName}（${meta.w}×${meta.h} @ ${Number(meta.res).toFixed(3)}m/px）`
     info.value.points = pointRows.length
 
     const img = await loadImage(imageUrl)
@@ -220,7 +219,7 @@ async function build() {
     axes.visible = cadMode.value
     scene.add(axes)
 
-    // 后处理：Bloom（半分辨率）+ 扫描线；低端机可一键关
+    // 后处理：只留 Bloom；扫描线后处理整屏每帧移相，看起来像画面在闪，已移除
     composer = new EffectComposer(renderer)
     composer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))
     composer.setSize(box.value.clientWidth, box.value.clientHeight)
@@ -228,15 +227,6 @@ async function build() {
     bloomPass = new UnrealBloomPass(
       new THREE.Vector2(box.value.clientWidth / 2, box.value.clientHeight / 2), 0.6, 0.4, 0.7)
     composer.addPass(bloomPass)
-    const scan = new ShaderPass({
-      uniforms: { tDiffuse: { value: null }, time: { value: 0 } },
-      vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
-      fragmentShader: `uniform sampler2D tDiffuse; uniform float time; varying vec2 vUv;
-        void main(){ vec4 c = texture2D(tDiffuse, vUv);
-          c.rgb += 0.028 * sin(vUv.y * 900.0 + time * 2.0);
-          gl_FragColor = c; }`,
-    })
-    composer.addPass(scan)
     composer.addPass(new OutputPass())
 
     buildWalls(data, img.width, img.height)
@@ -468,7 +458,12 @@ function updateAlarms(list: { id: number; message: string; level: string; metric
     scene.add(alarmGroup)
     return
   }
-  const recent = (list ?? []).slice(0, props.compact ? 2 : 6)
+  // 只有"有空间含义"的告警才放进 3D：环境/测温/火点这类。
+  // loc_lost/offline/battery/comm 是设备事件，没有坐标，放到机器人脚下会一直闪，
+  // 看着像"机器人在闪"，其实是告警柱在脉冲。
+  const NON_SPATIAL = new Set(['loc_lost', 'offline', 'battery', 'comm', 'estop', 'task', 'disk'])
+  const spatial = (list ?? []).filter((a) => !NON_SPATIAL.has(String(a.metric || '')))
+  const recent = spatial.slice(0, props.compact ? 2 : 6)
   recent.forEach((a, i) => {
     const angle = (i / Math.max(1, recent.length)) * Math.PI * 2
     const ax = Number(pose.x) + Math.cos(angle) * (1.2 + i * 0.4)
@@ -557,13 +552,9 @@ function loop() {
   }
 
   if (alarmGroup) {
-    const t = now / 1000
-    alarmGroup.children.forEach((o, i) => {
-      if ((o as THREE.Mesh).geometry?.type === 'CylinderGeometry') {
-        ;(o as THREE.Mesh).scale.x = 1 + 0.25 * Math.sin(t * 3 + i)
-        ;(o as THREE.Mesh).scale.z = 1 + 0.25 * Math.sin(t * 3 + i)
-      }
-    })
+    // 告警柱不脉冲：之前每个柱子按 sin(t*3) 缩放，站点告警多的时候整片在闪，
+    // 看起来像机器人/画面在闪。保持静态更稳，也少一帧计算。
+    void now
   }
 
   if (playing.value && playPoints.value.length > 1) {
@@ -578,8 +569,6 @@ function loop() {
   }
 
   if (fxOn.value && composer) {
-    const scan = composer.passes.find((p) => (p as ShaderPass).uniforms?.time)
-    if (scan) (scan as ShaderPass).uniforms.time.value = now / 1000
     composer.render()
   } else if (renderer && scene && camera) {
     renderer.render(scene, camera)
@@ -829,6 +818,8 @@ function setCadMode(on: boolean) {
   if (!scene) return
   scene.background = new THREE.Color(on ? 0x000000 : 0x050810)
   scene.fog = on ? null : new THREE.FogExp2(0x050810, 0.012)
+  // CAD 线框风不要强辉光：白线 + 0.6 bloom 会过曝，墙和点位糊成一片
+  if (bloomPass) bloomPass.strength = on ? 0.12 : 0.6
   if (wallMesh) (wallMesh.material as THREE.Material).visible = !on
   if (wallEdges) {
     const m = wallEdges.material as THREE.LineBasicMaterial
