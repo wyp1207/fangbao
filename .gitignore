@@ -65,3 +65,13 @@ server/data/backups/
 # 浏览器临时 profile（Playwright/Chrome）
 render3d/
 .chrome/
+
+# 安全整改：凭据与评审临时产物
+.pt_*
+cookies*.txt
+*.cookie
+test-results/
+playwright-report/
+# 评审临时产物
+_diag/
+_pkg_*/
