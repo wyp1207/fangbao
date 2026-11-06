@@ -1,5 +1,5 @@
-﻿<script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted } from 'vue'
+<script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import TopNav from '@/components/TopNav.vue'
@@ -23,9 +23,40 @@ const state = computed(() => {
 
 const alarmCount = computed(() => robot.alarms.filter((a) => !a.acked_at).length)
 
+// 返回上一页：只在"确实有上一页"时出现，避免在首页放一个点了没反应的按钮
+const canBack = ref(false)
+watch(
+  () => route.fullPath,
+  () => {
+    const back = window.history.state?.back as string | undefined
+    canBack.value = typeof back === 'string' && back !== route.fullPath && !back.startsWith('/login')
+  },
+  { immediate: true },
+)
+
+function goBack() {
+  const back = window.history.state?.back as string | undefined
+  if (back) router.back()
+  else void router.push('/dashboard')
+}
+
 // 后台页也要有实时状态：轮询在布局层启动，子页面不用各自管
-onMounted(() => { robot.start(); void platform.load() })
-onBeforeUnmount(() => robot.stop())
+onMounted(() => {
+  robot.start()
+  void platform.load()
+  window.addEventListener('keydown', onKey)
+})
+onBeforeUnmount(() => {
+  robot.stop()
+  window.removeEventListener('keydown', onKey)
+})
+
+function onKey(e: KeyboardEvent) {
+  if (e.altKey && e.key === 'ArrowLeft') {
+    e.preventDefault()
+    goBack()
+  }
+}
 
 async function onLogout() {
   await auth.logout()
@@ -38,6 +69,8 @@ async function onLogout() {
   <div class="shell">
     <header class="hdr">
       <div class="logo">
+        <button v-if="canBack" class="back" type="button" title="返回上一页（Alt+←）"
+                @click="goBack">← 返回</button>
         <span class="logo-badge"><img class="logo-img" :src="logoUrl" alt="logo" /></span>
         <span class="brand">AI防爆巡检</span>
       </div>
@@ -85,6 +118,20 @@ async function onLogout() {
   white-space: nowrap;
 }
 .logo-badge { display: flex; align-items: center; height: 26px; }
+/* 返回键：只占约 60px，不抢导航空间 */
+.back {
+  flex: none;
+  display: inline-flex; align-items: center; gap: 4px;
+  height: 26px; padding: 0 10px; margin-right: 4px;
+  font-size: 12.5px; color: #dff3ff; cursor: pointer;
+  background: rgba(0, 60, 120, 0.55);
+  border: 1px solid rgba(111, 227, 255, 0.45);
+  border-radius: 4px;
+}
+.back:hover { background: rgba(0, 120, 200, 0.55); border-color: #6fe3ff; }
+@media (max-width: 1180px) {
+  .back { padding: 0 7px; font-size: 11.5px; }
+}
 .logo-img {
   height: 22px; width: auto; display: block;
   filter: contrast(1.8) saturate(1.1) drop-shadow(0 0 5px rgba(190, 240, 255, 0.5));
