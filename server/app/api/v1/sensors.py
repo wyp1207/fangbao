@@ -79,7 +79,9 @@ def _out(s: Sensor, latest: SensorReading | None = None) -> dict:
         "enabled": s.enabled, "note": s.note,
         "calibrated": any(v is not None for v in (s.warn_low, s.warn_high, s.crit_low, s.crit_high)),
         "latest": None if latest is None else {
-            "value": latest.value, "ts": latest.ts.isoformat(timespec="seconds"),
+            # round 掉浮点尾巴（23.200000000000003），前端不再看到一串 0
+            "value": None if latest.value is None else round(float(latest.value), 3),
+            "ts": latest.ts.isoformat(timespec="seconds"),
             "source": latest.source,
         },
     }
@@ -337,7 +339,8 @@ def summary(
             age_s = max(0, int((datetime.now(timezone.utc) - ts).total_seconds()))
         out[s.kind] = {
             "name": s.name, "unit": s.unit,
-            "value": latest.value if latest else None,
+            "value": (round(float(latest.value), 3)
+                      if latest and latest.value is not None else None),
             "ts": latest.ts.isoformat(timespec="seconds") if latest else None,
             "age_s": age_s,
             "stale": bool(age_s is not None and age_s > 120),

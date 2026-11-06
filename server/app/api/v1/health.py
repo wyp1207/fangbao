@@ -50,13 +50,7 @@ def ready() -> dict:
                             content={"status": "not_ready", "error": exc.__class__.__name__})
 
 
-@router.get("/api/v1/health/deep")
-def health_deep(cache=Depends(get_cache), services=Depends(get_services),
-                _user=Depends(get_current_user)) -> dict:
-    """深探针：链路是否在线、后台循环是否活着、事件循环有没有卡。
-
-    注意 online 是“平台到机器人”的链路状态，不是 /system/is_online（那是机器人能不能上互联网）。
-    """
+def _deep_payload(cache, services) -> dict:
     from app.services.robot_runtime import registry as robot_registry
 
     default_rt = robot_registry.default()
@@ -73,3 +67,23 @@ def health_deep(cache=Depends(get_cache), services=Depends(get_services),
         "loop_lag_ms": services.lag.lag_ms,
         "disks": _disk_snapshot(),
     }
+
+
+@router.get("/health/deep")
+def health_deep_public(cache=Depends(get_cache), services=Depends(get_services)) -> dict:
+    """深探针（无需登录，给运维/探活脚本用）。
+
+    文档写的就是 /health/deep；之前的实现只挂在 /api/v1/health/deep 且强制登录，
+    外部按文档访问会 404——评审当场抓到过。内部指标不含密钥/凭据，内网可公开。
+    """
+    return _deep_payload(cache, services)
+
+
+@router.get("/api/v1/health/deep")
+def health_deep(cache=Depends(get_cache), services=Depends(get_services),
+                _user=Depends(get_current_user)) -> dict:
+    """深探针：链路是否在线、后台循环是否活着、事件循环有没有卡。
+
+    注意 online 是“平台到机器人”的链路状态，不是 /system/is_online（那是机器人能不能上互联网）。
+    """
+    return _deep_payload(cache, services)

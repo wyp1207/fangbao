@@ -200,9 +200,9 @@ class AlarmStore:
                 hits[:] = [t for t in hits if now - t <= self.escalate_window_s]
                 if level == "warn" and len(hits) >= self.escalate_hits:
                     idx = found.index((metric, level, message, value))
-                    found[idx] = (metric, "critical",
-                                  f"{message}（{int(self.escalate_window_s // 60)} 分钟内第 {len(hits)} 次）",
-                                  value)
+                    # 只升级级别，不把"第 N 次"写进消息：以前每轮都改写消息，
+                    # 值班看到的是"5 分钟内第 100 次"，像是刷屏，实际是同一条被反复改。
+                    found[idx] = (metric, "critical", message, value)
 
         new: list[Alarm] = []
         with self._lock:
@@ -219,11 +219,17 @@ class AlarmStore:
                 if cfg["sustain"] > 0 and now - first < cfg["sustain"]:
                     continue  # 还没持续够久，先不报（防抖）
                 last = self._last_raised.get(dkey)
-                if last is not None and now - last < cfg["dedupe"]:
+                # 通信中断类至少 5 分钟才允许再判一次：否则每次轮询失败都进来，
+                # 现场会被"通信中断"刷屏，真正的环境告警被淹没（评审实测过）。
+                dedupe_s = cfg["dedupe"]
+                if metric == "offline":
+                    dedupe_s = max(float(dedupe_s), 300.0)
+                if last is not None and now - last < dedupe_s:
                     continue
                 # 同一指标已有未解除的告警 → 更新它（计数/最近时间），不新增。
                 # 否则一台设备离线 10 小时就是 600 条告警、600 张工单。
-                if self._session_factory is not None and self._touch_open(robot_id, metric, message, value):
+                if self._session_factory is not None and self._touch_open(
+                        robot_id, metric, message, value, level):
                     self._last_raised[dkey] = now
                     continue
                 self._last_raised[dkey] = now
@@ -245,7 +251,8 @@ class AlarmStore:
                 pass
         return new
 
-    def _touch_open(self, robot_id: int | None, metric: str, message: str, value) -> bool:
+    def _touch_open(self, robot_id: int | None, metric: str, message: str, value,
+                    level: str = "warn") -> bool:
         """已有未解除的同指标告警就更新它并返回 True；没有返回 False。
 
         为什么需要：一台设备离线 10 小时，按分钟去重就是 600 条告警、600 张工单。
@@ -267,8 +274,11 @@ class AlarmStore:
                 row = q.order_by(AlarmRecord.id.desc()).first()
                 if row is None:
                     return False
-                row.message = message[:255]
-                row.level = "critical" if "critical" in message or "第" in message else row.level
+                # 消息只在首次写入：反复改写会制造"第 N 次"的刷屏观感
+                if not row.message:
+                    row.message = message[:255]
+                if level == "critical":
+                    row.level = "critical"
                 row.value_json = json.dumps(
                     {"value": value, "at": datetime.now().isoformat(timespec="seconds")},
                     ensure_ascii=False)

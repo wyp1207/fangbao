@@ -176,4 +176,5 @@ def storage(
         for f in ROOT.rglob("*.mp4"):
             total += f.stat().st_size
             count += 1
-    return {"files": count, "bytes": total, "dir": str(ROOT)}
+    # 不把服务器绝对路径吐给前端（评审指出过路径泄露）；只给目录名
+    return {"files": count, "bytes": total, "dir": ROOT.name}

@@ -5,6 +5,9 @@ const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/login', name: 'login', component: () => import('@/pages/Login.vue') },
+  { path: '/m/check', name: 'mobile-check-list', component: () => import('@/pages/MobileList.vue'), props: { tab: 'task' } },
+  { path: '/m/work-order', name: 'mobile-wo-list', component: () => import('@/pages/MobileList.vue'), props: { tab: 'wo' } },
+  // 兼容旧文档里的深链（必须带 id 才能进具体任务/工单）
   { path: '/m/task/:id', name: 'mobile-check', component: () => import('@/pages/MobileCheck.vue') },
   { path: '/m/wo/:id', name: 'mobile-wo', component: () => import('@/pages/MobileWorkOrder.vue') },
     // 驾驶舱是整屏大屏，独立于后台布局，避免叠两层顶栏
@@ -46,7 +49,6 @@ const router = createRouter({
 
         // 设备管理
         { path: 'robots', name: 'robots', component: () => import('@/pages/RobotProfile.vue') },
-        { path: 'peripherals', name: 'peripherals', component: () => import('@/pages/Peripherals.vue'), meta: { roles: ['admin', 'sysadmin', 'operator'] } },
         { path: 'peripherals', name: 'peripherals', component: () => import('@/pages/Peripherals.vue'), meta: { roles: ['admin', 'sysadmin', 'operator'] } },
         { path: 'cameras', name: 'cameras', component: () => import('@/pages/Cameras.vue') },
         { path: 'sensor-gateways', name: 'sensor-gateways', component: () => import('@/pages/SensorGateways.vue') },

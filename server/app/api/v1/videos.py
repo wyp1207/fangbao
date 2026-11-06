@@ -146,6 +146,8 @@ def _rtsp_for_stream(stream: str, base: str) -> str:
 
 
 _WEB_CACHE: dict[str, tuple[bool, float]] = {}
+# 健康检查结果缓存 10s：首页每次刷新都探 3 路会把相机/中继压死
+_HEALTH_CACHE: dict[str, tuple[float, dict]] = {}
 
 
 def _has_web_variant(stream: str, base: str) -> bool:
@@ -393,6 +395,11 @@ def videos_health(
     from app.db.session import SessionLocal
 
     base = getattr(get_settings(), "go2rtc_base", "") or ""
+    cache_key = f"{robot_id}|{ids or ''}"
+    now = time.time()
+    hit = _HEALTH_CACHE.get(cache_key)
+    if hit and now - hit[0] < 10:
+        return hit[1]
 
     gateway: dict = {"base": base, "reachable": False, "error": "未配置 JC_GO2RTC_BASE"}
     if base:
@@ -415,28 +422,37 @@ def videos_health(
                 q = q.filter(VideoSource.id.in_(want))
         rows = [(v.id, v.name, v.stream_name or "", v.url or "") for v in q.all()]
 
-    # 探测在会话外做（每路最多 2 次 × 2.5s，不能占连接）
-    # 并发探测：3 路串行要 3.6s（日志会报慢请求），并发后 ~1.3s
+    # 探测在会话外做，且**必须有总超时**：评审实测过 go2rtc 不可达时
+    # 每路都去直连相机拉帧，端点会挂住不返回，把首页/探活脚本一起拖死。
     def _probe_one(row: tuple[int, str, str, str]) -> dict:
         vid, name, stream, direct_url = row
-        ok, reason = probe_frame(stream, base)
-        if not ok:
-            # 中继不可用时，直接连相机再试一次：相机通就不算"视频不可用"
-            ok2, _reason2 = probe_direct(direct_url)
+        ok, reason = probe_frame(stream, base, timeout=2.0)
+        if not ok and not gateway["reachable"]:
+            # 只有中继不可达时才直连兜底；直连同样限时 2.5s
+            ok2, _reason2 = probe_direct(direct_url, timeout=2.5)
             if ok2:
                 ok, reason = True, "直连正常（中继不可用）"
-            elif base and not gateway["reachable"]:
-                reason = f"视频网关不可达（{base}）"
+            else:
+                reason = f"视频网关不可达（{base}）" if base else reason
         return {"id": vid, "name": name, "stream": stream, "ok": ok, "reason": reason}
 
     if rows:
-        from concurrent.futures import ThreadPoolExecutor
+        from concurrent.futures import ThreadPoolExecutor, wait
 
         with ThreadPoolExecutor(max_workers=min(4, len(rows))) as ex:
-            out = list(ex.map(_probe_one, rows))
+            futs = {ex.submit(_probe_one, r): r for r in rows}
+            done, pending = wait(futs, timeout=6.0)
+            out = [f.result() for f in done]
+            for f in pending:
+                vid, name, stream, _url = futs[f]
+                out.append({"id": vid, "name": name, "stream": stream,
+                            "ok": False, "reason": "探测超时（>6s）"})
+            out.sort(key=lambda x: x["id"])
     else:
         out = []
-    return {"ok": True, "gateway": gateway, "videos": out}
+    payload = {"ok": True, "gateway": gateway, "videos": out}
+    _HEALTH_CACHE[cache_key] = (now, payload)
+    return payload
 
 
 
