@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import TopNav from '@/components/TopNav.vue'
+import Breadcrumb from '@/components/Breadcrumb.vue'
 import UserMenu from '@/components/UserMenu.vue'
 import logoUrl from '@/assets/logo.png'
 import { useRobotStore } from '@/stores/robot'
@@ -90,7 +91,8 @@ async function onLogout() {
     </header>
 
     <main class="content">
-      <router-view />
+      <Breadcrumb />
+      <div class="page-host"><router-view /></div>
     </main>
   </div>
 </template>
@@ -206,7 +208,11 @@ async function onLogout() {
 }
 .logout:hover { background: rgba(255, 255, 255, 0.2); }
 
-.content { flex: 1; min-height: 0; overflow: auto; padding: 12px 14px 16px; }
+.content {
+  flex: 1; min-height: 0; overflow: auto; padding: 8px 14px 16px;
+  display: flex; flex-direction: column;
+}
+.page-host { flex: 1; min-height: 0; }
 
 /* ---------- 窄屏 ---------- */
 @media (max-width: 1440px) {
