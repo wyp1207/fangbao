@@ -167,6 +167,14 @@ onBeforeUnmount(() => {
   box-shadow: 0 0 14px rgba(120, 220, 255, 0.6);
 }
 .caret { font-style: normal; font-size: 10px; opacity: 0.8; }
+
+/* 窄屏降密度：8 个 104px 标签在 1280/960 会顶破顶栏并盖住 logo */
+@media (max-width: 1320px) {
+  .nav-tab { min-width: 76px; padding: 5px 8px; font-size: 12.5px; }
+}
+@media (max-width: 1000px) {
+  .nav-tab { min-width: 64px; padding: 4px 6px; font-size: 12px; }
+}
 </style>
 
 <style>

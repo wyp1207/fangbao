@@ -1445,6 +1445,7 @@ async function logout() {
 .board {
   position: fixed; inset: 0; z-index: 40;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);                /* 显式列：禁止隐式 auto 列按 min-content 撑宽整页 */
   grid-template-rows: 54px 40px minmax(0, 1fr) 26px;   /* header/subbar/body/foot 四行 */
   overflow: hidden;   /* 整页固定，滚动只发生在面板内部 */
   color: #dff0ff;
@@ -1463,6 +1464,8 @@ async function logout() {
   background-size: auto, 58px 58px, 58px 58px;
   mask-image: radial-gradient(circle at 50% 30%, #000 40%, transparent 92%);
 }
+/* 三块都允许被压缩，不然窄屏时子项 min-content 会顶破视口 */
+.hdr, .subbar, .body { min-width: 0; }
 
 /* 顶栏 */
 .hdr {
@@ -1846,13 +1849,38 @@ async function logout() {
   .h-msg { height: 216px; }
 }
 
+/* 1320 以下标题让位给 8 个导航：留着会把 logo 挤没、导航压字 */
+@media (max-width: 1320px) {
+  .board-title { display: none; }
+}
+
+/* 状态带：左右两翼按内容占宽、时钟居中，不再互相压字 */
+@media (max-width: 1200px) {
+  .subbar { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .clock { justify-self: center; }
+}
+
+/* 矮屏（如 960×540）：左右栏内部滚动，视频面板保底 120px，不再把内容裁掉 */
+@media (max-height: 640px) {
+  .col.left, .col.right { overflow-y: auto; }
+  .col.left > .t-panel.grow,
+  .col.right > .t-panel.grow { flex: 0 0 120px; }
+  .col .preset-list { max-height: 90px; }
+  /* 120px 面板里只留标题 + 按钮，说明文字短屏不显示，避免反向溢出 */
+  .col .embed-empty { padding: 4px; gap: 4px; }
+  .col .embed-empty span { display: none; }
+  /* 空态只有「更换地址」，右下角「打开全屏页」会压到它上面，短屏先藏 */
+  .embed:has(.embed-empty) .embed-expand { display: none; }
+  .col.left .embed-pick { right: 6px; }   /* 窄面板里 right:96 会压到空态标题上 */
+}
+
 /* 窄屏：仍保持固定三列，靠压缩列宽 + 面板内滚，不整页滚 */
 @media (max-width: 1240px) {
   /* 列宽用 minmax(0,…)：宁可压缩内容，也不撑破整页 */
   .body { grid-template-columns: minmax(0, 280px) minmax(0, 1fr) minmax(0, 250px); gap: 8px; padding: 8px; }
   .col, .t-panel { min-width: 0; }
   .logo-text { display: none; }
-  .hdr { grid-template-columns: auto auto minmax(0, 1fr) auto; }
+  .hdr { grid-template-columns: auto minmax(0, 1fr) auto; }   /* 3 个子项就 3 列，右栏不再掉进 0 宽轨道 */
   .subbar { gap: 8px; overflow: hidden; }
   .sb-left { min-width: 0; }
   .sb-right { gap: 8px; }

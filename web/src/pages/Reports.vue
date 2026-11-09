@@ -341,7 +341,7 @@ onMounted(() => applyPreset('7d'))
 .small { font-size: 12px; }
 .num { font-variant-numeric: tabular-nums; }
 .input.date { width: 140px; }
-.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
 .kpi {
   padding: 9px 11px; border-radius: 4px;
   background: linear-gradient(180deg, rgba(0, 96, 170, 0.42), rgba(0, 50, 100, 0.5));
@@ -357,4 +357,7 @@ onMounted(() => applyPreset('7d'))
 .block.wide { grid-column: 1 / -1; }
 .block-title { font-size: 12px; color: #ffe08a; margin-bottom: 6px; letter-spacing: 0.06em; }
 .danger { color: #ff8a8a; }
+@media (max-width: 1100px) {
+  .cols { grid-template-columns: 1fr; }   /* 窄屏两列各 445 太挤，改单列 */
+}
 </style>

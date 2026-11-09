@@ -16,7 +16,7 @@ const { items } = useToast()
 
 <style scoped>
 .toast-host {
-  position: fixed; right: 18px; top: 16px; z-index: 200;
+  position: fixed; right: 18px; top: 104px; z-index: 200;   /* 顶栏 54 + 状态带 40，浮层从下面开始，不盖导航 */
   display: flex; flex-direction: column; gap: 8px;
   pointer-events: none;
 }

@@ -306,7 +306,7 @@ watch([levelFilter, ackFilter], async () => { page.value = 1; await reload() })
             <th style="width: 90px">级别</th>
             <th>告警内容</th>
             <th style="width: 160px">状态</th>
-            <th style="width: 100px">操作</th>
+            <th style="width: 240px">操作</th>
           </tr>
         </thead>
         <tbody>

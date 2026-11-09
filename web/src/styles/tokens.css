@@ -231,9 +231,11 @@ table.grid tbody tr:hover td { background: rgba(41, 212, 255, 0.16); }
 
 /* ---------- 表格行内小方块图标按钮（参考图那种） ---------- */
 .act {
-  width: 26px; height: 24px;
+  width: auto; min-width: 26px; height: 24px;
+  padding: 0 5px;
   display: inline-grid; place-items: center;
   font-size: 12px; line-height: 1;
+  white-space: nowrap;   /* 「工单195」不折行，按钮宽度跟着内容走 */
   color: #cfe8ff; cursor: pointer;
   background: linear-gradient(180deg, rgba(20, 130, 220, 0.6), rgba(0, 70, 140, 0.75));
   border: 1px solid rgba(111, 227, 255, 0.45);
