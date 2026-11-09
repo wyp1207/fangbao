@@ -83,3 +83,20 @@ def test_patch_bad_url_400_not_500(auth_client, bad):
     assert r.status_code == 400, r.text
     assert r.json()["code"] == "BAD_URL"
     assert "视频流地址不合法" in r.json()["message"]
+
+
+def test_create_with_robot_id_attaches(auth_client):
+    """POST 带 robot_id 必须真的挂到设备上；之前 schema 没这个字段，会被静默丢弃。"""
+    r = auth_client.post("/api/v1/videos", json={
+        "name": "挂设备测试", "url": "rtsp://127.0.0.1:554/test", "robot_id": 1,
+    })
+    assert r.status_code == 200, r.text
+    vid = r.json()["id"]
+    rows = auth_client.get("/api/v1/videos?robot_id=1").json()
+    rows = rows.get("items", rows) if isinstance(rows, dict) else rows
+    assert any(x["id"] == vid for x in rows)
+
+    bad = auth_client.post("/api/v1/videos", json={
+        "name": "坏设备", "url": "rtsp://127.0.0.1:554/test", "robot_id": 99999,
+    })
+    assert bad.status_code == 400 and bad.json()["code"] == "BAD_ROBOT"

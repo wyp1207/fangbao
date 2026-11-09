@@ -143,6 +143,8 @@ class VideoIn(BaseModel):
     show_on_dashboard: bool = False
     note: str | None = Field(default=None, max_length=200)
     stream_name: str = Field(default="", max_length=32)
+    # 之前没有这个字段：POST 里带 robot_id 会被静默丢弃，新相机永远挂不到设备上
+    robot_id: int | None = None
 
 
 class VideoPatch(BaseModel):
@@ -154,6 +156,7 @@ class VideoPatch(BaseModel):
     show_on_dashboard: bool | None = None
     note: str | None = None
     stream_name: str | None = None
+    robot_id: int | None = None
 
 
 def _play_url(name: str) -> str | None:
@@ -317,6 +320,10 @@ def create_video(
     if body.vendor not in VENDORS:
         raise BadRequest("厂商只能是 hikvision/dahua/other", code="BAD_VENDOR")
     split_url(body.url)  # 提前校验
+    if body.robot_id is not None:
+        from app.models.robot import Robot
+        if db.get(Robot, body.robot_id) is None:
+            raise BadRequest("设备不存在", code="BAD_ROBOT")
     v = VideoSource(**body.model_dump())
     db.add(v)
     db.commit()
@@ -339,6 +346,10 @@ def update_video(
     data = body.model_dump(exclude_none=True)
     if "vendor" in data and data["vendor"] not in VENDORS:
         raise BadRequest("厂商只能是 hikvision/dahua/other", code="BAD_VENDOR")
+    if data.get("robot_id") is not None:
+        from app.models.robot import Robot
+        if db.get(Robot, data["robot_id"]) is None:
+            raise BadRequest("设备不存在", code="BAD_ROBOT")
     if "url" in data:
         # 前端提交打码串时用旧密码还原：只改 IP/路径也能真正生效
         new_url = unmask_url(str(data["url"] or ""), v.url)
