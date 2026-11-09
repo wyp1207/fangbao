@@ -74,9 +74,16 @@ export const useRobotStore = defineStore('robot', {
     },
     setDevice(id: number) {
       if (this.deviceId === id) return
+      // 切车 = 换数据源：旧 WS 必须断开，否则位姿一直推的是上一台车；
+      // 地图/当前地图也要重拉，不然地图面板还停在旧车。
+      this.stopWs()
       this.deviceId = id
       this.snapshot = null
+      this.maps = []
+      this.currentMap = ''
       void this.refresh()
+      void this.loadMaps().catch(() => { /* 地图失败不阻塞状态 */ })
+      this.startWs()
     },
     async refreshAlarms() {
       try {
@@ -91,8 +98,9 @@ export const useRobotStore = defineStore('robot', {
       if (hit) Object.assign(hit, acked)
     },
     async loadMaps() {
-      this.maps = await api.maps()
-      const current = await api.currentMap()
+      // 必须带 deviceId：api.maps()/api.currentMap() 默认都是 1，切车后就会拿到 1 号车的地图
+      this.maps = await api.maps(this.deviceId)
+      const current = await api.currentMap(this.deviceId)
       this.currentMap = current.name
     },
     start() {

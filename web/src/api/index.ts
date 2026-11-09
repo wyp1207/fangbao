@@ -245,7 +245,8 @@ export const api = {
   move: (id: number, body: { forward?: number; left?: number; yaw?: number }) =>
     request<{ ok: boolean }>(`/robots/${id}/move`, { method: 'POST', body }),
   ptzPresets: () => request<{ ok: boolean; reason?: string;
-    items: { preset_id: number; name: string }[] }>('/ptz/presets'),
+    items: { preset_id: number; name: string }[];
+    next_id?: number | null; max_id?: number }>('/ptz/presets'),
   ptzSavePreset: (preset_id: number, name: string) =>
     request<{ ok: boolean; preset_id: number; name: string }>('/ptz/presets',
       { method: 'POST', body: { preset_id, name } }),

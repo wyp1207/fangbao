@@ -36,8 +36,14 @@ const ptzOn = ref(false)
 const ptzBusy = ref(false)
 const ptzPresets = ref<{ preset_id: number; name: string }[]>([])
 const ptzPresetBusy = ref(false)
-// 写开关以服务端设置为准：以前只看角色，服务端关着也会显示"已开启"，现场会误判
-const writeEnabled = ref(false)
+// 预置位按海康/大华的标准交互：编号 1..256，同号即覆盖，名称随编号一起存
+const PTZ_PRESET_MAX = 256
+const ptzPresetErr = ref('')
+const ptzPresetNext = ref<number | null>(1)
+const ptzPresetOpen = ref(false)
+const ptzPresetForm = ref<{ id: number; name: string }>({ id: 1, name: '' })
+const ptzTargetExisting = computed(() =>
+  ptzPresets.value.find((p) => p.preset_id === Number(ptzPresetForm.value.id)) ?? null)
 let ptzTimer = 0
 
 async function loadPtzFlag() {
@@ -45,10 +51,8 @@ async function loadPtzFlag() {
     const res = await api.settings()
     const vals = res.values as Record<string, unknown>
     ptzOn.value = Boolean(vals['ptz.enabled'])
-    writeEnabled.value = Boolean(vals['robot.write_enabled'])
   } catch {
     ptzOn.value = false
-    writeEnabled.value = false
   }
 }
 
@@ -76,48 +80,83 @@ function ptzHoldEnd() {
 }
 
 async function loadPtzPresets() {
+  if (!ptzOn.value) return
   try {
     const res = await api.ptzPresets()
     ptzPresets.value = res.items ?? []
-  } catch { ptzPresets.value = [] }
-}
-
-async function ptzGoto(presetId: number) {
-  try {
-    await api.ptzGotoPreset(presetId)
-    toast(`已转到预置位 ${presetId}`, 'ok', 2500)
+    ptzPresetNext.value = res.next_id ?? null
+    ptzPresetErr.value = res.ok ? '' : (res.reason || '云台未连接')
   } catch (e) {
-    toast(e instanceof ApiError ? e.message : '调用预置位失败', 'danger')
+    ptzPresets.value = []
+    ptzPresetNext.value = null
+    ptzPresetErr.value = e instanceof ApiError ? e.message : '云台未连接'
   }
 }
 
-async function ptzSaveCurrent() {
-  if (ptzPresetBusy.value) return
+// 云台开关是异步读出来的：开了就顺手拉一次预置位，否则面板一直显示空的
+watch(ptzOn, (on) => { if (on) void loadPtzPresets() })
+
+/** 后端没给 next_id 时自己从列表里找：1–256 里最小的空号 */
+function firstFreePtzId(): number | null {
   const used = new Set(ptzPresets.value.map((p) => p.preset_id))
-  let next = 1
-  while (used.has(next) && next <= 256) next += 1
-  const name = window.prompt(`把当前位置存为预置位（编号 ${next}），起个名字：`, `机位 ${next}`)
-  if (!name) return
+  for (let i = 1; i <= PTZ_PRESET_MAX; i += 1) if (!used.has(i)) return i
+  return null
+}
+
+function openPtzPresetForm() {
+  if (!ptzOn.value) {
+    toast('云台未启用：先到「系统设置 → 云台」打开', 'warn', 4000)
+    return
+  }
+  const free = ptzPresetNext.value ?? firstFreePtzId()
+  ptzPresetForm.value = {
+    id: free ?? 1,
+    name: free ? `机位 ${free}` : '',
+  }
+  ptzPresetOpen.value = true
+}
+
+async function ptzGoto(presetId: number) {
+  const hit = ptzPresets.value.find((p) => p.preset_id === presetId)
+  try {
+    await api.ptzGotoPreset(presetId)
+    toast(`已转到预置位 ${presetId}${hit?.name ? ' · ' + hit.name : ''}`, 'ok', 2500)
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : '云台未连接，转预置位失败', 'danger', 5000)
+  }
+}
+
+async function savePtzPreset() {
+  if (ptzPresetBusy.value) return
+  const id = Number(ptzPresetForm.value.id)
+  if (!Number.isInteger(id) || id < 1 || id > PTZ_PRESET_MAX) {
+    toast(`预置位编号必须是 1–${PTZ_PRESET_MAX} 的整数`, 'warn', 4000)
+    return
+  }
+  const name = (ptzPresetForm.value.name || '').trim().slice(0, 32) || `机位 ${id}`
+  const occupied = Boolean(ptzTargetExisting.value)
   ptzPresetBusy.value = true
   try {
-    await api.ptzSavePreset(next, name.slice(0, 32))
+    await api.ptzSavePreset(id, name)
+    ptzPresetOpen.value = false
     await loadPtzPresets()
-    toast('预置位已保存', 'ok', 2500)
+    toast(occupied ? `已覆盖预置位 ${id} · ${name}` : `已存到预置位 ${id} · ${name}`, 'ok', 3000)
   } catch (e) {
-    toast(e instanceof ApiError ? e.message : '保存失败', 'danger')
+    // 相机不可达时后端会返回原因；不许假装保存成功
+    toast(e instanceof ApiError ? e.message : '云台未连接，预置位没有保存', 'danger', 6000)
   } finally {
     ptzPresetBusy.value = false
   }
 }
 
 async function ptzDelete(presetId: number, name: string) {
-  if (!window.confirm(`删除预置位「${name || presetId}」？`)) return
+  if (!window.confirm(`删除预置位 ${presetId}${name ? ` · ${name}` : ''}？`)) return
   try {
     await api.ptzDeletePreset(presetId)
     await loadPtzPresets()
-    toast('已删除', 'ok', 2000)
+    toast(`已删除预置位 ${presetId}`, 'ok', 2000)
   } catch (e) {
-    toast(e instanceof ApiError ? e.message : '删除失败', 'danger')
+    toast(e instanceof ApiError ? e.message : '云台未连接，删除失败', 'danger', 5000)
   }
 }
 
@@ -184,10 +223,8 @@ function onSite(v: string) {
   site.value = v
   const hit = devices.value.find((d) => d.station === v)
   if (hit) {
-    deviceId.value = String(hit.id)
-    robot.setDevice(hit.id)          // 真切数据源，别只改个名字
-    void api.videos(Number(deviceId.value)).then((rows) => { videoRows.value = rows as never }).catch(() => undefined)
-    void loadMap()
+    // 走同一条切设备流程：视频/地图/云台/能力/任务一起换，避免"只改了场站名"
+    onDevice(String(hit.id))
     toast('已切换到场站 ' + v + '（设备 ' + hit.name + '）', 'ok')
   } else {
     toast('该场站暂无设备', 'warn')
@@ -200,6 +237,15 @@ function onDevice(v: string) {
   toast('已切换到 ' + (hit?.name ?? v), 'ok')
   // 换设备就刷新视频与地图，避免还显示上一台的画面
   void api.videos(Number(deviceId.value)).then((rows) => { videoRows.value = rows as never }).catch(() => undefined)
+  void loadMap()
+  // 轨迹/地图报错属于上一台车，切车先清掉，避免"新车的轨迹里还有旧车"
+  // （目标点提示在 Twin 内部，Dashboard 没有对应状态，之前这行引用了未定义的 gotoHint）
+  trail.value = []
+  mapError.value = ''
+  locOpen.value = false
+  ptzPresetOpen.value = false
+  pickOpen.value = false
+  void loadPtzPresets()
   void loadEnv()
   void loadPtzFlag()
   void loadVideoHealth()
@@ -383,28 +429,54 @@ const urlFor = ref<{ id: number; name: string; url: string } | null>(null)
 const urlDraft = ref('')
 
 function openUrl(v: { id: number; name: string; url?: string } | null) {
-  urlFor.value = { id: v?.id ?? 0, name: v?.name ?? '这路视频', url: v?.url ?? '' }
-  urlDraft.value = v?.url ?? ''
+  if (!v) {
+    // 之前这里会拿 id=0 去 PATCH，后端回「视频源不存在」，用户只看到一句莫名报错
+    toast('这台设备还没有可改的视频源：请到「设备管理 → 摄像头」添加摄像头', 'warn', 6000)
+    return
+  }
+  urlFor.value = { id: v.id, name: v.name, url: v.url ?? '' }
+  urlDraft.value = v.url ?? ''
   urlOpen.value = true
 }
 
 async function saveUrl() {
   const t = urlFor.value
-  if (!t || !urlDraft.value.trim()) return
+  const draft = urlDraft.value.trim()
+  if (!t || !t.id) {
+    toast('没有选中视频源：请到「设备管理 → 摄像头」先添加', 'warn', 5000)
+    return
+  }
+  if (!draft) {
+    toast('请填写 RTSP 地址', 'warn', 3000)
+    return
+  }
+  if (t.url && draft === t.url) {
+    toast('地址没有改动', 'info', 2500)
+    urlOpen.value = false
+    return
+  }
   try {
-    await api.updateVideo(t.id, { url: urlDraft.value.trim() })
+    await api.updateVideo(t.id, { url: draft })
     toast('地址已保存，正在重连…', 'ok')
     urlOpen.value = false
     const rows = await api.videos(Number(deviceId.value))
     videoRows.value = rows as never
     await loadVideoHealth()
   } catch (e) {
-    toast(e instanceof ApiError ? e.message : '保存失败', 'danger')
+    toast(e instanceof ApiError ? e.message : '保存失败（看控制台）', 'danger', 6000)
   }
 }
 
 async function openPick(v: { id: number; name: string; stream_name: string } | null) {
-  if (!v) return
+  if (!v) {
+    // 没有首页视频源时也必须给反馈：之前直接 return，按钮像坏的
+    const rows = videoRows.value
+    toast(rows.length
+      ? `本设备有 ${rows.length} 路摄像头，但都没勾「首页显示」：到「设备管理 → 摄像头」勾选后再换流`
+      : '本设备未配置视频源：请到「设备管理 → 摄像头」添加摄像头并勾选「首页显示」',
+      'warn', 6500)
+    return
+  }
   pickFor.value = v
   pickOpen.value = true
   pickBusy.value = true
@@ -413,10 +485,16 @@ async function openPick(v: { id: number; name: string; stream_name: string } | n
   try {
     const res = await api.go2rtcStreams()
     pickStreams.value = res.streams ?? []
-    if (!res.ok) pickErr.value = res.reason || 'go2rtc 不可达'
-    else if (!pickStreams.value.length) pickErr.value = 'go2rtc 里还没有已登记的流'
+    if (!res.ok) {
+      pickErr.value = res.reason || 'go2rtc 不可达'
+      toast(`换流不可用：${pickErr.value}`, 'warn', 5000)
+    } else if (!pickStreams.value.length) {
+      pickErr.value = 'go2rtc 里还没有已登记的流'
+      toast('没有可选的视频流：go2rtc 里还没有已登记的流', 'warn', 5000)
+    }
   } catch (e) {
     pickErr.value = e instanceof ApiError ? e.message : '读取流列表失败'
+    toast(`换流不可用：${pickErr.value}`, 'warn', 5000)
   } finally {
     pickBusy.value = false
   }
@@ -1012,19 +1090,22 @@ async function logout() {
             <div class="ctrl-meta">
               <div class="preset-head">
                 <b>预置位</b>
-                <button class="btn btn-xs" :disabled="ptzPresetBusy" @click="ptzSaveCurrent">
+                <button class="btn btn-xs" :disabled="ptzPresetBusy" @click="openPtzPresetForm">
                   存当前
                 </button>
               </div>
               <div v-if="ptzPresets.length" class="preset-list">
                 <span v-for="p in ptzPresets" :key="p.preset_id" class="preset-chip">
                   <button class="pc-go" :title="`转到预置位 ${p.preset_id}`" @click="ptzGoto(p.preset_id)">
-                    {{ p.name || `#${p.preset_id}` }}
+                    {{ p.preset_id }} · {{ p.name || '未命名' }}
                   </button>
                   <button class="pc-del" title="删除" @click="ptzDelete(p.preset_id, p.name)">×</button>
                 </span>
               </div>
-              <p v-else class="dim small">还没有预置位：调好角度后点「存当前」</p>
+              <p v-else-if="ptzPresetErr" class="preset-state bad" :title="ptzPresetErr">
+                云台未连接<button class="ps-retry" @click="loadPtzPresets">重试</button>
+              </p>
+              <p v-else class="preset-state">暂无预置位</p>
             </div>
           </div>
           <div v-show="controlTab === 'chassis' || !ptzOn" class="ctrl-body">
@@ -1063,9 +1144,6 @@ async function logout() {
                 <button class="btn" :disabled="!activeRun" @click="runAction('resume')">继续</button>
                 <button class="btn" :disabled="!activeRun" @click="runAction('cancel')">取消</button>
               </div>
-              <span class="cmd-hint">
-                这台设备不支持遥控行走；上面按钮走任务接口，状态以车端回读为准。
-              </span>
             </div>
 
             <div class="ctrl-meta">
@@ -1075,9 +1153,7 @@ async function logout() {
                 <button class="btn" @click="moveMode('start')">开始运动</button>
                 <button class="btn" @click="moveMode('stop')">停止运动</button>
               </div>
-              <p v-else class="dim small">该机型不支持起立/趴下（轮式没有这个动作）</p>
-              <p class="dim small" v-if="motionState">MotionState={{ motionState }} · 按住走，松手停</p>
-              <p class="dim small">写开关：{{ writeEnabled ? '已开启' : '已关闭（只读）' }} · 急停在车身上</p>
+              <p class="dim small" v-if="motionState">MotionState={{ motionState }}</p>
             </div>
           </div>
         </ScadaPanel>
@@ -1263,10 +1339,37 @@ async function logout() {
         <h4>改「{{ urlFor?.name }}」的地址</h4>
         <p class="dim small">填 RTSP 地址（rtsp://用户:密码@IP:554/...）；改完立即重连。</p>
         <input v-model="urlDraft" class="input" placeholder="rtsp://admin:密码@192.168.1.64:554/h264/ch1/main/av_stream" />
+        <p class="dim small">密码显示为 *** 表示沿用原密码：只改 IP / 路径也会保留原密码。</p>
         <p class="dim small">如果只是想换一路流，用「换流」更省事；这里适合相机换了 IP / 换了设备。</p>
         <div class="pick-acts">
           <button class="btn btn-sm" @click="urlOpen = false">取消</button>
           <button class="btn btn-sm primary" @click="saveUrl">保存</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 预置位：编号 1–256，同号覆盖（海康/大华标准做法） -->
+    <div v-if="ptzPresetOpen" class="mask" @click.self="ptzPresetOpen = false">
+      <div class="pick preset-pick">
+        <h4>存预置位</h4>
+        <p class="dim small">把云台当前角度存到指定编号；同一编号再存会覆盖原来的位置和名称。</p>
+        <div class="pf-grid">
+          <label for="pf-id">编号</label>
+          <input id="pf-id" v-model.number="ptzPresetForm.id" class="input pf-id"
+                 type="number" min="1" :max="PTZ_PRESET_MAX" step="1" />
+          <label for="pf-name">名称</label>
+          <input id="pf-name" v-model="ptzPresetForm.name" class="input"
+                 maxlength="32" placeholder="如 泵房机位" />
+        </div>
+        <p v-if="ptzTargetExisting" class="pf-warn">
+          编号 {{ ptzTargetExisting.preset_id }} 已存在「{{ ptzTargetExisting.name || '未命名' }}」，保存会覆盖。
+        </p>
+        <p v-else-if="ptzPresetNext == null" class="pf-warn">编号 1–{{ PTZ_PRESET_MAX }} 已用满，请填一个已有编号覆盖。</p>
+        <div class="pick-acts">
+          <button class="btn btn-sm" @click="ptzPresetOpen = false">取消</button>
+          <button class="btn btn-sm primary" :disabled="ptzPresetBusy" @click="savePtzPreset">
+            {{ ptzTargetExisting ? '覆盖保存' : '保存' }}
+          </button>
         </div>
       </div>
     </div>
@@ -2245,6 +2348,22 @@ async function logout() {
   background: rgba(120, 30, 30, .35); color: #ffb3b3; border: 0; padding: 0 5px;
   font-size: 12px; cursor: pointer;
 }
+.preset-state { margin: 4px 0 0; font-size: 11px; color: #8fc4f0; }
+.preset-state.bad { color: #ff9b9b; }
+.preset-state .ps-retry {
+  margin-left: 6px; padding: 0 5px; font-size: 11px; cursor: pointer;
+  color: #9fe4ff; background: rgba(0, 90, 150, .45);
+  border: 1px solid rgba(111, 227, 255, .4); border-radius: 3px;
+}
+/* 预置位小面板：编号 + 名称 + 覆盖提示 */
+.preset-pick { width: 400px; }
+.pf-grid {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center; gap: 6px 10px; margin: 10px 0 6px;
+}
+.pf-grid label { font-size: 12px; color: #9fd2ff; }
+.pf-id { width: 74px; }
+.pf-warn { margin: 2px 0 8px; font-size: 11.5px; color: #ffcf3f; }
 
 /* 今日任务状态：文字必须完整；时间不截断 */
 .rt-right { min-width: 0; }
