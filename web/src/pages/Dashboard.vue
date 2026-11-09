@@ -2118,7 +2118,7 @@ async function logout() {
   font-size: 11.5px; padding: 2px 10px; border-radius: 3px; letter-spacing: 1px;
 }
 .rt-line {
-  display: flex; justify-content: space-between; gap: 10px; align-items: baseline;
+  display: flex; justify-content: flex-start; gap: 10px; align-items: baseline;
   font-size: 11.5px; line-height: 1.4;
   padding: 5px 0;                      /* 行间留白 */
   border-bottom: 1px dashed rgba(48, 152, 232, .45);   /* 行分隔线 */
@@ -2126,7 +2126,7 @@ async function logout() {
 .rt-line:last-of-type { border-bottom: 0; }
 .rt-line span { color: #71f9ff; white-space: nowrap; font-weight: 700; }
 .rt-line b {
-  color: #f7c355; font-weight: 800; letter-spacing: .3px; text-align: right; max-width: 62%;
+  color: #f7c355; font-weight: 800; letter-spacing: .3px; text-align: left; max-width: 66%;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .rt-groups {
@@ -2372,7 +2372,7 @@ async function logout() {
   color: #eaf7ff; font-size: 13px; font-weight: 600;
   white-space: normal; overflow: visible; text-overflow: clip;
   word-break: break-all; overflow-wrap: anywhere;
-  text-align: right;            /* 数值居右，标签居左，一眼能扫 */
+  text-align: left;             /* 标签左对齐，值紧随其后，不再贴最右边 */
 }
 /* 点位多时面板内滚动，细滚动条 */
 .t-panel:has(.points) :deep(.t-body) { max-height: 214px; overflow-y: auto; }
