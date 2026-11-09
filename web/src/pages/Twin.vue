@@ -872,7 +872,6 @@ function onResize() {
 }
 
 onMounted(async () => {
-  robot.setDevice(robot.deviceId)
   robot.startWs()
   if (!props.compact) void loadPlayback()
   void loadPlan()
@@ -889,7 +888,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   alive = false
-  robot.stopWs()
+  // WS 属于布局层（robot store），Twin 只是消费者：这里 stopWs 会让 2D 视图退化成 1Hz 轮询
   cancelAnimationFrame(raf)
   window.removeEventListener('resize', onResize)
   renderer?.domElement.removeEventListener('pointerdown', onStageDown)

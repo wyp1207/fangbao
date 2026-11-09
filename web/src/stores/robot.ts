@@ -64,10 +64,15 @@ export const useRobotStore = defineStore('robot', {
       this.wsConnected = false
     },
     async refresh() {
+      const dev = this.deviceId
       try {
-        this.snapshot = await api.status(this.deviceId)
+        const snap = await api.status(dev)
+        // 切车后旧请求可能才回来：别用它覆盖新车的状态
+        if (dev !== this.deviceId) return
+        this.snapshot = snap
         this.lastError = ''
       } catch (e) {
+        if (dev !== this.deviceId) return
         this.lastError = e instanceof Error ? e.message : String(e)
       }
       if (++this.ticks % ALARM_EVERY === 0) await this.refreshAlarms()
@@ -99,8 +104,11 @@ export const useRobotStore = defineStore('robot', {
     },
     async loadMaps() {
       // 必须带 deviceId：api.maps()/api.currentMap() 默认都是 1，切车后就会拿到 1 号车的地图
-      this.maps = await api.maps(this.deviceId)
-      const current = await api.currentMap(this.deviceId)
+      const dev = this.deviceId
+      const maps = await api.maps(dev)
+      const current = await api.currentMap(dev)
+      if (dev !== this.deviceId) return   // 旧车的图晚到，丢弃
+      this.maps = maps
       this.currentMap = current.name
     },
     start() {

@@ -223,9 +223,8 @@ function onSite(v: string) {
   site.value = v
   const hit = devices.value.find((d) => d.station === v)
   if (hit) {
-    // 走同一条切设备流程：视频/地图/云台/能力/任务一起换，避免"只改了场站名"
+    // 走同一条切设备流程：视频/地图/云台/能力/任务一起换
     onDevice(String(hit.id))
-    toast('已切换到场站 ' + v + '（设备 ' + hit.name + '）', 'ok')
   } else {
     toast('该场站暂无设备', 'warn')
   }
@@ -253,20 +252,8 @@ function onDevice(v: string) {
   void loadCaps()
   void loadRuns()
   void loadFeed()
-  // 切设备时重建定时器：先清掉旧的，否则每切一次就多 3 个轮询
-  timers.forEach((t) => window.clearInterval(t))
-  timers = []
-  timers.push(window.setInterval(loadEnv, 15000))
-  timers.push(window.setInterval(() => {
-    const anyBad = Object.values(videoHealth.value).some((h) => !h.ok)
-    void loadVideoHealth()
-    if (anyBad) window.setTimeout(() => { void loadVideoHealth() }, 2000)
-  }, 10000))
-  window.clearInterval(tickTimer)
-  timers.push(window.setInterval(loadTrend, 60000))
-  timers.push(window.setInterval(loadRuns, 10000))
-  timers.push(window.setInterval(loadFeed, 15000))
-  timers.push(window.setInterval(pollUnread, 30000))
+  // 切设备/首次挂载共用同一套定时器；清掉旧的再建，避免多组轮询
+  startTimers()
 
   // 切设备时把场站也对齐，否则下拉显示"全部"、后面地图/健康还停在旧设备
   const d = devices.value.find((x) => String(x.id) === v)
@@ -370,7 +357,6 @@ async function saveInitLoc() {
 const videoHealth = ref<Record<number, { ok: boolean; reason: string }>>({})
 // 图片轮询：2.5 帧/秒够看现场，全幅 contain 不裁切，也不会把 go2rtc 的报错糊上来
 const tick = ref(0)
-let tickTimer = 0
 
 // 用 MJPEG 长连接（一条连接连续出帧）；ticket 只在重连时变，不随帧刷新
 const liveTicket = ref<Record<number, number>>({})
@@ -906,6 +892,29 @@ async function loadMap() {
 }
 
 let timers: number[] = []
+/** 首次挂载和切设备共用：时钟、未读、轨迹这些不重建的话，切车后就停了 */
+function startTimers() {
+  timers.forEach((t) => window.clearInterval(t))
+  timers = []
+  timers.push(window.setInterval(loadEnv, 15000))
+  timers.push(window.setInterval(() => {
+    const anyBad = Object.values(videoHealth.value).some((h) => !h.ok)
+    void loadVideoHealth()
+    if (anyBad) window.setTimeout(() => { void loadVideoHealth() }, 2000)
+  }, 10000))
+  timers.push(window.setInterval(loadTrend, 60000))
+  timers.push(window.setInterval(loadRuns, 10000))
+  timers.push(window.setInterval(loadFeed, 15000))
+  timers.push(window.setInterval(pollUnread, 30000))
+  timers.push(window.setInterval(() => { now.value = new Date() }, 1000))
+  timers.push(window.setInterval(refreshMsgUnread, 15000))
+  timers.push(window.setInterval(() => {
+    const p = robot.pose
+    if (!p || typeof p.x !== 'number' || typeof p.y !== 'number') return
+    trail.value.push({ x: p.x, y: p.y })
+    if (trail.value.length > 200) trail.value.shift()
+  }, 1000))
+}
 onMounted(async () => {
   robot.start()
   void api.videos(Number(deviceId.value)).then((rows) => { videoRows.value = rows as never }).catch(() => undefined)
@@ -916,34 +925,14 @@ onMounted(async () => {
   void loadCaps()
   void loadRuns()
   void loadFeed()
-  // 切设备时重建定时器：先清掉旧的，否则每切一次就多 3 个轮询
-  timers.forEach((t) => window.clearInterval(t))
-  timers = []
-  timers.push(window.setInterval(loadEnv, 15000))
-  timers.push(window.setInterval(() => {
-    const anyBad = Object.values(videoHealth.value).some((h) => !h.ok)
-    void loadVideoHealth()
-    if (anyBad) window.setTimeout(() => { void loadVideoHealth() }, 2000)
-  }, 10000))
-  window.clearInterval(tickTimer)
-  timers.push(window.setInterval(loadTrend, 60000))
-  timers.push(window.setInterval(loadRuns, 10000))
-  timers.push(window.setInterval(loadFeed, 15000))
-  timers.push(window.setInterval(pollUnread, 30000))
+  // 切设备/首次挂载共用同一套定时器；清掉旧的再建，避免多组轮询
+  startTimers()
   void api.devices().then((rows) => {
     devices.value = rows.map((d) => ({ id: d.id, name: d.name, station: d.station, adapter: d.adapter, version: d.version }))
     site.value = rows[0]?.station ?? '未分场站'
   }).catch(() => undefined)
   await loadMap()
-  timers.push(window.setInterval(() => { now.value = new Date() }, 1000))
   void refreshMsgUnread()
-  timers.push(window.setInterval(refreshMsgUnread, 15000))
-  timers.push(window.setInterval(() => {
-    const p = robot.pose
-    if (!p || typeof p.x !== 'number' || typeof p.y !== 'number') return
-    trail.value.push({ x: p.x, y: p.y })
-    if (trail.value.length > 200) trail.value.shift()
-  }, 1000))
 })
 onBeforeUnmount(() => {
   stopMoveTimer()
