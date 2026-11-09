@@ -3,14 +3,30 @@ import { nextTick, onMounted, ref, watch } from 'vue'
 import { useLockStore } from '@/stores/lock'
 import { useAuthStore } from '@/stores/auth'
 import { useRouter } from 'vue-router'
+import { api } from '@/api'
+import { ApiError } from '@/api/client'
 
 const lock = useLockStore()
 const auth = useAuthStore()
 const router = useRouter()
 const input = ref<HTMLInputElement | null>(null)
+// 锁屏瞬间先问一次后端"这台机器还登录着吗"：后端重启/令牌失效时 /auth/me 会 401，
+// 这时直接进"登录已过期"态，不要让用户输一遍密码才发现解不开。
+const checking = ref(false)
 
 watch(() => lock.locked, async (v) => {
   if (v) {
+    lock.expired = !auth.user
+    if (!lock.expired) {
+      checking.value = true
+      try {
+        await api.me()
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 401) lock.expired = true
+      } finally {
+        checking.value = false
+      }
+    }
     await nextTick()
     input.value?.focus()
   }
@@ -18,6 +34,12 @@ watch(() => lock.locked, async (v) => {
 
 onMounted(() => {
   if (lock.locked) input.value?.focus()
+})
+
+// 锁屏期间会话被后端判失效（轮询 401 会清空 auth.user）：立刻转“登录已过期”，
+// 不用等用户再输一次密码才失败。
+watch(() => auth.user, (u) => {
+  if (!u && lock.locked) lock.expired = true
 })
 
 async function logout() {
@@ -32,18 +54,27 @@ async function logout() {
     <div v-if="lock.locked" class="ls-mask">
       <div class="ls-box">
         <div class="ls-icon">🔒</div>
-        <h3>屏幕已锁定</h3>
-        <p class="ls-dim">已空闲 {{ lock.idleMinutes }} 分钟，输入当前账号密码解锁</p>
-        <input
-          ref="input" v-model="lock.password" class="ls-input" type="password"
-          placeholder="密码" autocomplete="off" @keyup.enter="lock.unlock()"
-        />
-        <p v-if="lock.error" class="ls-err">{{ lock.error }}</p>
+        <h3>{{ lock.expired ? '登录已过期' : '屏幕已锁定' }}</h3>
+        <p class="ls-dim">
+          {{ lock.expired ? '后台服务重启或会话超时，需要重新登录后继续' : `已空闲 ${lock.idleMinutes} 分钟，输入当前账号密码解锁` }}
+        </p>
+        <template v-if="!lock.expired">
+          <input
+            v-if="!checking"
+            ref="input" v-model="lock.password" class="ls-input" type="password"
+            placeholder="密码" autocomplete="off" @keyup.enter="lock.unlock()"
+          />
+          <p v-if="checking" class="ls-dim">正在确认登录状态…</p>
+          <p v-if="lock.error" class="ls-err">{{ lock.error }}</p>
+        </template>
         <div class="ls-actions">
-          <button class="ls-btn" @click="logout">退出登录</button>
-          <button class="ls-btn primary" :disabled="lock.busy" @click="lock.unlock()">
-            {{ lock.busy ? '验证中…' : '解锁' }}
-          </button>
+          <template v-if="!lock.expired">
+            <button class="ls-btn" @click="logout">退出登录</button>
+            <button class="ls-btn primary" :disabled="lock.busy" @click="lock.unlock()">
+              {{ lock.busy ? '验证中…' : '解锁' }}
+            </button>
+          </template>
+          <button v-else class="ls-btn primary" @click="logout">重新登录</button>
         </div>
         <p class="ls-dim small">锁定期间无法操作大屏；忘记密码请让管理员在「用户管理」里重置</p>
       </div>

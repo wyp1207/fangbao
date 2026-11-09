@@ -32,8 +32,9 @@ export function triggerUnauthorized(): void {
 }
 
 // 这些接口的 401 是"业务答案"，不是会话过期：
-// /auth/login 密码错、/auth/me 用来判断有没有登录、/auth/logout 本来就可能没会话
-const AUTH_PATHS = new Set(['/auth/login', '/auth/me', '/auth/logout'])
+// /auth/login 密码错、/auth/me 用来判断有没有登录、/auth/logout 本来就可能没会话、
+// /auth/verify 是锁屏解锁的密码校验（密码错也是 401，不能把人踢回登录页）
+const AUTH_PATHS = new Set(['/auth/login', '/auth/me', '/auth/logout', '/auth/verify'])
 
 type Options = {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
