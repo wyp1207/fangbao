@@ -959,6 +959,8 @@ onBeforeUnmount(() => {
 .twin { position: absolute; inset: 0; }
 .twin.compact { position: relative; height: 100%; }
 .twin.compact .hud { font-size: 10px; padding: 4px 8px; gap: 8px; }
+/* 全屏 /twin 是绝对定位到视口，HUD top:12 会被 54px 顶栏遮住 */
+.twin:not(.compact) .hud { top: 66px; }
 .stage { position: relative; width: 100%; height: 100%; background: #050810; overflow: hidden; }
 .hud {
   position: absolute; left: 14px; top: 12px; display: flex; gap: 14px; align-items: center;
