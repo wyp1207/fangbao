@@ -8,6 +8,7 @@
  * 将来客户给了 GLB 白模，只要换 modelGroup，业务对象一个不用动。
  */
 import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js'
@@ -20,6 +21,7 @@ import { useRobotStore } from '@/stores/robot'
 import { toast } from '@/composables/useToast'
 
 const props = defineProps<{ compact?: boolean }>()
+const route = useRoute()
 const robot = useRobotStore()
 const box = ref<HTMLDivElement | null>(null)
 const fps = ref(0)
@@ -100,13 +102,15 @@ async function build() {
   try {
     loading.value = true
     const deviceId = Number(robot.deviceId) || 1
+    // ?map=<平台地图库 id>：直接预览某张平台地图（不动机器人当前地图，用于验收/演示）
+    const previewMapId = Number(route.query.map || 0)
     // 和 2D 地图用同一张图：机器人当前地图优先，平台地图库只作回退。
     // 之前 3D 只读地图库 active（可能是纯白占位图），导致 3D 没墙、点位也对不上。
     let mapName = robot.currentMap || ''
     let m: any = null
     let imageUrl = ''
     let pointRows: any[] = []
-    const robotMaps = (await api.maps(deviceId).catch(() => [])) as unknown as any[]
+    const robotMaps = previewMapId ? [] : ((await api.maps(deviceId).catch(() => [])) as unknown as any[])
     const mapRows = Array.isArray(robotMaps) ? robotMaps : ((robotMaps as any).items ?? [])
     m = mapRows.find((x: any) => x.name === mapName) ?? mapRows[0] ?? null
     if (m) {
@@ -122,10 +126,12 @@ async function build() {
       const nav = await api.navPoints(deviceId, mapName, '').catch(() => ({ points: [] as any[] }))
       pointRows = (nav as any).points ?? []
     } else {
-      // 回退：平台地图库（没有机器人地图时）
+      // 回退：平台地图库（没有机器人地图时）；带 ?map= 时按 id 选
       const maps = await api.libraryMaps()
       const rows = (maps as unknown as { items?: any[] }).items ?? (maps as unknown as any[])
-      m = rows.find((x: any) => x.is_active) ?? rows[0]
+      m = previewMapId
+        ? rows.find((x: any) => Number(x.id) === previewMapId)
+        : (rows.find((x: any) => x.is_active) ?? rows[0])
       if (!m) throw new Error('没有地图：机器人没上报地图，平台地图库也是空的')
       mapName = m.name
       meta = {
