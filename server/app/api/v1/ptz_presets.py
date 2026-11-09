@@ -1,4 +1,8 @@
-"""云台预置位接口。"""
+"""云台预置位接口。
+
+海康/大华一致：预置位是 1–256 的编号，每个编号一个位置 + 名称，
+同号再存就是覆盖。接口层显式校验编号范围，非法编号返回 400 中文原因。
+"""
 
 from __future__ import annotations
 
@@ -19,8 +23,10 @@ router = APIRouter(prefix="/ptz/presets", tags=["ptz"])
 def list_presets(_: User = Depends(require_roles("admin", "operator", "safety"))) -> dict:
     ok, why, items = presets.list_presets()
     if not ok:
-        return {"ok": False, "reason": why, "items": []}
-    return {"ok": True, "items": items}
+        return {"ok": False, "reason": why or "云台未连接", "items": [],
+                "next_id": None, "max_id": presets.MAX_PRESET_ID}
+    return {"ok": True, "reason": "", "items": items,
+            "next_id": presets.next_free_id(items), "max_id": presets.MAX_PRESET_ID}
 
 
 @router.post("", dependencies=[Depends(require_csrf)])
@@ -33,7 +39,9 @@ def save_preset(
         preset_id = int(body.get("preset_id"))
     except (TypeError, ValueError):
         raise BadRequest("preset_id 必须是数字", code="BAD_PRESET") from None
-    name = str(body.get("name") or f"预置位 {preset_id}").strip()[:32]
+    if not presets.valid_preset_id(preset_id):
+        raise BadRequest(presets.preset_id_error(), code="BAD_PRESET")
+    name = str(body.get("name") or f"预置位 {preset_id}").strip()[:32] or f"预置位 {preset_id}"
     ok, why = presets.save_preset(preset_id, name)
     audit(db=db, action="ptz.preset_save", target=str(preset_id), user=me,
           detail={"name": name, "ok": ok})
@@ -48,6 +56,8 @@ def goto_preset(
     db: Session = Depends(get_db),
     me: User = Depends(require_roles("admin", "operator")),
 ) -> dict:
+    if not presets.valid_preset_id(preset_id):
+        raise BadRequest(presets.preset_id_error(), code="BAD_PRESET")
     ok, why = presets.goto_preset(preset_id)
     audit(db=db, action="ptz.preset_goto", target=str(preset_id), user=me,
           detail={"ok": ok})
@@ -62,6 +72,8 @@ def delete_preset(
     db: Session = Depends(get_db),
     me: User = Depends(require_roles("admin", "operator")),
 ) -> dict:
+    if not presets.valid_preset_id(preset_id):
+        raise BadRequest(presets.preset_id_error(), code="BAD_PRESET")
     ok, why = presets.delete_preset(preset_id)
     audit(db=db, action="ptz.preset_delete", target=str(preset_id), user=me,
           detail={"ok": ok})

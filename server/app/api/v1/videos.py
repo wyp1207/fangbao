@@ -61,18 +61,63 @@ def _upstream(url: str) -> str:
 VENDORS = {"hikvision": "海康", "dahua": "大华", "other": "其他"}
 
 _USERINFO = re.compile(r"(?P<scheme>\w+://)(?P<user>[^:/@]*):(?P<pwd>[^@/]*)@")
+MAX_URL_LEN = 512
+DEFAULT_PORTS = {"rtsp": 554, "rtsps": 322, "http": 80, "https": 443}
 
 
 def mask_url(url: str) -> str:
     return _USERINFO.sub(lambda m: f"{m.group('scheme')}{m.group('user')}:***@", url)
 
 
+def _bad_url(reason: str) -> BadRequest:
+    """统一 400：地址问题必须给中文原因，不能漏成 500。"""
+    return BadRequest(f"视频流地址不合法：{reason}", code="BAD_URL")
+
+
 def split_url(url: str) -> tuple[str, int]:
-    parts = urlsplit(url)
-    if not parts.hostname:
-        raise BadRequest("视频流地址不合法，缺少主机", code="BAD_URL")
-    port = parts.port or (554 if parts.scheme.startswith("rtsp") else 80)
-    return parts.hostname, port
+    """校验并解析视频地址。
+
+    urlsplit 的 `.port` 在端口越界/非数字时会抛 ValueError（以前没接住 → 500），
+    IPv6 写错也会在 urlsplit 阶段抛，所以解析整体包在 try 里。
+    """
+    text = (url or "").strip()
+    if not text:
+        raise _bad_url("地址不能为空")
+    if len(text) > MAX_URL_LEN:
+        raise _bad_url(f"地址太长（最多 {MAX_URL_LEN} 个字符）")
+    if any(ch.isspace() for ch in text):
+        raise _bad_url("地址里不能有空格")
+    try:
+        parts = urlsplit(text)
+        host = parts.hostname
+        port = parts.port
+    except ValueError as exc:
+        raise _bad_url(f"主机或端口格式不对（{exc}）") from None
+    if not parts.scheme:
+        raise _bad_url("缺少协议前缀，例如 rtsp://")
+    if not host:
+        raise _bad_url("缺少主机（IP 或域名）")
+    port = port or DEFAULT_PORTS.get(parts.scheme.lower(), 554)
+    return host, port
+
+
+def unmask_url(new_url: str, old_url: str) -> str:
+    """把前端提交的打码密码（***）还原成原密码。
+
+    前端拿不到明文密码，只能显示 rtsp://user:***@host/...。用户改 IP / 路径时
+    *** 会一起提交；以前整条 URL 被当成"没改"丢掉，看起来像保存成功实际没生效。
+    """
+    new_url = (new_url or "").strip()
+    if "***@" not in new_url:
+        return new_url
+    m = _USERINFO.search(old_url or "")
+    if not m:
+        raise BadRequest("地址里的密码是打码串（***），请填写完整密码后再保存", code="BAD_URL")
+    pwd = m.group("pwd")
+    if not pwd:
+        raise BadRequest("原地址没有密码可还原，请填写完整地址", code="BAD_URL")
+    return _USERINFO.sub(
+        lambda mm: f"{mm.group('scheme')}{mm.group('user')}:{pwd}@", new_url, count=1)
 
 
 class VideoOut(BaseModel):
@@ -295,12 +340,13 @@ def update_video(
     if "vendor" in data and data["vendor"] not in VENDORS:
         raise BadRequest("厂商只能是 hikvision/dahua/other", code="BAD_VENDOR")
     if "url" in data:
-        # 前端提交打码串 = 没改地址，保留原值
-        data["url"] = v.url if "***@" in data["url"] else data["url"]
-        split_url(data["url"])
+        # 前端提交打码串时用旧密码还原：只改 IP/路径也能真正生效
+        new_url = unmask_url(str(data["url"] or ""), v.url)
+        data["url"] = new_url
+        split_url(new_url)
         # 换了地址却没指定流名 → 清掉旧流名，否则播放永远走 go2rtc 的旧流，
         # 用户会以为"改了地址没生效"（QA 实测发现）
-        if "stream_name" not in data and data["url"] != v.url:
+        if "stream_name" not in data and new_url != v.url:
             data["stream_name"] = ""
     for k, val in data.items():
         setattr(v, k, val)
