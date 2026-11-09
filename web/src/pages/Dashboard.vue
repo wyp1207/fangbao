@@ -458,6 +458,8 @@ async function saveUrl() {
   try {
     await api.updateVideo(t.id, { url: draft })
     toast('地址已保存，正在重连…', 'ok')
+    // 地址变了但 img 的 src 只带视频源 id，不换 ticket 的话长连接还在放旧地址
+    reconnectLive({ id: t.id })
     urlOpen.value = false
     const rows = await api.videos(Number(deviceId.value))
     videoRows.value = rows as never
@@ -509,6 +511,8 @@ async function chooseStream(name: string) {
   toast(`正在切到 ${name}…`, 'info')
   try {
     await api.updateVideo(target.id, { stream_name: name })
+    // 换流后必须重连长连接：src 只带 id，不换 ticket 画面还是旧流（选了像没反应）
+    reconnectLive(target)
     toast(`已切到 ${name}`, 'ok')
   } catch (e) {
     target.stream_name = before          // 失败回滚
@@ -722,7 +726,9 @@ const poseYawDeg = computed(() => {
 const galileo = computed(() => robot.snapshot?.galileo ?? {})
 const unacked = computed(() => robot.alarms.filter((a) => !a.acked_at))
 const acked = computed(() => robot.alarms.filter((a) => a.acked_at))
-const imageUrl = computed(() => (robot.currentMap ? api.mapPng(1, robot.currentMap) : ''))
+const imageUrl = computed(() => (robot.currentMap
+  ? api.mapPng(Number(deviceId.value) || 1, robot.currentMap)
+  : ''))
 // 地图面板 2D/3D 切换：2D 负责点选，3D 负责看空间关系（GLM/豆包建议的共存方式）
 const viewMode = ref<'2d' | '3d'>('3d')
 
@@ -893,7 +899,7 @@ async function loadMap() {
     await robot.loadMaps()
     const meta = robot.maps.find((m) => m.name === robot.currentMap) ?? robot.maps[0] ?? null
     mapMeta.value = meta
-    if (meta) points.value = (await api.navPoints(1, meta.name, '')).points
+    if (meta) points.value = (await api.navPoints(Number(deviceId.value) || 1, meta.name, '')).points
   } catch (e) {
     mapError.value = e instanceof Error ? e.message : '地图加载失败'
   }
@@ -1171,7 +1177,7 @@ async function logout() {
               :map-meta="mapMeta" :image-url="imageUrl" :points="points"
               :pose="pose" :stale="robot.stale || !robot.online" :trail="trail"
             />
-            <Twin v-if="viewMode === '3d'" compact />
+            <Twin v-if="viewMode === '3d'" :key="`${deviceId}-${robot.currentMap}`" compact />
             <div class="view-toggle">
               <button :class="{ on: viewMode === '2d' }" @click="viewMode = '2d'">2D</button>
               <button :class="{ on: viewMode === '3d' }" @click="viewMode = '3d'">3D</button>
