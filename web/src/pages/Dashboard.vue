@@ -943,6 +943,8 @@ function startTimers() {
 }
 onMounted(async () => {
   robot.start()
+  // 从其它页面切回来时，下拉框要跟 store 里的当前设备一致，别显示 1 号却看的是别的车
+  deviceId.value = String(robot.deviceId || 1)
   const seq = ++videoSeq
   void loadVideoRows(seq)
   void loadEnv()

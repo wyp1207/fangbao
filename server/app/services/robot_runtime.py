@@ -87,6 +87,8 @@ class RobotRegistry:
                     self._runtimes[robot.id] = rt
                     continue
                 self._runtimes[robot.id] = rt
+                # 在线阈值跟适配器走：X30 是 30s，别让 UI 用 5s 先把车判死
+                rt.cache.offline_after_s = float(getattr(rt.adapter, "offline_after_s", 0) or 5.0)
                 rt.task = asyncio.create_task(self._poll_loop(rt, settings.jcrob_poll_interval))
                 log.info("开始轮询设备 %s（id=%s）", robot.name, robot.id)
 

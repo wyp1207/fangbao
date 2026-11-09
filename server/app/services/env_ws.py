@@ -185,6 +185,9 @@ class EnvWsRunner:
                 continue
             if (getattr(r, "adapter", "") or "") != "jcrob_http":
                 continue
+            # mock 设备没有真实 WS，连了只会每 30s 报 TimeoutError/ConnectionRefused
+            if (getattr(r, "mode", "") or "") == "mock":
+                continue
             # 开关：设备备注里带 no_env_ws 就不接（临时排障用，不改表）
             if "no_env_ws" in (getattr(r, "note", "") or ""):
                 continue

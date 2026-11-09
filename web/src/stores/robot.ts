@@ -49,6 +49,8 @@ export const useRobotStore = defineStore('robot', {
       sock.onmessage = (ev) => {
         try {
           const m = JSON.parse(ev.data)
+          // 切车瞬间旧连接可能还有一帧在路上：设备号不匹配就丢弃，别覆盖新车状态
+          if (typeof m.robot_id === 'number' && m.robot_id !== this.deviceId) return
           if (m.type !== 'state' || !this.snapshot) return
           if (m.pose) this.snapshot.pose = m.pose
           if (m.status) this.snapshot.status = { ...(this.snapshot.status as object), ...m.status } as never

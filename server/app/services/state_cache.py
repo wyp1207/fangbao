@@ -28,6 +28,9 @@ class Snapshot:
 
 
 class StateCache:
+    # 在线判定阈值：默认 5s；适配器（如 X30 30s）可覆盖，避免 UI 与告警两套口径
+    offline_after_s: float = 5.0
+
     def __init__(self) -> None:
         self._snapshot = Snapshot()
 
@@ -58,8 +61,8 @@ class StateCache:
 
     @property
     def online(self) -> bool:
-        """链路在线：最近一次成功且 5s 内（WS 断开不等于机器人失联，见方案 §9）。"""
-        return bool(self._snapshot.recv_ts) and self._snapshot.age_s <= 5.0
+        """链路在线：最近一次成功且在阈值内（默认 5s；X30 适配器另有 30s）。"""
+        return bool(self._snapshot.recv_ts) and self._snapshot.age_s <= self.offline_after_s
 
     def as_dict(self) -> dict[str, Any]:
         snap = self._snapshot
