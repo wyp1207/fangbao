@@ -54,6 +54,7 @@ export interface VideoRow {
   vendor: 'hikvision' | 'dahua' | 'other'
   url: string
   enabled: boolean
+  robot_id: number | null
   note: string | null
   stream_name: string
   play_url: string | null

@@ -128,6 +128,8 @@ class VideoOut(BaseModel):
     url: str          # 已打码
     enabled: bool
     show_on_dashboard: bool = False
+    # 摄像头页要显示归属设备；没有它现场只能看到一串 ID
+    robot_id: int | None = None
     note: str | None = None
     stream_name: str = ""
     play_url: str | None = None
@@ -240,7 +242,7 @@ def _out(v: VideoSource) -> VideoOut:
     return VideoOut(
         id=v.id, name=v.name, group_name=v.group_name, vendor=v.vendor,
         url=mask_url(v.url), enabled=v.enabled,
-        show_on_dashboard=v.show_on_dashboard, note=v.note,
+        show_on_dashboard=v.show_on_dashboard, robot_id=v.robot_id, note=v.note,
         stream_name=v.stream_name or "",
         play_url=_play_url(v.name) if v.enabled else None,
         go2rtc_url=_go2rtc_url(v.stream_name) if v.enabled else None,
@@ -436,6 +438,32 @@ def live_jpg(
                     headers={"Cache-Control": "no-store"})
 
 
+_REASON_TEXT = {
+    "TimeoutError": ("连接超时", "相机不可达"),
+    "ConnectionRefusedError": ("连接被拒绝", "端口未开或服务未启动"),
+    "URLError": ("网络不可达", "相机或视频网关不可达"),
+    "ConnectionResetError": ("连接被重置", "相机或网关主动断开"),
+}
+
+
+def friendly_reason(reason: str) -> str:
+    """把探活抛出的异常类名翻成现场看得懂的话，原始类名留在括号里。"""
+    raw = (reason or "").strip()
+    if not raw:
+        return "未返回原因"
+    for key, (label, note) in _REASON_TEXT.items():
+        if key in raw:
+            return f"{label}（{note}，{key if raw == key else raw}）"
+    low = raw.lower()
+    if "timed out" in low or "timeout" in low:
+        return f"连接超时（相机不可达，{raw}）"
+    if "connection refused" in low:
+        return f"连接被拒绝（端口未开或服务未启动，{raw}）"
+    if "no route to host" in low:
+        return f"网络不可达（相机离线或网段不通，{raw}）"
+    return raw
+
+
 @router.get("/health")
 def videos_health(
     robot_id: int | None = Query(None),
@@ -491,7 +519,8 @@ def videos_health(
                 ok, reason = True, "直连正常（中继不可用）"
             else:
                 reason = f"视频网关不可达（{base}）" if base else reason
-        return {"id": vid, "name": name, "stream": stream, "ok": ok, "reason": reason}
+        return {"id": vid, "name": name, "stream": stream, "ok": ok,
+                "reason": friendly_reason(reason)}
 
     if rows:
         from concurrent.futures import ThreadPoolExecutor, wait

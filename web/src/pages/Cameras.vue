@@ -9,6 +9,7 @@ import { toast } from '@/composables/useToast'
 const route = useRoute()
 const highlightId = ref<number>(Number(route?.query?.v ?? 0) || 0)
 const rows = ref<VideoRow[]>([])
+const devices = ref<{ id: number; name: string }[]>([])
 const loading = ref(false)
 const error = ref('')
 const keyword = ref('')
@@ -81,6 +82,19 @@ const filtered = computed(() =>
     return true
   }),
 )
+
+const deviceName = computed(() => Object.fromEntries(devices.value.map((d) => [d.id, d.name])))
+function deviceText(id?: number | null): string {
+  return (id && deviceName.value[id]) || '未绑定'
+}
+
+async function loadDevices() {
+  try {
+    devices.value = (await api.devices()).map((d) => ({ id: d.id, name: d.name }))
+  } catch {
+    devices.value = []
+  }
+}
 
 async function reload() {
   loading.value = true
@@ -193,7 +207,7 @@ async function remove(v: VideoRow) {
   }
 }
 
-onMounted(() => { void reload(); void loadGo2rtc() })
+onMounted(() => { void reload(); void loadGo2rtc(); void loadDevices() })
 </script>
 
 <template>
@@ -222,10 +236,11 @@ onMounted(() => { void reload(); void loadGo2rtc() })
             <th style="width: 60px">ID</th>
             <th style="width: 180px">名称</th>
             <th style="width: 130px">分组</th>
+            <th style="width: 140px">设备</th>
             <th style="width: 90px">厂商</th>
             <th style="width: 110px">go2rtc 流名</th>
             <th>视频流地址</th>
-            <th style="width: 90px">状态</th>
+            <th style="width: 90px">启用</th>
             <th style="width: 100px">首页显示</th>
             <th style="width: 170px">操作</th>
           </tr>
@@ -235,6 +250,7 @@ onMounted(() => { void reload(); void loadGo2rtc() })
             <td>{{ v.id }}</td>
             <td>{{ v.name }}</td>
             <td class="dim">{{ v.group_name }}</td>
+            <td class="dim">{{ deviceText(v.robot_id) }}</td>
             <td><span class="tag" :class="v.vendor === 'other' ? '' : 'ok'">{{ vendorText[v.vendor] }}</span></td>
             <td class="mono dim">{{ v.stream_name || '—' }}</td>
             <td class="mono url">{{ v.url }}</td>
@@ -258,7 +274,7 @@ onMounted(() => { void reload(); void loadGo2rtc() })
             </td>
           </tr>
           <tr v-if="!filtered.length">
-            <td colspan="8" class="dim">{{ loading ? '读取中…' : '还没有视频源，点右上角新增' }}</td>
+            <td colspan="10" class="dim">{{ loading ? '读取中…' : '还没有视频源，点右上角新增' }}</td>
           </tr>
         </tbody>
       </table>

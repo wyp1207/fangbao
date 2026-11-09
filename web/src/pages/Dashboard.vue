@@ -231,11 +231,14 @@ function onSite(v: string) {
 }
 function onDevice(v: string) {
   deviceId.value = v
+  const seq = ++videoSeq
+  // 先清掉上一台车的探活结果：旧图不能再渲染，新结果回来前统一显示"检测中"
+  videoHealth.value = {}
   const hit = devices.value.find((d) => String(d.id) === v)
   robot.setDevice(Number(v))
   toast('已切换到 ' + (hit?.name ?? v), 'ok')
-  // 换设备就刷新视频与地图，避免还显示上一台的画面
-  void api.videos(Number(deviceId.value)).then((rows) => { videoRows.value = rows as never }).catch(() => undefined)
+  // 先按新设备拿视频源，再探活；否则会拿旧 ids 去探新车，健康结果对不上
+  void loadVideoRows(seq)
   void loadMap()
   // 轨迹/地图报错属于上一台车，切车先清掉，避免"新车的轨迹里还有旧车"
   // （目标点提示在 Twin 内部，Dashboard 没有对应状态，之前这行引用了未定义的 gotoHint）
@@ -247,7 +250,6 @@ function onDevice(v: string) {
   void loadPtzPresets()
   void loadEnv()
   void loadPtzFlag()
-  void loadVideoHealth()
   void loadTrend()
   void loadCaps()
   void loadRuns()
@@ -355,6 +357,8 @@ async function saveInitLoc() {
 }
 // 视频健康：真抓一帧判断流有没有画面；没画面就不渲染播放器，改显示"未接入"
 const videoHealth = ref<Record<number, { ok: boolean; reason: string }>>({})
+// 切车代次：旧设备的视频/探活响应晚到时直接丢弃，别把上一台车的画面探到新车头上
+let videoSeq = 0
 // 图片轮询：2.5 帧/秒够看现场，全幅 contain 不裁切，也不会把 go2rtc 的报错糊上来
 const tick = ref(0)
 
@@ -513,11 +517,26 @@ async function chooseStream(name: string) {
   } catch { /* 刷新失败不影响已成事实的切换 */ }
 }
 
-async function loadVideoHealth() {
+async function loadVideoRows(seq: number) {
+  try {
+    const rows = await api.videos(Number(deviceId.value))
+    if (seq !== videoSeq) return
+    videoRows.value = rows as never
+    await loadVideoHealth(seq)
+  } catch {
+    // 取不到就退回"未配置"占位，别让面板一直停在"检测中"
+    if (seq === videoSeq) videoRows.value = []
+  }
+}
+
+async function loadVideoHealth(seq: number = videoSeq) {
   try {
     // 只探首页真正显示的那两路，别把没上大屏的也跑一遍
     const ids = [visibleVideo.value?.id, thermalVideo.value?.id].filter(Boolean) as number[]
-    const res = await api.videoHealth(Number(deviceId.value) || undefined, ids.length ? ids : undefined)
+    if (!ids.length) return
+    const dev = Number(deviceId.value) || undefined
+    const res = await api.videoHealth(dev, ids)
+    if (seq !== videoSeq) return
     const map: Record<number, { ok: boolean; reason: string }> = {}
     for (const v of res.videos) map[v.id] = { ok: v.ok, reason: v.reason }
     videoHealth.value = map
@@ -526,7 +545,14 @@ async function loadVideoHealth() {
 
 function healthOf(v: { id: number } | null): { ok: boolean; reason: string } {
   if (!v) return { ok: false, reason: '未配置视频源' }
-  return videoHealth.value[v.id] ?? { ok: true, reason: '' }
+  return videoHealth.value[v.id] ?? { ok: false, reason: '检测中' }
+}
+
+function videoEmptyTitle(v: { id: number } | null): string {
+  if (!v) return '视频通道待启用'
+  const h = healthOf(v)
+  if (h.reason === '检测中') return '正在检测视频…'
+  return h.reason.includes('网关') ? '视频网关不可达' : '视频通道待启用'
 }
 // 环境趋势：取第一台传感器的近 1 小时读数画折线（面板空白用它填上）
 const spark = ref<number[]>([])
@@ -917,10 +943,10 @@ function startTimers() {
 }
 onMounted(async () => {
   robot.start()
-  void api.videos(Number(deviceId.value)).then((rows) => { videoRows.value = rows as never }).catch(() => undefined)
+  const seq = ++videoSeq
+  void loadVideoRows(seq)
   void loadEnv()
   void loadPtzFlag()
-  void loadVideoHealth()
   void loadTrend()
   void loadCaps()
   void loadRuns()
@@ -1030,11 +1056,11 @@ async function logout() {
                    @error="onLiveError(visibleVideo)" @load="onLiveLoad(visibleVideo)" />
             </div>
             <div v-else class="embed-empty">
-              <b>{{ (visibleVideo && healthOf(visibleVideo).reason.includes('网关')) ? '视频网关不可达' : '视频通道待启用' }}</b>
+              <b>{{ videoEmptyTitle(visibleVideo) }}</b>
               <span v-if="visibleVideo">原因：{{ healthOf(visibleVideo).reason }}</span>
               <span v-else>真机联调后，在「设备管理 → 摄像头」勾选「首页显示」即自动呈现</span>
               <div class="embed-acts">
-                <button v-if="visibleVideo" class="btn btn-sm" @click="loadVideoHealth">重新探测</button>
+                <button v-if="visibleVideo" class="btn btn-sm" @click="loadVideoHealth()">重新探测</button>
                 <button class="btn btn-sm" @click="openUrl(visibleVideo)">更换地址</button>
               </div>
             </div>
@@ -1050,11 +1076,11 @@ async function logout() {
                    @error="onLiveError(thermalVideo)" @load="onLiveLoad(thermalVideo)" />
             </div>
             <div v-else class="embed-empty">
-              <b>{{ (thermalVideo && healthOf(thermalVideo).reason.includes('网关')) ? '视频网关不可达' : '视频通道待启用' }}</b>
+              <b>{{ videoEmptyTitle(thermalVideo) }}</b>
               <span v-if="thermalVideo">原因：{{ healthOf(thermalVideo).reason }}</span>
               <span v-else>热像仪接上后，勾选「首页显示」即自动呈现</span>
               <div class="embed-acts">
-                <button v-if="thermalVideo" class="btn btn-sm" @click="loadVideoHealth">重新探测</button>
+                <button v-if="thermalVideo" class="btn btn-sm" @click="loadVideoHealth()">重新探测</button>
                 <button class="btn btn-sm" @click="openUrl(thermalVideo)">更换地址</button>
               </div>
             </div>
@@ -2146,7 +2172,7 @@ async function logout() {
   font-size: 11.5px; padding: 2px 10px; border-radius: 3px; letter-spacing: 1px;
 }
 .rt-line {
-  display: flex; justify-content: flex-start; gap: 10px; align-items: baseline;
+  display: flex; justify-content: space-between; gap: 10px; align-items: baseline;
   font-size: 11.5px; line-height: 1.4;
   padding: 5px 0;                      /* 行间留白 */
   border-bottom: 1px dashed rgba(48, 152, 232, .45);   /* 行分隔线 */
@@ -2154,7 +2180,7 @@ async function logout() {
 .rt-line:last-of-type { border-bottom: 0; }
 .rt-line span { color: #71f9ff; white-space: nowrap; font-weight: 700; }
 .rt-line b {
-  color: #f7c355; font-weight: 800; letter-spacing: .3px; text-align: left; max-width: 66%;
+  color: #f7c355; font-weight: 800; letter-spacing: .3px; text-align: right; max-width: 66%;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .rt-groups {
@@ -2400,7 +2426,7 @@ async function logout() {
   color: #eaf7ff; font-size: 13px; font-weight: 600;
   white-space: normal; overflow: visible; text-overflow: clip;
   word-break: break-all; overflow-wrap: anywhere;
-  text-align: left;             /* 标签左对齐，值紧随其后，不再贴最右边 */
+  text-align: right;            /* 值居右，和左侧标签拉开，一眼能扫 */
 }
 /* 点位多时面板内滚动，细滚动条 */
 .t-panel:has(.points) :deep(.t-body) { max-height: 214px; overflow-y: auto; }
