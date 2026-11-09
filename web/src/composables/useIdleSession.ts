@@ -13,20 +13,12 @@ import { toast } from '@/composables/useToast'
  */
 const FALLBACK_MINUTES = 5
 const CHECK_EVERY_MS = 60_000
-const REFRESH_SETTING_MS = 10 * 60_000
-
-function devOverride(): number | null {
-  // 只在本地调试用：localStorage 里显式设了才生效，生产不写这玩意
-  try {
-    const n = Number(localStorage.getItem('jc_idle_minutes'))
-    if (Number.isFinite(n) && n > 0) return n
-  } catch { /* 隐私模式 */ }
-  return null
-}
+const REFRESH_SETTING_MS = 60_000
 
 export function useIdleSessionGuard() {
   let lastActive = Date.now()
   let idleMinutes = FALLBACK_MINUTES
+  let enabled = true
   let timer = 0
   let refreshTimer = 0
 
@@ -34,19 +26,22 @@ export function useIdleSessionGuard() {
   const events = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'wheel']
 
   async function loadSetting() {
-    const override = devOverride()
-    if (override !== null) { idleMinutes = override; return }
     try {
       const res = await api.settings()
-      const raw = (res.values as Record<string, unknown>)['security.idle_minutes']
-      const n = Number(raw)
+      const v = res.values as Record<string, unknown>
+      // 先看总开关，再取分钟数；关掉后 idleMinutes 不再起作用
+      enabled = v['security.idle_lock_enabled'] !== false
+      const n = Number(v['security.idle_minutes'])
       idleMinutes = Number.isFinite(n) && n > 0 ? n : FALLBACK_MINUTES
     } catch {
-      idleMinutes = FALLBACK_MINUTES   // 读不到设置就用默认，绝不因为设置接口挂了就永不退出
+      // 读不到就按默认开、5 分钟，绝不因为设置接口挂了就永不锁屏
+      enabled = true
+      idleMinutes = FALLBACK_MINUTES
     }
   }
 
   async function check() {
+    if (!enabled) return
     const idle = (Date.now() - lastActive) / 60000
     if (idle < idleMinutes) return
     lastActive = Date.now()
@@ -58,9 +53,13 @@ export function useIdleSessionGuard() {
     toast(`已空闲 ${Math.round(idleMinutes)} 分钟，屏幕已锁定`, 'warn', 6000)
   }
 
+  // 设置页保存后立刻生效，不用等下一次轮询
+  const onSettingsSaved = () => { void loadSetting() }
+
   onMounted(() => {
     void loadSetting()
     refreshTimer = window.setInterval(() => { void loadSetting() }, REFRESH_SETTING_MS)
+    window.addEventListener('jc:settings-updated', onSettingsSaved)
     events.forEach((e) => window.addEventListener(e, bump, { passive: true }))
     window.addEventListener('visibilitychange', bump)
     timer = window.setInterval(() => { void check() }, CHECK_EVERY_MS)
@@ -69,6 +68,7 @@ export function useIdleSessionGuard() {
   onBeforeUnmount(() => {
     events.forEach((e) => window.removeEventListener(e, bump))
     window.removeEventListener('visibilitychange', bump)
+    window.removeEventListener('jc:settings-updated', onSettingsSaved)
     window.clearInterval(timer)
     window.clearInterval(refreshTimer)
   })

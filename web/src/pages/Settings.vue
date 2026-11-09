@@ -86,6 +86,8 @@ async function saveSettings() {
     values.value = res.values
     dirty.value = {}
     message.value = `已保存 ${Object.keys(res.changed).length} 项，立即生效`
+    // 通知空闲锁屏守卫立刻重读，不用等 60s 轮询（用户反馈"保存了不生效"）
+    window.dispatchEvent(new Event('jc:settings-updated'))
   } catch (e) {
     message.value = e instanceof Error ? e.message : '保存失败'
   } finally {

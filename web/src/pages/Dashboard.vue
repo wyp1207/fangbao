@@ -1054,6 +1054,7 @@ async function logout() {
             <div v-if="visibleVideo && healthOf(visibleVideo).ok" class="live-box">
               <img class="live-img" :src="liveSrc(visibleVideo)" alt="可见光实时画面"
                    @error="onLiveError(visibleVideo)" @load="onLiveLoad(visibleVideo)" />
+              <span class="live-clock" title="平台时间（画面 OSD 为相机时间）">{{ clock.time }}</span>
             </div>
             <div v-else class="embed-empty">
               <b>{{ videoEmptyTitle(visibleVideo) }}</b>
@@ -1074,6 +1075,7 @@ async function logout() {
             <div v-if="thermalVideo && healthOf(thermalVideo).ok" class="live-box">
               <img class="live-img" :src="liveSrc(thermalVideo)" alt="热红外实时画面"
                    @error="onLiveError(thermalVideo)" @load="onLiveLoad(thermalVideo)" />
+              <span class="live-clock" title="平台时间（画面 OSD 为相机时间）">{{ clock.time }}</span>
             </div>
             <div v-else class="embed-empty">
               <b>{{ videoEmptyTitle(thermalVideo) }}</b>
@@ -2255,7 +2257,15 @@ async function logout() {
 .pick-item .reg { color: #7be08a; }
 
 /* 两个视频窗口画幅一致：16:9 容器 + contain，谁都不会被裁 */
-.live-box { width: 100%; height: 100%; display: grid; place-items: center; background: #04101f; overflow: hidden; }
+.live-box { width: 100%; height: 100%; display: grid; place-items: center; background: #04101f; overflow: hidden; position: relative; }
+/* 两个画面共用平台时间，避免一路 OSD 快/慢时看不出谁准 */
+.live-clock {
+  position: absolute; top: 6px; right: 8px; z-index: 2;
+  padding: 1px 8px; border-radius: 3px;
+  font-size: 11px; font-variant-numeric: tabular-nums; color: #cfefff;
+  background: rgba(2, 18, 34, .62); border: 1px solid rgba(90, 200, 255, .35);
+  pointer-events: none;
+}
 .live-box .live-img { width: 100%; height: 100%; object-fit: contain; display: block; }
 
 /* 16:9 画框：让播放器按源比例显示，避免 go2rtc 铺满导致两侧被裁 */

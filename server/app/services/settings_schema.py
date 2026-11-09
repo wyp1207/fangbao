@@ -83,6 +83,12 @@ SCHEMA: dict[str, dict[str, Any]] = {
                   "真机确认 map_id 字段后再开；现在是警告模式",
     },
 
+    "security.idle_lock_enabled": {
+        "label": "启用定时锁屏", "type": "bool", "default": True,
+        "group": "平台",
+        "effect": "关闭后，空闲多久都不会自动锁屏（大屏值班可关；仍需手动锁屏保护操作权限）",
+    },
+
     "security.idle_minutes": {
         "label": "空闲多久自动锁屏（分钟）", "type": "int", "default": 5, "min": 1, "max": 240,
         "group": "平台",
