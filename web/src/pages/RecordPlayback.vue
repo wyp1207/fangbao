@@ -105,6 +105,14 @@ async function jumpToTarget() {
   toast("这个时刻没有对应录像（可能没开录）", "warn", 3000)
 }
 
+async function reset() {
+  videoId.value = ''
+  date.value = ''
+  // 清空条件后重新查询，否则列表还是上一组录像
+  await load()
+  toast('已重置', 'ok', 2000)
+}
+
 onMounted(async () => {
   await load()
   await jumpToTarget()
@@ -140,7 +148,7 @@ async function clearCamera() {
         <label>日期</label>
         <input class="input date" type="date" v-model="date" />
         <button class="btn btn-sm ok" :disabled="loading" @click="load">查询</button>
-        <button class="btn btn-sm warn" @click="videoId = ''; date = ''">重置</button>
+        <button class="btn btn-sm warn" @click="reset">重置</button>
         <button class="btn btn-sm danger" :disabled="!videoId"
                 title="删除这个摄像头的全部录像段" @click="clearCamera">清空该相机录像</button>
         <span class="grow" />

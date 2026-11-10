@@ -207,6 +207,14 @@ async function remove(v: VideoRow) {
   }
 }
 
+async function reset() {
+  keyword.value = ''
+  groupFilter.value = ''
+  // 清完筛选重新查一次，否则默认态下点「重置」没有任何可见变化
+  await reload()
+  toast('已重置', 'ok', 2000)
+}
+
 onMounted(() => { void reload(); void loadGo2rtc(); void loadDevices() })
 </script>
 
@@ -224,7 +232,7 @@ onMounted(() => { void reload(); void loadGo2rtc(); void loadDevices() })
         <label>名称</label>
         <input class="input" v-model="keyword" placeholder="输入摄像头名称" />
         <button class="btn btn-sm ok" :disabled="loading" @click="reload">查询</button>
-        <button class="btn btn-sm warn" @click="keyword = ''; groupFilter = ''">重置</button>
+        <button class="btn btn-sm warn" @click="reset">重置</button>
         <span class="grow" />
         <button class="btn btn-sm" @click="reload">刷新</button>
         <button class="btn btn-sm primary" @click="openCreate">新增视频源</button>

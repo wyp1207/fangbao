@@ -5,6 +5,7 @@ import { ApiError } from '@/api/client'
 import DarkSelect from '@/components/DarkSelect.vue'
 import { toast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
+import { useRobotStore } from '@/stores/robot'
 
 interface RunRow {
   id: number
@@ -33,10 +34,12 @@ interface Step {
 }
 
 const auth = useAuthStore()
+const robot = useRobotStore()
 const rows = ref<RunRow[]>([])
 const total = ref(0)
 const status = ref('')
 const loading = ref(false)
+const error = ref('')
 const detail = ref<(RunRow & { steps: Step[]; progress: { total: number; ok: number; failed: number } }) | null>(null)
 const templates = ref<{ id: number; name: string }[]>([])
 const creating = ref(false)
@@ -64,10 +67,16 @@ function exportReport(id: number) {
 
 async function load() {
   loading.value = true
+  error.value = ''
   try {
     const res = await api.taskRuns({ status: status.value, limit: 50 })
     rows.value = res.items as unknown as RunRow[]
     total.value = res.total
+  } catch (e) {
+    // 不能把请求失败伪装成「还没有执行记录」
+    error.value = e instanceof ApiError ? e.message : (e instanceof Error ? e.message : '加载失败')
+    rows.value = []
+    total.value = 0
   } finally {
     loading.value = false
   }
@@ -196,9 +205,10 @@ onMounted(async () => {
   await load()
 })
 
-// 人工接管：先取消这台车所有运行中任务，再让人手动处理
+// 人工接管：先取消这台车所有运行中任务，再让人手动处理。
+// 任务没绑机器人时用大屏当前的设备，不能默认 1 号车瞎取消。
 async function takeover(r: { id: number; robot_id?: number }) {
-  const rid = r.robot_id ?? 1
+  const rid = r.robot_id ?? robot.deviceId
   if (!window.confirm('取消这台车所有运行中的任务，交由人工接管？')) return
   try {
     const t = await api.takeoverRobot(rid, `人工接管（任务 #${r.id}）`)
@@ -226,6 +236,11 @@ async function takeover(r: { id: number; robot_id?: number }) {
         <button class="btn btn-sm ok" :disabled="loading" @click="load">刷新</button>
         <span class="grow" />
         <span class="muted small">共 {{ total }} 条</span>
+      </div>
+
+      <div v-if="error" class="errbar">
+        <span>加载失败：{{ error }}</span>
+        <button class="btn btn-sm" :disabled="loading" @click="load">重试</button>
       </div>
 
       <table class="grid">
@@ -276,7 +291,7 @@ async function takeover(r: { id: number; robot_id?: number }) {
               </div>
             </td>
           </tr>
-          <tr v-if="!rows.length">
+          <tr v-if="!rows.length && !error">
             <td colspan="8" class="dim">
               {{ loading ? '读取中…' : '还没有执行记录。真机接入后，机器人回传的任务会自动出现在这里。' }}
             </td>
@@ -360,6 +375,11 @@ async function takeover(r: { id: number; robot_id?: number }) {
 .small { font-size: 12px; }
 .num { font-variant-numeric: tabular-nums; }
 .btn-xs { padding: 2px 8px; font-size: 12px; }
+.errbar {
+  display: flex; align-items: center; gap: 10px; margin: 6px 0 8px;
+  padding: 7px 10px; font-size: 12.5px; color: #ffb3b3;
+  background: rgba(255, 90, 90, 0.12); border: 1px solid rgba(255, 90, 90, 0.5);
+}
 .modal-mask { position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; background: rgba(2, 14, 30, 0.66); }
 .modal {
   width: 520px; max-height: 90vh; overflow: auto; padding: 14px 16px 16px;

@@ -30,6 +30,7 @@ const rows = ref<Order[]>([])
 const total = ref(0)
 const status = ref('')
 const loading = ref(false)
+const error = ref('')
 const acting = ref<Order | null>(null)
 const resolution = ref('')
 const users = ref<{ id: number; username: string }[]>([])
@@ -49,10 +50,16 @@ const LEVEL_TONE: Record<string, string> = { critical: 'danger', warn: 'warn', i
 
 async function load() {
   loading.value = true
+  error.value = ''
   try {
     const res = await api.workOrders({ status: status.value })
     rows.value = res.items as unknown as Order[]
     total.value = res.total
+  } catch (e) {
+    // 请求失败不能显示成「还没有工单」，否则切筛选时会误判成"这个状态没数据"
+    error.value = e instanceof ApiError ? e.message : (e instanceof Error ? e.message : '加载失败')
+    rows.value = []
+    total.value = 0
   } finally {
     loading.value = false
   }
@@ -128,6 +135,11 @@ onMounted(async () => {
         <button class="btn btn-sm ok" :disabled="loading" @click="load">刷新</button>
       </div>
 
+      <div v-if="error" class="errbar">
+        <span>加载失败：{{ error }}</span>
+        <button class="btn btn-sm" :disabled="loading" @click="load">重试</button>
+      </div>
+
       <table class="grid">
         <thead>
           <tr>
@@ -178,7 +190,7 @@ onMounted(async () => {
               </div>
             </td>
           </tr>
-          <tr v-if="!rows.length">
+          <tr v-if="!rows.length && !error">
             <td colspan="7" class="dim">{{ loading ? '读取中…' : '还没有工单。告警页可以把告警转成工单。' }}</td>
           </tr>
         </tbody>
@@ -212,6 +224,11 @@ onMounted(async () => {
 .small { font-size: 12px; }
 .num { font-variant-numeric: tabular-nums; }
 .btn-xs { padding: 2px 8px; font-size: 12px; }
+.errbar {
+  display: flex; align-items: center; gap: 10px; margin: 6px 0 8px;
+  padding: 7px 10px; font-size: 12.5px; color: #ffb3b3;
+  background: rgba(255, 90, 90, 0.12); border: 1px solid rgba(255, 90, 90, 0.5);
+}
 .link { background: none; border: none; cursor: pointer; font-size: 12px; padding: 0 2px; }
 .modal-mask { position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; background: rgba(2, 14, 30, 0.66); }
 .modal { width: 520px; padding: 14px 16px;

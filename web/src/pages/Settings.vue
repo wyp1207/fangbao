@@ -71,9 +71,17 @@ function onEdit(key: string, raw: unknown) {
   dirty.value = { ...dirty.value, [key]: raw }
 }
 
+// 与后端 server/app/api/v1/settings.py 的 require_roles 对齐：
+// 能保存的角色是 admin/sysadmin/secadmin/safety，operator/viewer/auditor 只能看。
+const CAN_SAVE_ROLES = ['admin', 'sysadmin', 'secadmin', 'safety']
+const canSaveSettings = computed(() => CAN_SAVE_ROLES.includes(auth.user?.role ?? ''))
+
+// 后端对 secadmin/safety 只放行这些前缀；前端同步禁用其余输入，别让人白改一通再 403
+const SAFETY_PREFIXES = ['alarm.', 'notify.', 'clock.', 'security.']
 function canEditKey(key: string): boolean {
-  if (auth.user?.role === 'admin') return true
-  if (auth.user?.role === 'safety') return key.startsWith('alarm.') || key.startsWith('notify.') || key.startsWith('clock.')
+  const role = auth.user?.role ?? ''
+  if (role === 'admin' || role === 'sysadmin') return true
+  if (role === 'secadmin' || role === 'safety') return SAFETY_PREFIXES.some((p) => key.startsWith(p))
   return false
 }
 
@@ -146,9 +154,13 @@ onMounted(async () => {
         <span class="grow" />
         <span v-if="dirtyCount" class="tag warn">{{ dirtyCount }} 项未保存</span>
         <button class="btn btn-sm" :disabled="!dirtyCount" @click="dirty = {}">撤销</button>
-        <button class="btn btn-sm primary" :disabled="!dirtyCount || saving || !auth.canWrite" @click="saveSettings">
+        <button v-if="canSaveSettings" class="btn btn-sm primary"
+                :disabled="!dirtyCount || saving" @click="saveSettings">
           {{ saving ? '保存中…' : '保存配置' }}
         </button>
+        <span v-else class="muted small" title="保存接口只允许 admin / sysadmin / secadmin / safety">
+          当前角色（{{ auth.user?.role }}）不能修改系统设置
+        </span>
       </div>
 
       <div class="set-grid">
@@ -161,6 +173,7 @@ onMounted(async () => {
               :model-value="String(dirty[it.key] ?? values[it.key])"
               :options="[{ value: 'true', label: '开启' }, { value: 'false', label: '关闭' }]"
               width="110px"
+              :disabled="!canEditKey(it.key)"
               @update:model-value="onEdit(it.key, $event === 'true')"
             />
             <textarea
@@ -168,12 +181,16 @@ onMounted(async () => {
               class="input json-in"
               rows="3"
               :value="jsonText(it.key)"
+              :disabled="!canEditKey(it.key)"
+              :title="canEditKey(it.key) ? it.effect : '当前角色不能修改这一项'"
               @input="onJsonEdit(it.key, ($event.target as HTMLTextAreaElement).value)"
             />
             <input
               v-else-if="it.type === 'str'"
               class="input"
               :value="dirty[it.key] ?? values[it.key]"
+              :disabled="!canEditKey(it.key)"
+              :title="canEditKey(it.key) ? it.effect : '当前角色不能修改这一项'"
               @input="onEdit(it.key, ($event.target as HTMLInputElement).value)"
             />
             <input
@@ -183,6 +200,8 @@ onMounted(async () => {
               :min="it.min" :max="it.max"
               :step="it.type === 'float' ? 0.01 : 1"
               :value="dirty[it.key] ?? values[it.key]"
+              :disabled="!canEditKey(it.key)"
+              :title="canEditKey(it.key) ? it.effect : '当前角色不能修改这一项'"
               @input="onEdit(it.key, Number(($event.target as HTMLInputElement).value))"
             />
             <span class="eff">{{ it.effect }}</span>

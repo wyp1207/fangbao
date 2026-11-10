@@ -11,7 +11,8 @@ const props = withDefaults(defineProps<{
   options: Option[]
   placeholder?: string
   width?: string
-}>(), { placeholder: '全部', width: '120px' })
+  disabled?: boolean
+}>(), { placeholder: '全部', width: '120px', disabled: false })
 
 const emit = defineEmits<{ 'update:modelValue': [string] }>()
 
@@ -23,6 +24,7 @@ const current = computed(
 )
 
 function pick(value: string) {
+  if (props.disabled) return
   emit('update:modelValue', value)
   open.value = false
 }
@@ -37,7 +39,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
 
 <template>
   <div ref="root" class="dasel" :style="{ width }">
-    <button class="trigger" :class="{ open }" @click="open = !open">
+    <button class="trigger" :class="{ open, disabled }" :disabled="disabled" @click="open = !open">
       <span>{{ current }}</span>
       <i class="caret">▾</i>
     </button>
@@ -71,6 +73,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
   border-color: #7fe9ff;
   box-shadow: 0 0 10px rgba(80, 200, 255, 0.4);
 }
+.trigger.disabled { cursor: not-allowed; opacity: 0.5; }
 .caret { font-style: normal; font-size: 10px; color: #7fe9ff; transition: transform 0.15s; }
 .trigger.open .caret { transform: rotate(180deg); }
 

@@ -38,6 +38,12 @@ async function load() {
   }
 }
 
+async function reset() {
+  keyword.value = ''
+  await load()
+  toast('已重置', 'ok', 2000)
+}
+
 onMounted(async () => {
   await robot.loadMaps()
   mapName.value = robot.currentMap || robot.maps[0]?.name || ''
@@ -59,7 +65,7 @@ onMounted(async () => {
         <label>点位名</label>
         <input class="input" v-model="keyword" placeholder="输入点位名称" />
         <button class="btn btn-sm ok" :disabled="loading" @click="load">查询</button>
-        <button class="btn btn-sm warn" @click="keyword = ''">重置</button>
+        <button class="btn btn-sm warn" @click="reset">重置</button>
         <span class="grow" />
         <button class="btn btn-sm" title="到地图页在图上打点（存平台草稿）" @click="$router.push({ name: 'map', query: { lib: '1' } })">去地图打点</button>
         <button class="btn btn-sm" disabled title="点位下发要等真机联调 + 现场授权">同步到机器人</button>

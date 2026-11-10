@@ -113,10 +113,14 @@ function exportCurrent() {
   }
 }
 
-function reset() {
+async function reset() {
   keyword.value = ''
   from.value = ''
   to.value = ''
+  // 清空后要重新拉一次：只清变量的话列表不会随重置刷新
+  await loadTasks()
+  if (tab.value === 'alarms') await robot.refreshAlarms()
+  toast('已重置', 'ok', 2000)
 }
 
 onMounted(async () => {

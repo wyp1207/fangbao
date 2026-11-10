@@ -244,6 +244,9 @@ function onDevice(v: string) {
   // （目标点提示在 Twin 内部，Dashboard 没有对应状态，之前这行引用了未定义的 gotoHint）
   trail.value = []
   mapError.value = ''
+  // 点位也必须清：否则新车地图还没回来时，面板里显示的是上一台车的点位
+  points.value = []
+  mapMeta.value = null
   locOpen.value = false
   ptzPresetOpen.value = false
   pickOpen.value = false
@@ -254,6 +257,7 @@ function onDevice(v: string) {
   void loadCaps()
   void loadRuns()
   void loadFeed()
+  void loadServerHealth()
   // 切设备/首次挂载共用同一套定时器；清掉旧的再建，避免多组轮询
   startTimers()
 
@@ -300,28 +304,46 @@ function moveStart(dir: string) {
   }
   moving.value = dir
   stopMoveTimer()
-  const send = () => {
-    const body = dir === 'fwd' ? { forward: 0.6 }
-      : dir === 'back' ? { forward: -0.6 }
-      : dir === 'left' ? { left: 0.5 }
-      : dir === 'right' ? { left: -0.5 }
-      : dir === 'yawL' ? { yaw: -0.5 }
-      : { yaw: 0.5 }
-    void api.move(Number(deviceId.value), body).catch(() => {})
+  const body = dir === 'fwd' ? { forward: 0.6 }
+    : dir === 'back' ? { forward: -0.6 }
+    : dir === 'left' ? { left: 0.5 }
+    : dir === 'right' ? { left: -0.5 }
+    : dir === 'yawL' ? { yaw: -0.5 }
+    : { yaw: 0.5 }
+  let inFlight = false
+  const send = async () => {
+    // 100ms 一帧，上一帧没回来就跳过，避免请求堆叠时一次失败刷一屏 toast
+    if (inFlight) return
+    inFlight = true
+    try {
+      await api.move(Number(deviceId.value), body)
+    } catch (e) {
+      // 失败必须停下来告诉人：按钮不能一直亮着假装车在走
+      moving.value = ''
+      stopMoveTimer()
+      toast(`移动指令下发失败：${e instanceof Error ? e.message : String(e)}`, 'danger', 6000)
+    } finally {
+      inFlight = false
+    }
   }
-  send()
-  moveTimer = window.setInterval(send, 100)
+  void send()
+  moveTimer = window.setInterval(() => { void send() }, 100)
 }
 
-function moveEnd() {
+async function moveEnd() {
   stopMoveTimer()
   if (!moving.value) return
   moving.value = ''
-  void api.move(Number(deviceId.value), { forward: 0, left: 0, yaw: 0 }).catch(() => {})
+  try {
+    await api.move(Number(deviceId.value), { forward: 0, left: 0, yaw: 0 })
+  } catch (e) {
+    // 松手刹车是全页唯一兜底，失败绝不能静默
+    toast(`停止指令下发失败：${e instanceof Error ? e.message : String(e)}`, 'danger', 8000)
+  }
 }
 
 function stopMoveTimer() {
-  window.clearInterval(ptzTimer)
+  // 只管车体：之前顺手清了 ptzTimer，按住云台时点一下「停」云台就连发中断了
   if (moveTimer) {
     window.clearInterval(moveTimer)
     moveTimer = 0
@@ -413,6 +435,24 @@ const pickFiltered = computed(() => {
 })
 const pickBusy = ref(false)
 const pickErr = ref('')
+
+/** go2rtc 地址不再写死：优先用视频源返回的 go2rtc_url（部署时是 /go2rtc 反代前缀），取不到再回退 */
+function go2rtcBaseOf(url?: string | null): string {
+  if (!url) return ''
+  try {
+    const u = new URL(url, window.location.origin)
+    const cut = u.pathname.search(/\/(?:stream\.html|api\/|stream\/)/)
+    const prefix = cut > 0 ? u.pathname.slice(0, cut) : ''
+    return u.host + (prefix === '/' ? '' : prefix)
+  } catch {
+    return ''
+  }
+}
+const go2rtcBase = computed(() =>
+  go2rtcBaseOf(videoRows.value.find((v) => v.id === pickFor.value?.id)?.go2rtc_url)
+  || go2rtcBaseOf(visibleVideo.value?.go2rtc_url)
+  || go2rtcBaseOf(thermalVideo.value?.go2rtc_url)
+  || '未配置（检查 JC_GO2RTC_PUBLIC_BASE）')
 // 直接改 RTSP 地址（不用跳去摄像头页，现场找不到入口）
 const urlOpen = ref(false)
 const urlFor = ref<{ id: number; name: string; url: string } | null>(null)
@@ -612,12 +652,23 @@ async function loadFeed() {
 function openMsg(row: FeedRow) {
   void router.push(row.link)     // 和后端页面一一对应：告警/任务执行/系统日志
 }
-const alarmUnacked = computed(() => robot.alarms.filter((a) => !a.acked_at).length)
-const alarmAcked = computed(() => robot.alarms.filter((a) => !!a.acked_at).length)
 const alarmCritical = computed(() => robot.alarms.filter((a) => a.level === 'critical').length)
 
+// 告警数统一口径：优先 /alarms/stats 的全量统计（列表接口 limit=200，超了就会和环图对不上）
+const alarmCounts = computed(() => {
+  const s = stats7.value
+  const list = robot.alarms
+  return {
+    total: s?.total ?? list.length,
+    unacked: s?.unacked ?? list.filter((a) => !a.acked_at).length,
+    acked: s?.acked ?? list.filter((a) => !!a.acked_at).length,
+  }
+})
+const alarmUnacked = computed(() => alarmCounts.value.unacked)
+const alarmAcked = computed(() => alarmCounts.value.acked)
+
 // 今日任务状态（右半边）
-type RunRow = { id: number; name: string; status: string; steps?: number; ok?: number }
+type RunRow = { id: number; name: string; status: string; step_count?: number; done?: number }
 const runs = ref<RunRow[]>([])
 const runStats = computed(() => {
   const st = { total: runs.value.length, planned: 0, running: 0, done: 0, failed: 0, cancelled: 0 }
@@ -659,15 +710,25 @@ const runStatusText = computed(() => {
 })
 const runEta = computed(() => {
   const r = currentRun.value
-  if (!r || !r.steps) return '—'
-  const left = Math.max(0, r.steps - (r.ok ?? 0))
+  // 后端列表字段是 step_count（不是 steps），之前读错字段导致这行永远是 —。
+  // 已完成点数来自详情 progress.ok，拿不到就按 0 算。
+  if (!r || !r.step_count) return '—'
+  const left = Math.max(0, r.step_count - (r.done ?? 0))
   return left ? `${left} 个点位（约 ${left * 3} 分钟）` : '收尾中'
 })
 
 async function loadRuns() {
   try {
     const res = await api.taskRuns({ limit: 50 })
-    runs.value = ((res as unknown as { items?: RunRow[] }).items ?? [])
+    const rows = ((res as unknown as { items?: RunRow[] }).items ?? [])
+    const running = rows.find((x) => x.status === 'running')
+    if (running?.step_count) {
+      try {
+        const d = await api.taskRun(running.id) as { progress?: { ok?: number } }
+        running.done = d.progress?.ok ?? 0
+      } catch { /* 详情拿不到就按 0 算，不阻塞大屏 */ }
+    }
+    runs.value = rows
   } catch {
     runs.value = []
   }
@@ -736,8 +797,6 @@ const poseYawDeg = computed(() => {
   return p ? (Number(p.theta_rad ?? 0) * 57.3).toFixed(1) : '—'
 })
 const galileo = computed(() => robot.snapshot?.galileo ?? {})
-const unacked = computed(() => robot.alarms.filter((a) => !a.acked_at))
-const acked = computed(() => robot.alarms.filter((a) => a.acked_at))
 const imageUrl = computed(() => (robot.currentMap
   ? api.mapPng(Number(deviceId.value) || 1, robot.currentMap)
   : ''))
@@ -765,10 +824,7 @@ const RING_C = 2 * Math.PI * 42
 const stats7 = ref<{ total: number; unacked: number; acked: number } | null>(null)
 
 const donut = computed(() => {
-  const s = stats7.value
-  const total = s?.total ?? robot.alarms.length
-  const un = s?.unacked ?? unacked.value.length
-  const ac = s?.acked ?? acked.value.length
+  const { total, unacked: un, acked: ac } = alarmCounts.value
   return {
     total,
     unacked: un,
@@ -907,15 +963,41 @@ async function loadSpark() {
 }
 
 async function loadMap() {
+  // 切车后旧请求可能才回来：点位/地图只认当前设备
+  const dev = deviceId.value
   try {
     await robot.loadMaps()
+    if (dev !== deviceId.value) return
     const meta = robot.maps.find((m) => m.name === robot.currentMap) ?? robot.maps[0] ?? null
     mapMeta.value = meta
-    if (meta) points.value = (await api.navPoints(Number(deviceId.value) || 1, meta.name, '')).points
+    const pts = meta ? (await api.navPoints(Number(dev) || 1, meta.name, '')).points : []
+    if (dev !== deviceId.value) return
+    points.value = pts
   } catch (e) {
+    if (dev !== deviceId.value) return
+    mapMeta.value = null
+    points.value = []
     mapError.value = e instanceof Error ? e.message : '地图加载失败'
   }
 }
+
+// 服务器状态：不再恒「已连接」。每 15s 探一次 /health/deep，探不到就是连接异常
+const serverOk = ref<boolean | null>(null)
+const serverErr = ref('')
+async function loadServerHealth() {
+  try {
+    const h = await api.deepHealth()
+    const down = h.services.filter((s) => !s.running).map((s) => s.name)
+    serverOk.value = true
+    serverErr.value = h.cache.last_error || (down.length ? `后台循环未运行：${down.join('、')}` : '')
+  } catch (e) {
+    serverOk.value = false
+    serverErr.value = e instanceof Error ? e.message : '健康检查失败'
+  }
+}
+const serverText = computed(() => (serverOk.value === null ? '检测中' : serverOk.value ? '已连接' : '连接异常'))
+const serverTone = computed(() => (serverOk.value === null ? 'gold' : serverOk.value ? 'green' : 'red'))
+const linkText = computed(() => (serverOk.value === null ? '检测中' : serverOk.value ? '正常' : '异常'))
 
 let timers: number[] = []
 /** 首次挂载和切设备共用：时钟、未读、轨迹这些不重建的话，切车后就停了 */
@@ -930,6 +1012,7 @@ function startTimers() {
   }, 10000))
   timers.push(window.setInterval(loadTrend, 60000))
   timers.push(window.setInterval(loadRuns, 10000))
+  timers.push(window.setInterval(loadServerHealth, 15000))
   timers.push(window.setInterval(loadFeed, 15000))
   timers.push(window.setInterval(pollUnread, 30000))
   timers.push(window.setInterval(() => { now.value = new Date() }, 1000))
@@ -953,6 +1036,7 @@ onMounted(async () => {
   void loadCaps()
   void loadRuns()
   void loadFeed()
+  void loadServerHealth()
   // 切设备/首次挂载共用同一套定时器；清掉旧的再建，避免多组轮询
   startTimers()
   void api.devices().then((rows) => {
@@ -996,7 +1080,7 @@ async function logout() {
 
       <div class="hdr-right">
         <router-link class="icon-btn" :to="{ name: 'alarms' }" title="告警">
-          <span class="bell" />{{ unacked.length }}
+          <span class="bell" />{{ alarmCounts.unacked }}
         </router-link>
         <UserMenu />
       </div>
@@ -1014,12 +1098,12 @@ async function logout() {
               <path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7" />
             </svg>
           </button>
-          <button class="ti" type="button" :title="`告警：${unacked.length} 条未确认`" @click="goAlarms('unacked')">
+          <button class="ti" type="button" :title="`告警：${alarmCounts.unacked} 条未确认`" @click="goAlarms('unacked')">
             <svg viewBox="0 0 16 16" aria-hidden="true">
               <path d="M8 2.2a3.6 3.6 0 0 0-3.6 3.6v2.4L3.2 11h9.6l-1.2-2.8V5.8A3.6 3.6 0 0 0 8 2.2Z" />
               <path d="M6.4 12.6a1.6 1.6 0 0 0 3.2 0" />
             </svg>
-            <em v-if="unacked.length" class="ti-badge">{{ unacked.length }}</em>
+            <em v-if="alarmCounts.unacked" class="ti-badge">{{ alarmCounts.unacked }}</em>
           </button>
           <button class="ti" type="button" title="消息中心" @click="router.push({ name: 'messages' })">
             <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -1044,7 +1128,7 @@ async function logout() {
           </button>
         </div>
         <div class="stat"><label>机器人状态</label><b class="gold">{{ mode }}</b></div>
-        <div class="stat"><label>服务器状态</label><b class="green">已连接</b></div>
+        <div class="stat"><label>服务器状态</label><b :class="serverTone" :title="serverErr || '平台接口与后台循环正常'">{{ serverText }}</b></div>
       </div>
     </div>
 
@@ -1420,7 +1504,7 @@ async function logout() {
             {{ pickBusy ? '读取中…' : (pickErr || '没有匹配的流') }}
           </p>
           <p v-if="pickErr" class="dim small">
-            go2rtc 在 {{ '192.168.8.40:1984' }}，连不上时换流不可用；可用「改地址」绕过。
+            go2rtc 地址：{{ go2rtcBase }}，连不上时换流不可用；可用「改地址」绕过。
             <button class="btn btn-sm" style="margin-left:6px" @click="openPick(pickFor)">重试</button>
           </p>
         </div>
@@ -1437,7 +1521,7 @@ async function logout() {
       <span>固件 {{ version }} · 导航源 {{ slam }} · 急停 {{ estop ? '已按下' : '未按下' }}</span>
       <span class="spacer" />
       <span>数据刷新 1s</span>
-      <span>通讯链路正常</span>
+      <span :class="{ danger: serverOk === false }" :title="serverErr">通讯链路{{ linkText }}</span>
     </footer>
 
     

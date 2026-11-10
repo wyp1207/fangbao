@@ -222,11 +222,14 @@ async function submitAct() {
   }
 }
 
-function reset() {
+async function reset() {
   keyword.value = ''
   levelFilter.value = ''
   ackFilter.value = ''
   page.value = 1
+  // 清完必须重查，否则筛选条件没了、列表还是旧的
+  await reload()
+  toast('已重置', 'ok', 2000)
 }
 
 // CSV 公式注入：以 = + - @ 开头的单元格在 Excel 里会被当公式执行

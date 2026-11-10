@@ -6,10 +6,12 @@
  * 浏览器打印出来的 PDF 字体、分页、页眉都是现成的，客户签字盖章也够用。
  */
 import { computed, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/api'
+import { toast } from '@/composables/useToast'
 
 const route = useRoute()
+const router = useRouter()
 const data = ref<Record<string, any> | null>(null)
 const err = ref('')
 const printed = ref(false)
@@ -40,6 +42,13 @@ async function load() {
 
 function close() {
   window.close()
+  // 浏览器只允许关闭脚本自己开的窗口；从报表页点链接进来的普通标签页会拦截，
+  // 之前的表现就是「点了没反应」。这里兜底提示一句并退回报表页。
+  window.setTimeout(() => {
+    if (window.closed) return
+    toast('浏览器不允许脚本关闭这个标签页，请手动关闭；已退回报表页', 'warn', 4000)
+    void router.push({ name: 'reports' })
+  }, 300)
 }
 
 function print() {

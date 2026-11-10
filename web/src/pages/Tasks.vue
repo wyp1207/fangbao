@@ -85,11 +85,14 @@ function tryWrite(action: string) {
   toast(`${action}未开放：需真机联调通过 + 现场授权签字`, 'warn', 3000)
 }
 
-function reset() {
+async function reset() {
   keyword.value = ''
   stateFilter.value = ''
   loopFilter.value = ''
   page.value = 1
+  // 只清变量不重查的话，默认态下按钮看起来就是坏的
+  await reload()
+  toast('已重置', 'ok', 2000)
 }
 
 onMounted(reload)
