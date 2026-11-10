@@ -5,7 +5,10 @@ import { ApiError } from '@/api/client'
 import DarkSelect from '@/components/DarkSelect.vue'
 import { toast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
-import { useRobotStore } from '@/stores/robot'
+
+// 单页行数：不一次拉全量（执行记录只会越攒越多），翻页用 offset。
+// 页头必须显示「共 N 条，当前第 x–y 条」，否则 total 与可见行数对不上。
+const PAGE_SIZE = 50
 
 interface RunRow {
   id: number
@@ -34,16 +37,23 @@ interface Step {
 }
 
 const auth = useAuthStore()
-const robot = useRobotStore()
 const rows = ref<RunRow[]>([])
 const total = ref(0)
 const status = ref('')
 const loading = ref(false)
 const error = ref('')
+const page = ref(1)                       // 1 起：第几页
 const detail = ref<(RunRow & { steps: Step[]; progress: { total: number; ok: number; failed: number } }) | null>(null)
 const templates = ref<{ id: number; name: string }[]>([])
 const creating = ref(false)
 const form = ref({ templateId: '', name: '', note: '' })
+// 没有可续跑点位的任务：查过一次就置灰，别让人反复点
+const noResume = ref<Set<number>>(new Set())
+const resuming = ref(0)                  // 正在读详情的 run id，防连点
+
+const pages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
+const pageFrom = computed(() => (total.value ? (page.value - 1) * PAGE_SIZE + 1 : 0))
+const pageTo = computed(() => Math.min(page.value * PAGE_SIZE, total.value))
 
 const STATUS_TEXT: Record<string, string> = {
   planned: '计划中', running: '执行中', done: '已完成', failed: '失败', cancelled: '已取消',
@@ -69,9 +79,15 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const res = await api.taskRuns({ status: status.value, limit: 50 })
+    const res = await api.taskRuns({ status: status.value, limit: PAGE_SIZE, offset: (page.value - 1) * PAGE_SIZE })
     rows.value = res.items as unknown as RunRow[]
     total.value = res.total
+    // 停在末页时把最后一页的任务取消/删掉了：页号会越界，回落到最后一页重拉，别显示空表
+    if (!rows.value.length && page.value > 1 && total.value > 0) {
+      page.value = Math.min(page.value, Math.ceil(total.value / PAGE_SIZE))
+      loading.value = false
+      return load()
+    }
   } catch (e) {
     // 不能把请求失败伪装成「还没有执行记录」
     error.value = e instanceof ApiError ? e.message : (e instanceof Error ? e.message : '加载失败')
@@ -80,6 +96,18 @@ async function load() {
   } finally {
     loading.value = false
   }
+}
+
+function onStatusChange() {
+  page.value = 1
+  void load()
+}
+
+function goPage(p: number) {
+  const target = Math.min(Math.max(1, p), pages.value)
+  if (target === page.value) return
+  page.value = target
+  void load()
 }
 
 async function openDetail(r: RunRow) {
@@ -157,12 +185,29 @@ async function resume(r: RunRow) {
 }
 
 async function resumeFromFailed(r: RunRow) {
+  // 「接着跑」：从**最后完成点的下一个点**继续，不重复已完成的点；
+  // 后端的 from_seq 是**闭区间**起点（server/app/services/cruise.py：`TaskRunStep.seq >= from_seq`），
+  // 所以传 lastOk + 1。若产品要求"重跑最后一个完成点"，把 +1 去掉即可。
+  resuming.value = r.id
   try {
-    const res = await api.startCruise(r.id, 0)
-    toast(`已重新巡航（${res.steps} 个点位）`, 'ok', 4000)
+    const d = (await api.taskRun(r.id)) as unknown as { steps?: Step[] }
+    const steps = d.steps ?? []
+    const ok = steps.filter((s) => s.status === 'ok').map((s) => s.seq)
+    const lastOk = ok.length ? Math.max(...ok) : 0
+    // 没有已完成的点 = 没断点可续；已完成点之后没有剩余点 = 任务其实已经跑完
+    if (!lastOk || !steps.some((s) => s.seq > lastOk)) {
+      noResume.value = new Set(noResume.value).add(r.id)
+      toast('没有可续跑的点位', 'warn')
+      return
+    }
+    const fromSeq = lastOk + 1
+    const res = await api.startCruise(r.id, fromSeq)
+    toast(`从第 ${fromSeq} 点接着跑（前 ${lastOk} 点已完成，共 ${res.steps} 个点位）`, 'ok', 5000)
     await load()
   } catch (e) {
     toast(e instanceof ApiError ? e.message : '启动失败', 'danger')
+  } finally {
+    resuming.value = 0
   }
 }
 
@@ -204,20 +249,6 @@ onMounted(async () => {
   } catch { /* 无模板也能看列表 */ }
   await load()
 })
-
-// 人工接管：先取消这台车所有运行中任务，再让人手动处理。
-// 任务没绑机器人时用大屏当前的设备，不能默认 1 号车瞎取消。
-async function takeover(r: { id: number; robot_id?: number }) {
-  const rid = r.robot_id ?? robot.deviceId
-  if (!window.confirm('取消这台车所有运行中的任务，交由人工接管？')) return
-  try {
-    const t = await api.takeoverRobot(rid, `人工接管（任务 #${r.id}）`)
-    toast(`已接管，取消 ${t.cancelled} 条任务`, 'ok')
-    await load()
-  } catch (e) {
-    toast(e instanceof ApiError ? e.message : '接管失败', 'danger')
-  }
-}
 </script>
 
 <template>
@@ -232,10 +263,15 @@ async function takeover(r: { id: number; robot_id?: number }) {
 
       <div class="toolbar">
         <label>状态</label>
-        <DarkSelect v-model="status" :options="statusOptions" width="120px" @update:model-value="load" />
+        <DarkSelect v-model="status" :options="statusOptions" width="120px" @update:model-value="onStatusChange" />
         <button class="btn btn-sm ok" :disabled="loading" @click="load">刷新</button>
         <span class="grow" />
-        <span class="muted small">共 {{ total }} 条</span>
+        <span class="muted small">
+          共 {{ total }} 条<template v-if="total">，当前第 {{ pageFrom }}–{{ pageTo }} 条</template>
+        </span>
+        <button class="btn btn-sm" :disabled="loading || page <= 1" @click="goPage(page - 1)">上一页</button>
+        <span class="muted small">{{ page }}/{{ pages }}</span>
+        <button class="btn btn-sm" :disabled="loading || page >= pages" @click="goPage(page + 1)">下一页</button>
       </div>
 
       <div v-if="error" class="errbar">
@@ -278,10 +314,12 @@ async function takeover(r: { id: number; robot_id?: number }) {
                 <button v-if="r.status === 'planned'" class="btn btn-xs"
                         :disabled="!auth.canWrite" @click="dispatch(r)">单点下发</button>
                 <button v-if="['planned','failed','cancelled'].includes(r.status)" class="btn btn-xs primary"
+                        title="重新巡航：从第 1 点开始重跑全部点位（不跳过已完成的点）"
                         :disabled="!auth.canWrite" @click="cruise(r)">巡航</button>
                 <button v-if="['failed','cancelled'].includes(r.status)" class="btn btn-xs"
-                        title="从第一个失败的点继续，不重复已完成的点"
-                        :disabled="!auth.canWrite" @click="resumeFromFailed(r)">接着跑</button>
+                        :title="noResume.has(r.id) ? '没有可续跑的点位' : '从最后完成点的下一个点继续，不重复已完成的点'"
+                        :disabled="!auth.canWrite || resuming === r.id || noResume.has(r.id)"
+                        @click="resumeFromFailed(r)">接着跑</button>
                 <template v-if="r.status === 'running'">
                   <button v-if="!r.paused" class="btn btn-xs" :disabled="!auth.canWrite" @click="pause(r)">暂停</button>
                   <button v-else class="btn btn-xs ok" :disabled="!auth.canWrite" @click="resume(r)">继续</button>

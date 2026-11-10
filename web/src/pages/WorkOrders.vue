@@ -6,6 +6,11 @@ import DarkSelect from '@/components/DarkSelect.vue'
 import { toast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 
+// 派单默认期限（小时）：现场还没定 SLA 矩阵，先全等级统一 24h。
+// 只作用在「派单」这一个动作上；不新增设置项（避免过度设计），
+// 要按告警等级区分时改这一个常量，或接 settings 里的 SLA 配置。
+const DEFAULT_DUE_HOURS = 24
+
 interface Order {
   id: number
   code: string | null
@@ -67,7 +72,7 @@ async function load() {
 
 async function assign(o: Order, userId: string) {
   try {
-    await api.assignWorkOrder(o.id, { assignee_id: Number(userId), due_hours: 24 })
+    await api.assignWorkOrder(o.id, { assignee_id: Number(userId), due_hours: DEFAULT_DUE_HOURS })
     toast('已派单', 'ok')
     await load()
   } catch (e) {

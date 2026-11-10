@@ -110,10 +110,15 @@ class DevicePatch(BaseModel):
 
 async def _reload_polling(db: Session) -> None:
     """设备台账变了就重建轮询任务（新增设备不用重启服务）。"""
+    from app.services.env_ws import runner as env_ws_runner
     from app.services.robot_runtime import registry as robot_registry
 
+    robots = db.query(Robot).filter(Robot.is_active.is_(True)).all()
     await robot_registry.stop()
-    await robot_registry.start(db.query(Robot).filter(Robot.is_active.is_(True)).all())
+    await robot_registry.start(robots)
+    # 环境 WS 也要重建：否则把设备改成 mock 后，旧连接还会每 30s 报断开
+    await env_ws_runner.stop()
+    await env_ws_runner.start(robots)
 
 
 def _out(r: Robot) -> DeviceOut:
@@ -137,11 +142,14 @@ async def reload_polling(
     db: Session = Depends(get_db),
     _: User = Depends(require_roles("admin")),
 ) -> dict:
-    """设备台账变了，重建轮询任务（新增设备不用重启服务）。"""
+    """设备台账变了，重建轮询任务（新增设备不用重启服务）。
+
+    走 _reload_polling：它同时重建环境 WS。只重建轮询的话，设备改成 mock 之后
+    旧的环境流任务还会每 30s 连一次、报一次「环境流断开」。
+    """
     from app.services.robot_runtime import registry as robot_registry
 
-    await robot_registry.stop()
-    await robot_registry.start(db.query(Robot).filter(Robot.is_active.is_(True)).all())
+    await _reload_polling(db)
     return {"ok": True, "robots": [rt.status() for rt in robot_registry.runtimes.values()]}
 
 
@@ -195,7 +203,7 @@ async def create_device(
 
 
 @router.patch("/{device_id}", dependencies=[Depends(require_csrf)])
-def update_device(
+async def update_device(
     device_id: int,
     body: DevicePatch,
     db: Session = Depends(get_db),
@@ -216,6 +224,10 @@ def update_device(
     db.commit()
     db.refresh(r)
     audit(db=db, action="device.update", target=r.name, user=me, detail=data)
+    # 连接参数/模式变了要重建轮询与环境 WS：之前只改库不重建，
+    # 设备改成 mock 后旧的环境流任务还会每 30s 报一次「环境流断开」。
+    if any(k in data for k in ("mode", "adapter", "ip", "port", "ws_port", "is_active", "username", "password")):
+        await _reload_polling(db)
     return _out(r)
 
 

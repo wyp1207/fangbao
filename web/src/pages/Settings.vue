@@ -3,8 +3,11 @@ import { computed, onMounted, ref } from 'vue'
 import { api } from '@/api'
 import DarkSelect from '@/components/DarkSelect.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useRobotStore } from '@/stores/robot'
 
 const auth = useAuthStore()
+// 能力矩阵/探测必须打在当前设备上：写死 1 号车时，切到 3 号车后页面显示的是 1 号车的能力。
+const robotStore = useRobotStore()
 const caps = ref<Record<string, unknown> | null>(null)
 const health = ref<Awaited<ReturnType<typeof api.deepHealth>> | null>(null)
 const robot = ref<Awaited<ReturnType<typeof api.robots>>[number] | null>(null)
@@ -105,15 +108,22 @@ async function saveSettings() {
 
 async function loadRobot() {
   try {
-    robot.value = (await api.robots())[0] ?? null
+    // 连接表与能力矩阵要指同一台车：都用大屏当前设备（robot store 的 deviceId）
+    const list = await api.robots()
+    const id = robotStore.deviceId
+    robot.value = list.find((d) => d.id === id) ?? list[0] ?? null
   } catch (e) {
     message.value = e instanceof Error ? e.message : '机器人配置读取失败'
   }
 }
 
+function currentRobotId(): number {
+  return robotStore.deviceId || robot.value?.id || 1
+}
+
 async function loadCaps() {
   try {
-    caps.value = await api.capabilities(1)
+    caps.value = await api.capabilities(currentRobotId())
   } catch (e) {
     message.value = e instanceof Error ? e.message : '能力读取失败'
   }
@@ -130,8 +140,8 @@ async function loadHealth() {
 async function probe() {
   message.value = ''
   try {
-    caps.value = await api.probe(1)
-    message.value = '能力探测完成'
+    caps.value = await api.probe(currentRobotId())
+    message.value = `能力探测完成（设备 #${currentRobotId()}）`
   } catch (e) {
     message.value = e instanceof Error ? e.message : '探测失败'
   }

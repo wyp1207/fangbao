@@ -30,6 +30,11 @@ const points = ref<NavPoint[]>([])
 const trail = ref<{ x: number; y: number }[]>([])
 const mapError = ref('')
 const now = ref(new Date())
+
+// 巡检节拍估算：每个点位约 3 分钟（到点 + 拍照/测温 + 转场）。
+// 只用于大屏「预估剩余」这行文案，不参与任何控制逻辑；真机节拍未标定，
+// 这里不新增设置项（避免过度设计），先用一个具名常量，将来要按车型配置再升级。
+const MINUTES_PER_POINT = 3
 const controlTab = ref<'ptz' | 'chassis'>('ptz')
 // 云台：海康 ISAPI（settings.ptz.enabled）。X30 本体 SDK 不管云台。
 const ptzOn = ref(false)
@@ -609,10 +614,6 @@ const sparkPoints = computed(() => {
     return `${x.toFixed(1)},${y.toFixed(1)}`
   }).join(' ')
 })
-const located = computed(() => {
-  const st = (robot.snapshot?.status ?? {}) as Record<string, unknown>
-  return Boolean(st.located ?? st.Location)
-})
 const currentDevice = computed(() =>
   devices.value.find((d) => String(d.id) === deviceId.value) ?? null)
 type FeedRow = { id: number; ts: string; text: string; level: string; badge: string; link: string }
@@ -714,7 +715,7 @@ const runEta = computed(() => {
   // 已完成点数来自详情 progress.ok，拿不到就按 0 算。
   if (!r || !r.step_count) return '—'
   const left = Math.max(0, r.step_count - (r.done ?? 0))
-  return left ? `${left} 个点位（约 ${left * 3} 分钟）` : '收尾中'
+  return left ? `${left} 个点位（约 ${left * MINUTES_PER_POINT} 分钟）` : '收尾中'
 })
 
 async function loadRuns() {
@@ -1806,25 +1807,10 @@ async function logout() {
 /* 右栏：环境面板吃掉剩余高度（内容居中），点位列表按内容高，底部不留大片空白 */
 .col.right > .grow { flex: 1 1 auto; }
 .col.right .points { overflow-y: auto; }
-.h-msg { height: 244px; flex: none; }
-.h-msg :deep(.panel-body) { padding: 0; }
-.msg-split { display: grid; grid-template-columns: 5.2fr 4.8fr; height: 100%; min-height: 0; }
-.msg-main { min-width: 0; overflow: auto; }
-.msg-side {
-  padding: 4px 10px 8px; border-left: 1px solid rgba(111, 227, 255, .22);
-  display: flex; flex-direction: column; gap: 1px; font-size: 11px; overflow: hidden;
-}
-.ms-head { color: #8ef0ff; font-weight: 600; letter-spacing: 1px; }
-.ms-row { display: flex; justify-content: space-between; gap: 6px; align-items: baseline; font-size: 11px; line-height: 1.35; }
-.ms-row b { max-width: 62%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
-.ms-row span { color: #bfe6ff; }
-.ms-row b { color: #f2fbff; font-weight: 600; }
-.ms-counts { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; margin-top: 2px; }
-.ms-counts div { text-align: center; background: rgba(0, 90, 160, .35); border-radius: 3px; padding: 2px 0; }
-.ms-counts b { display: block; font-size: 14px; color: #f2fbff; line-height: 1.15; }
-.ms-counts span { font-size: 9.5px; color: #9fd2ff; line-height: 1.1; display: block; }
 
-.no-pad { padding: 6px !important; }
+/* 视频面板 body 去内边距：no-pad 通过 body-class 落在 ScadaPanel 内部的 .t-body 上，
+   scoped 的 .no-pad[data-v-xxx] 只能命中子组件根节点，必须用 :deep 才能打进去 */
+:deep(.t-body.no-pad) { padding: 6px; }
 .clickable { height: 100%; cursor: pointer; }
 
 /* 控制面板 */
@@ -1960,7 +1946,6 @@ async function logout() {
   .h-ctrl { height: 182px; }
   .h-donut { height: 196px; }
   .h-points { height: 168px; }
-  .h-msg { height: 216px; }
 }
 
 /* 1320 以下标题让位给 8 个导航：留着会把 logo 挤没、导航压字 */
@@ -2004,7 +1989,6 @@ async function logout() {
   .h-ctrl { height: 168px; }
   .h-donut { height: 190px; }
   .h-points { height: 160px; }
-  .h-msg { height: 200px; }
 }
 
 @media (max-width: 1240px) {
@@ -2102,111 +2086,6 @@ async function logout() {
 .trend-col .b-warn { background: linear-gradient(180deg, #ffe066, #d9a300); }
 .trend-x { font-size: 9px; color: #6f9dc4; line-height: 1; }
 .trend p { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; }
-
-/* 实时消息表格：级别/状态不换行，内容列吃剩余宽度 */
-.msg-main .tbl th:nth-child(1), .msg-main .tbl td:nth-child(1) { width: 72px; }
-.msg-main .tbl th:nth-child(2), .msg-main .tbl td:nth-child(2) { width: 70px; white-space: nowrap; }
-.msg-main .tbl th:nth-child(4), .msg-main .tbl td:nth-child(4) { width: 74px; white-space: nowrap; }
-.msg-main .tbl td:nth-child(3) { white-space: normal; }
-
-/* ===== 实时消息：按参考图（工业蓝+青+橙）重做 ===== */
-.h-msg :deep(.panel-body) { padding: 0; }
-.h-msg .tbl th {
-  background: linear-gradient(180deg, #0d2a52, #0a244b);
-  color: #eaf3ff; font-size: 12.5px; font-weight: 700; letter-spacing: .5px;
-  border: 1px solid rgba(37, 116, 187, .75);
-}
-.h-msg .tbl td {
-  font-size: 12.5px; color: #eaf3ff;
-  border: 1px solid rgba(37, 116, 187, .55);
-  padding: 7px 8px;
-}
-.h-msg .tbl tbody tr:nth-child(even) td { background: transparent; }
-.h-msg .tbl tbody tr:hover td { background: rgba(47, 224, 240, .12); }
-.msg-side {
-  background: linear-gradient(180deg, rgba(8, 32, 64, .55), rgba(6, 24, 48, .35));
-  border-left: 2px solid rgba(37, 116, 187, .8);
-}
-.ms-head {
-  color: #ffc23c; font-weight: 700; letter-spacing: 1.5px; font-size: 12px;
-  padding-bottom: 2px; border-bottom: 1px solid rgba(37, 116, 187, .5);
-}
-.ms-row span { color: #7fd8ff; font-size: 11.5px; }
-.ms-row b { color: #ffb62e; font-weight: 700; font-size: 12px; }
-.ms-counts { gap: 4px; }
-.ms-counts div {
-  background: rgba(6, 26, 54, .55);
-  border: 1px solid rgba(37, 116, 187, .45);
-  border-radius: 2px; padding: 3px 0 2px;
-}
-.ms-counts b { font-size: 15px; font-weight: 700; }
-.ms-counts b.c-total { color: #ff6a6e; }
-.ms-counts b.c-plan { color: #ff6a6e; }
-.ms-counts b.c-cancel { color: #9fb8d0; }
-.ms-counts b.c-done { color: #4dff46; }
-.ms-counts b.c-fail { color: #ff4b45; }
-.ms-counts span { color: #8fb7d8; font-size: 9.5px; }
-
-/* ===== 实时消息：按参考图重做（豆包视觉说明） ===== */
-.h-msg { position: relative; }
-.h-msg :deep(.panel-body) { padding: 0; overflow: hidden; }
-.h-msg :deep(.panel-title) {
-  background: linear-gradient(180deg, #1e6fae 0%, #0b2b55 100%);
-  box-shadow: inset 0 1px 0 rgba(160, 240, 255, .55);
-}
-.msg-split { display: grid; grid-template-columns: 6fr 4fr; height: 100%; min-height: 0; }
-.msg-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-
-/* 三个 tab：选中亮青底深字，未选深蓝底浅字 */
-.msg-tabs { display: flex; gap: 3px; padding: 5px 6px 3px; flex: none; }
-.msg-tabs button {
-  flex: 1; padding: 4px 6px; font-size: 11.5px; font-weight: 600; cursor: pointer;
-  color: #bfd9ef; background: #0a2247; border: 1px solid rgba(37, 116, 187, .7);
-  border-radius: 2px; letter-spacing: .5px;
-}
-.msg-tabs button.on { background: #2fe0f0; color: #06253f; border-color: #7ff0ff; }
-
-.h-msg .tbl { table-layout: fixed; width: 100%; }
-.h-msg .tbl th {
-  background: #0a244b; color: #eaf3ff; font-size: 12px; font-weight: 700;
-  border: 1px solid rgba(37, 116, 187, .75); padding: 5px 8px;
-}
-.h-msg .tbl th:nth-child(1) { width: 108px; }
-.h-msg .tbl td {
-  border: 1px solid rgba(37, 116, 187, .55); padding: 6px 8px;
-  color: #eaf3ff; font-size: 12px; white-space: normal; line-height: 1.45;
-}
-.h-msg .tbl tbody tr:nth-child(even) td { background: transparent; }
-.h-msg .tbl tbody tr:hover td { background: rgba(47, 224, 240, .12); }
-.h-msg .tbl .t-time { color: #cfe6ff; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.h-msg .tbl .t-state { font-style: normal; font-size: 10.5px; margin-left: 6px; padding: 0 4px; border-radius: 2px; }
-.h-msg .tbl .t-state.ok { color: #4dff46; border: 1px solid rgba(77, 255, 70, .5); }
-.h-msg .tbl .t-state.bad { color: #ff6a6e; border: 1px solid rgba(255, 106, 110, .5); }
-
-/* 右侧任务区：浅青标签 + 橙黄数值 + 三组红/绿计数 */
-.msg-side {
-  padding: 6px 10px 8px; border-left: 2px solid rgba(37, 116, 187, .85);
-  background: linear-gradient(180deg, rgba(10, 36, 75, .75), rgba(7, 25, 50, .55));
-  display: flex; flex-direction: column; gap: 4px; min-height: 0; overflow: hidden;
-}
-.ms-tag {
-  align-self: flex-end; background: #36cbe6; color: #06264a; font-weight: 700;
-  font-size: 11.5px; padding: 3px 9px; border-radius: 2px;
-  box-shadow: 0 0 10px rgba(54, 203, 230, .55); letter-spacing: 1px;
-}
-.ms-line { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; font-size: 11.5px; }
-.ms-line span { color: #7fd8ff; }
-.ms-line b {
-  color: #ffb62e; font-weight: 700; max-width: 58%; text-align: right;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.ms-groups { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: auto; }
-.ms-group { border: 1px solid rgba(37, 116, 187, .55); border-radius: 2px; padding: 3px 4px; }
-.ms-group .nums { text-align: center; font-size: 15px; font-weight: 700; letter-spacing: 1px; color: #8fb7d8; }
-.ms-group .nums i { font-style: normal; text-shadow: 0 0 8px currentColor; }
-.ms-group .nums .r { color: #ff6a6e; }
-.ms-group .nums .g { color: #4dff46; }
-.ms-group .caps { display: flex; justify-content: space-around; font-size: 9px; color: #8fb7d8; }
 
 /* ===== 实时消息：1:1 复刻参考（配色用豆包给出的精确值） ===== */
 .rt {

@@ -395,8 +395,11 @@ export const api = {
     request<Record<string, unknown>>(`/work-orders/${id}/transition`, { method: 'POST', body }),
   escalateWorkOrder: (id: number) =>
     request<Record<string, unknown>>(`/work-orders/${id}/escalate`, { method: 'POST' }),
-  taskRuns: (params: { status?: string; limit?: number } = {}) => {
-    const qs = Object.entries(params).filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&')
+  taskRuns: (params: { status?: string; limit?: number; offset?: number } = {}) => {
+    const qs = Object.entries(params)
+      .filter(([, v]) => v !== undefined && v !== null && v !== '' && v !== 0)
+      .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
+      .join('&')
     return request<{ total: number; items: Record<string, unknown>[] }>(`/task-runs${qs ? '?' + qs : ''}`)
   },
   taskReportUrl: (id: number) => `/api/v1/task-runs/${id}/report.xlsx`,
