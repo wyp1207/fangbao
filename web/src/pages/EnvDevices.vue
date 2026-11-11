@@ -142,8 +142,8 @@ onBeforeUnmount(() => window.clearInterval(timer))
 
       <div class="toolbar">
         <span class="grow" />
-        <button class="btn btn-sm" :disabled="loading" @click="load">刷新</button>
-        <button class="btn btn-sm primary" :disabled="!auth.canWrite" @click="openCreate">新增传感器</button>
+        <button type="button" class="btn btn-sm" :disabled="loading" @click="load">刷新</button>
+        <button type="button" class="btn btn-sm primary" :disabled="!auth.canWrite" @click="openCreate">新增传感器</button>
       </div>
 
       <table class="grid">
@@ -178,9 +178,9 @@ onBeforeUnmount(() => window.clearInterval(timer))
             </td>
             <td>
               <div class="row-actions">
-                <button class="act" title="录入一条读数" :disabled="!auth.canWrite" @click="openReading(s)">＋</button>
-                <button class="act" title="编辑/标定" :disabled="!auth.canWrite" @click="openEdit(s)">✎</button>
-                <button class="act danger" title="删除" :disabled="!auth.canWrite" @click="remove(s)">🗑</button>
+                <button type="button" class="act" title="录入一条读数" :disabled="!auth.canWrite" @click="openReading(s)">＋</button>
+                <button type="button" class="act" title="编辑/标定" :disabled="!auth.canWrite" @click="openEdit(s)">✎</button>
+                <button type="button" class="act danger" title="删除" :disabled="!auth.canWrite" @click="remove(s)">🗑</button>
               </div>
             </td>
           </tr>
@@ -228,9 +228,9 @@ onBeforeUnmount(() => window.clearInterval(timer))
         <label class="fld"><span>备注</span><input class="input" v-model="form.note" placeholder="检定证书编号 / 标定人 / 日期" /></label>
 
         <div class="modal-actions">
-          <button class="btn" @click="creating = false; editing = null">取消</button>
-          <button v-if="!editing" class="btn primary" @click="submitCreate">保存</button>
-          <button v-else class="btn primary" @click="submitEdit">保存</button>
+          <button type="button" class="btn" @click="creating = false; editing = null">取消</button>
+          <button type="button" v-if="!editing" class="btn primary" @click="submitCreate">保存</button>
+          <button type="button" v-else class="btn primary" @click="submitEdit">保存</button>
         </div>
       </div>
     </div>
@@ -247,8 +247,8 @@ onBeforeUnmount(() => window.clearInterval(timer))
           现在是手填。真机环境模块或采集网关接上后，改成自动写入同一个接口，页面不用改。
         </p>
         <div class="modal-actions">
-          <button class="btn" @click="reading = null">取消</button>
-          <button class="btn primary" :disabled="readingValue === ''" @click="submitReading">记录</button>
+          <button type="button" class="btn" @click="reading = null">取消</button>
+          <button type="button" class="btn primary" :disabled="readingValue === ''" @click="submitReading">记录</button>
         </div>
       </div>
     </div>

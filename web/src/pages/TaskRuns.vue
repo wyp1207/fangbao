@@ -258,25 +258,25 @@ onMounted(async () => {
         <span>任务执行</span>
         <span class="muted small">平台只生成「计划」；执行结果由机器人回传（真机接了才有数据）</span>
         <span class="grow" />
-        <button class="btn btn-sm primary" :disabled="!auth.canWrite" @click="openCreate">从模板生成计划</button>
+        <button type="button" class="btn btn-sm primary" :disabled="!auth.canWrite" @click="openCreate">从模板生成计划</button>
       </div>
 
       <div class="toolbar">
         <label>状态</label>
         <DarkSelect v-model="status" :options="statusOptions" width="120px" @update:model-value="onStatusChange" />
-        <button class="btn btn-sm ok" :disabled="loading" @click="load">刷新</button>
+        <button type="button" class="btn btn-sm ok" :disabled="loading" @click="load">刷新</button>
         <span class="grow" />
         <span class="muted small">
           共 {{ total }} 条<template v-if="total">，当前第 {{ pageFrom }}–{{ pageTo }} 条</template>
         </span>
-        <button class="btn btn-sm" :disabled="loading || page <= 1" @click="goPage(page - 1)">上一页</button>
+        <button type="button" class="btn btn-sm" :disabled="loading || page <= 1" @click="goPage(page - 1)">上一页</button>
         <span class="muted small">{{ page }}/{{ pages }}</span>
-        <button class="btn btn-sm" :disabled="loading || page >= pages" @click="goPage(page + 1)">下一页</button>
+        <button type="button" class="btn btn-sm" :disabled="loading || page >= pages" @click="goPage(page + 1)">下一页</button>
       </div>
 
       <div v-if="error" class="errbar">
         <span>加载失败：{{ error }}</span>
-        <button class="btn btn-sm" :disabled="loading" @click="load">重试</button>
+        <button type="button" class="btn btn-sm" :disabled="loading" @click="load">重试</button>
       </div>
 
       <table class="grid">
@@ -308,23 +308,23 @@ onMounted(async () => {
             </td>
             <td>
               <div class="row-actions">
-                <button class="btn btn-xs" @click="openDetail(r)">详情</button>
-              <button class="btn btn-xs" title="导出这趟巡检的 xlsx 报告"
+                <button type="button" class="btn btn-xs" @click="openDetail(r)">详情</button>
+              <button type="button" class="btn btn-xs" title="导出这趟巡检的 xlsx 报告"
                       @click="exportReport(r.id)">报告</button>
-                <button v-if="r.status === 'planned'" class="btn btn-xs"
+                <button type="button" v-if="r.status === 'planned'" class="btn btn-xs"
                         :disabled="!auth.canWrite" @click="dispatch(r)">单点下发</button>
-                <button v-if="['planned','failed','cancelled'].includes(r.status)" class="btn btn-xs primary"
+                <button type="button" v-if="['planned','failed','cancelled'].includes(r.status)" class="btn btn-xs primary"
                         title="重新巡航：从第 1 点开始重跑全部点位（不跳过已完成的点）"
                         :disabled="!auth.canWrite" @click="cruise(r)">巡航</button>
-                <button v-if="['failed','cancelled'].includes(r.status)" class="btn btn-xs"
+                <button type="button" v-if="['failed','cancelled'].includes(r.status)" class="btn btn-xs"
                         :title="noResume.has(r.id) ? '没有可续跑的点位' : '从最后完成点的下一个点继续，不重复已完成的点'"
                         :disabled="!auth.canWrite || resuming === r.id || noResume.has(r.id)"
                         @click="resumeFromFailed(r)">接着跑</button>
                 <template v-if="r.status === 'running'">
-                  <button v-if="!r.paused" class="btn btn-xs" :disabled="!auth.canWrite" @click="pause(r)">暂停</button>
-                  <button v-else class="btn btn-xs ok" :disabled="!auth.canWrite" @click="resume(r)">继续</button>
+                  <button type="button" v-if="!r.paused" class="btn btn-xs" :disabled="!auth.canWrite" @click="pause(r)">暂停</button>
+                  <button type="button" v-else class="btn btn-xs ok" :disabled="!auth.canWrite" @click="resume(r)">继续</button>
                 </template>
-                <button v-if="['planned','running'].includes(r.status)" class="act danger"
+                <button type="button" v-if="['planned','running'].includes(r.status)" class="act danger"
                         title="取消" :disabled="!auth.canWrite" @click="cancel(r)">✕</button>
               </div>
             </td>
@@ -368,7 +368,7 @@ onMounted(async () => {
                 </span>
               </td>
               <td class="dim small">
-                <button v-if="s.status === 'failed'" class="btn btn-xs" :disabled="!auth.canWrite"
+                <button type="button" v-if="s.status === 'failed'" class="btn btn-xs" :disabled="!auth.canWrite"
                         @click="retry(s)">重试动作</button>
                 <span v-if="s.error">{{ s.error }}</span>
                 <span v-else-if="s.result">{{ JSON.stringify(s.result).slice(0, 80) }}</span>
@@ -380,7 +380,7 @@ onMounted(async () => {
         </table>
 
         <div class="modal-actions">
-          <button class="btn" @click="detail = null">关闭</button>
+          <button type="button" class="btn" @click="detail = null">关闭</button>
         </div>
       </div>
     </div>
@@ -399,8 +399,8 @@ onMounted(async () => {
           生成的是<b>计划</b>，不会下发到机器人——写操作要等真机联调 + 现场授权。
         </p>
         <div class="modal-actions">
-          <button class="btn" @click="creating = false">取消</button>
-          <button class="btn primary" @click="submitCreate">生成</button>
+          <button type="button" class="btn" @click="creating = false">取消</button>
+          <button type="button" class="btn primary" @click="submitCreate">生成</button>
         </div>
       </div>
     </div>

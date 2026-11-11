@@ -73,7 +73,7 @@ async function submit() {
       <p v-if="newPwd && !ruleOk" class="warn small">规则：≥8 位、含字母和数字、不能与原密码相同</p>
       <p v-if="confirmPwd && !matchOk" class="warn small">两次输入不一致</p>
 
-      <button class="btn primary" :disabled="busy || !ruleOk || !matchOk" @click="submit">
+      <button type="button" class="btn primary" :disabled="busy || !ruleOk || !matchOk" @click="submit">
         {{ busy ? '提交中…' : '修改并继续' }}
       </button>
     </div>

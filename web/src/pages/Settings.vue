@@ -163,8 +163,8 @@ onMounted(async () => {
         <span class="muted small">改完立即生效，不用重启；写库并记审计</span>
         <span class="grow" />
         <span v-if="dirtyCount" class="tag warn">{{ dirtyCount }} 项未保存</span>
-        <button class="btn btn-sm" :disabled="!dirtyCount" @click="dirty = {}">撤销</button>
-        <button v-if="canSaveSettings" class="btn btn-sm primary"
+        <button type="button" class="btn btn-sm" :disabled="!dirtyCount" @click="dirty = {}">撤销</button>
+        <button type="button" v-if="canSaveSettings" class="btn btn-sm primary"
                 :disabled="!dirtyCount || saving" @click="saveSettings">
           {{ saving ? '保存中…' : '保存配置' }}
         </button>
@@ -249,7 +249,7 @@ onMounted(async () => {
     <section class="panel">
       <div class="panel-title">
         <span>能力矩阵</span>
-        <button class="btn" :disabled="!auth.canWrite" @click="probe">重新探测</button>
+        <button type="button" class="btn" :disabled="!auth.canWrite" @click="probe">重新探测</button>
       </div>
       <p class="muted small">
         不按固件版本写死能力：启动时逐接口探测，缺什么就隐藏/置灰。不支持时接口返回
@@ -262,7 +262,7 @@ onMounted(async () => {
     <section class="panel">
       <div class="panel-title">
         <span>运行状态</span>
-        <button class="btn" @click="loadHealth">刷新</button>
+        <button type="button" class="btn" @click="loadHealth">刷新</button>
       </div>
       <div v-if="health" class="health">
         <div class="kv"><span>链路在线</span><b :class="health.cache.online ? 'ok' : 'danger'">{{ health.cache.online ? '是' : '否' }}</b></div>

@@ -31,13 +31,6 @@ const page = ref(1)
 const focusRow = ref<number | null>(null)
 const pageSize = 10
 
-function fmtVal(v: unknown): string {
-  if (typeof v !== 'number') return ''
-  const a = Math.abs(v)
-  if (a >= 100) return v.toFixed(1)
-  if (a >= 10) return v.toFixed(1)
-  return v.toFixed(2)
-}
 
 const levelText: Record<string, string> = { critical: '严重', warn: '提醒' }
 const levelOptions = [
@@ -294,11 +287,11 @@ watch([levelFilter, ackFilter], async () => { page.value = 1; await reload() })
         <DarkSelect v-model="levelFilter" :options="levelOptions" width="110px" />
         <label>状态</label>
         <DarkSelect v-model="ackFilter" :options="ackOptions" width="110px" />
-        <button class="btn btn-sm ok" @click="page = 1; reload()">查询</button>
-        <button class="btn btn-sm warn" @click="reset">重置</button>
+        <button type="button" class="btn btn-sm ok" @click="page = 1; reload()">查询</button>
+        <button type="button" class="btn btn-sm warn" @click="reset">重置</button>
         <span class="grow" />
-        <button class="btn btn-sm" @click="robot.refreshAlarms()">刷新</button>
-        <button class="btn btn-sm" @click="exportCsv">导出 CSV</button>
+        <button type="button" class="btn btn-sm" @click="robot.refreshAlarms()">刷新</button>
+        <button type="button" class="btn btn-sm" @click="exportCsv">导出 CSV</button>
       </div>
 
       <table class="grid">
@@ -329,21 +322,21 @@ watch([levelFilter, ackFilter], async () => { page.value = 1; await reload() })
             </td>
             <td>
               <div class="row-actions">
-                <button class="act" title="确认告警" :disabled="!!a.acked_at || !auth.canWrite" @click="ack(a.id)">✓</button>
-                <button class="act" title="处置（写清做了什么）" :disabled="!auth.canWrite || !!a.closed_at" @click="openAct(a, 'handle')">✎</button>
-                <button v-if="a.camera_id" class="act" title="看当时的录像"
+                <button type="button" class="act" title="确认告警" :disabled="!!a.acked_at || !auth.canWrite" @click="ack(a.id)">✓</button>
+                <button type="button" class="act" title="处置（写清做了什么）" :disabled="!auth.canWrite || !!a.closed_at" @click="openAct(a, 'handle')">✎</button>
+                <button type="button" v-if="a.camera_id" class="act" title="看当时的录像"
                         @click="goPlayback(a)">▶</button>
-                <button v-if="!a.work_order_id" class="act" title="转工单（派单闭环）"
+                <button type="button" v-if="!a.work_order_id" class="act" title="转工单（派单闭环）"
                         :disabled="!auth.canWrite || !!a.closed_at" @click="asWorkOrder(a)">→</button>
-                <button v-else class="act ok" :title="`已生成工单 #${a.work_order_id}，点击查看`"
+                <button type="button" v-else class="act ok" :title="`已生成工单 #${a.work_order_id}，点击查看`"
                         @click="router.push({ name: 'work-orders', query: { focus: a.work_order_id } })">
                   工单{{ a.work_order_id }}
                 </button>
-                <button v-if="!a.shelved_until" class="act" title="搁置（检修时临时别报）"
+                <button type="button" v-if="!a.shelved_until" class="act" title="搁置（检修时临时别报）"
                         :disabled="!auth.canWrite || !!a.closed_at" @click="openShelve(a)">⏸</button>
-                <button v-else class="act warn" :title="`已搁置到 ${a.shelved_until}`" @click="unshelve(a)">▶</button>
-                <button class="act danger" title="关闭（给结论）" :disabled="!auth.canWrite || !!a.closed_at" @click="openAct(a, 'close')">⏹</button>
-                <button class="act" title="回看这个时刻的录像" @click="router.push({ name: 'record-playback', query: { date: a.started_at.slice(0, 10), t: a.started_at.slice(11, 19) } })">⟲</button>
+                <button type="button" v-else class="act warn" :title="`已搁置到 ${a.shelved_until}`" @click="unshelve(a)">▶</button>
+                <button type="button" class="act danger" title="关闭（给结论）" :disabled="!auth.canWrite || !!a.closed_at" @click="openAct(a, 'close')">⏹</button>
+                <button type="button" class="act" title="回看这个时刻的录像" @click="router.push({ name: 'record-playback', query: { date: a.started_at.slice(0, 10), t: a.started_at.slice(11, 19) } })">⟲</button>
               </div>
             </td>
           </tr>
@@ -356,12 +349,12 @@ watch([levelFilter, ackFilter], async () => { page.value = 1; await reload() })
       <div class="pager">
         <span>共 {{ total }} 条 · 第 {{ page }}/{{ pageCount }} 页</span>
         <span class="spacer" />
-        <button :disabled="page <= 1" @click="goto(page - 1)">上一页</button>
-        <button
+        <button type="button" :disabled="page <= 1" @click="goto(page - 1)">上一页</button>
+        <button type="button"
           v-for="n in Math.min(pageCount, 7)" :key="n"
           :class="{ on: n === page }" @click="goto(n)"
         >{{ n }}</button>
-        <button :disabled="page >= pageCount" @click="goto(page + 1)">下一页</button>
+        <button type="button" :disabled="page >= pageCount" @click="goto(page + 1)">下一页</button>
       </div>
 
       <p v-if="message" class="danger small">{{ message }}</p>
@@ -403,8 +396,8 @@ watch([levelFilter, ackFilter], async () => { page.value = 1; await reload() })
         </label>
 
         <div class="modal-actions">
-          <button class="btn" @click="acting = null">取消</button>
-          <button class="btn primary" :disabled="!actNote.trim()" @click="submitAct">
+          <button type="button" class="btn" @click="acting = null">取消</button>
+          <button type="button" class="btn primary" :disabled="!actNote.trim()" @click="submitAct">
             {{ actMode === 'handle' ? '提交处置' : '确认关闭' }}
           </button>
         </div>
@@ -422,8 +415,8 @@ watch([levelFilter, ackFilter], async () => { page.value = 1; await reload() })
           <input class="input" v-model="shelveReason" placeholder="如：探头标定中 / 检修动火 / 更换传感器" /></label>
         <p class="dim small">搁置期间同指标不会再产生新告警；到期自动恢复，也可手动解除。</p>
         <div class="acts">
-          <button class="btn btn-sm" @click="shelveFor = null">取消</button>
-          <button class="btn btn-sm primary" @click="saveShelve">确认搁置</button>
+          <button type="button" class="btn btn-sm" @click="shelveFor = null">取消</button>
+          <button type="button" class="btn btn-sm primary" @click="saveShelve">确认搁置</button>
         </div>
       </div>
     </div>
@@ -448,7 +441,6 @@ watch([levelFilter, ackFilter], async () => { page.value = 1; await reload() })
 .small { font-size: 12px; line-height: 1.6; }
 .num { font-variant-numeric: tabular-nums; }
 
-tr.flash td { background: rgba(255, 176, 46, .28) !important; box-shadow: inset 0 0 0 1px rgba(255,176,46,.7); }
 
 .p-badge { background: rgba(255, 168, 46, .18); color: #ffc355; margin-right: 4px; }
 

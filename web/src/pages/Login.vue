@@ -78,7 +78,7 @@ async function submit() {
 
       <p v-if="error" class="danger small">{{ error }}</p>
 
-      <button class="btn primary submit" :disabled="auth.loading" @click="submit">
+      <button type="button" class="btn primary submit" :disabled="auth.loading" @click="submit">
         {{ auth.loading ? '登录中…' : '登 录' }}
       </button>
 

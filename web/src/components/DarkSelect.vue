@@ -39,7 +39,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
 
 <template>
   <div ref="root" class="dasel" :style="{ width }">
-    <button class="trigger" :class="{ open, disabled }" :disabled="disabled" @click="open = !open">
+    <button type="button" class="trigger" :class="{ open, disabled }" :disabled="disabled" @click="open = !open">
       <span>{{ current }}</span>
       <i class="caret">▾</i>
     </button>

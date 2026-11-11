@@ -179,7 +179,7 @@ onMounted(load)
         <span>告警通知</span>
         <span class="muted small">告警产生后自动推送到企业微信 / 钉钉 / Webhook / 邮件；静默期内不重复刷屏</span>
         <span class="grow" />
-        <button class="btn btn-sm primary" :disabled="!auth.canWrite" @click="openCreate">新增通道</button>
+        <button type="button" class="btn btn-sm primary" :disabled="!auth.canWrite" @click="openCreate">新增通道</button>
       </div>
 
       <table class="grid">
@@ -205,10 +205,10 @@ onMounted(load)
             <td><span class="tag" :class="c.enabled ? 'ok' : 'warn'">{{ c.enabled ? '开' : '关' }}</span></td>
             <td>
               <div class="row-actions">
-                <button class="btn btn-xs" :disabled="busy === c.id" @click="test(c)">测试</button>
-                <button class="act" title="启用/停用" @click="toggle(c)">{{ c.enabled ? '⏸' : '▶' }}</button>
-                <button class="act" title="编辑" @click="openEdit(c)">✎</button>
-                <button class="act danger" title="删除" @click="remove(c)">🗑</button>
+                <button type="button" class="btn btn-xs" :disabled="busy === c.id" @click="test(c)">测试</button>
+                <button type="button" class="act" title="启用/停用" @click="toggle(c)">{{ c.enabled ? '⏸' : '▶' }}</button>
+                <button type="button" class="act" title="编辑" @click="openEdit(c)">✎</button>
+                <button type="button" class="act danger" title="删除" @click="remove(c)">🗑</button>
               </div>
             </td>
           </tr>
@@ -226,7 +226,7 @@ onMounted(load)
         <span>投递记录</span>
         <span class="grow" />
         <label class="chk"><input type="checkbox" v-model="onlyFailed" @change="load" /> 只看失败</label>
-        <button class="btn btn-sm" @click="load">刷新</button>
+        <button type="button" class="btn btn-sm" @click="load">刷新</button>
       </div>
 
       <table class="grid">
@@ -307,8 +307,8 @@ onMounted(load)
         <label class="fld"><span>备注</span><input class="input" v-model="form.note" /></label>
 
         <div class="modal-actions">
-          <button class="btn" @click="creating = false; editing = null">取消</button>
-          <button class="btn primary" @click="editing ? submitEdit() : submitCreate()">保存</button>
+          <button type="button" class="btn" @click="creating = false; editing = null">取消</button>
+          <button type="button" class="btn primary" @click="editing ? submitEdit() : submitCreate()">保存</button>
         </div>
       </div>
     </div>

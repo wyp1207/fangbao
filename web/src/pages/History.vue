@@ -3,7 +3,6 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api, type TaskItem } from '@/api'
 import { useRobotStore } from '@/stores/robot'
-import DarkSelect from '@/components/DarkSelect.vue'
 import { toast } from '@/composables/useToast'
 
 const robot = useRobotStore()
@@ -138,7 +137,7 @@ onMounted(async () => {
       </div>
 
       <div class="tabs-row">
-        <button
+        <button type="button"
           v-for="t in tabs" :key="t.key"
           class="tab-btn" :class="{ on: tab === t.key }"
           @click="router.push({ name: t.key === 'tasks' ? 'history-tasks' : 'history-alarms' })"
@@ -154,10 +153,10 @@ onMounted(async () => {
           <label>止</label>
           <input class="input date" type="date" v-model="to" />
         </template>
-        <button class="btn btn-sm warn" @click="reset">重置</button>
+        <button type="button" class="btn btn-sm warn" @click="reset">重置</button>
         <span class="grow" />
-        <button class="btn btn-sm" :disabled="loading" @click="loadTasks">刷新</button>
-        <button class="btn btn-sm primary" @click="exportCurrent">导出 CSV</button>
+        <button type="button" class="btn btn-sm" :disabled="loading" @click="loadTasks">刷新</button>
+        <button type="button" class="btn btn-sm primary" @click="exportCurrent">导出 CSV</button>
       </div>
 
       <table v-if="tab === 'tasks'" class="grid">

@@ -70,7 +70,7 @@ onMounted(load)
         <select v-model.number="pick" :disabled="!auth.canWrite">
           <option v-for="r in robots" :key="r.id" :value="r.id">{{ r.name }}</option>
         </select>
-        <button class="btn primary" :disabled="busy || !auth.canWrite" @click="issue">
+        <button type="button" class="btn primary" :disabled="busy || !auth.canWrite" @click="issue">
           签发 / 轮换
         </button>
       </div>
@@ -81,8 +81,8 @@ onMounted(load)
       <code class="key">{{ issued.secret }}</code>
       <div class="row">
         <span class="muted small">key_id：{{ issued.key_id }} · 设备 ID：{{ issued.robot_id }}</span>
-        <button class="btn btn-sm" @click="copySecret">复制</button>
-        <button class="btn btn-sm" @click="issued = null">我已保存</button>
+        <button type="button" class="btn btn-sm" @click="copySecret">复制</button>
+        <button type="button" class="btn btn-sm" @click="issued = null">我已保存</button>
       </div>
       <p class="muted small">
         签名规则：<code>hmac_sha256(secret, key_id + "\n" + timestamp + "\n" + nonce + "\n" + sha256(body))</code>
@@ -105,7 +105,7 @@ onMounted(load)
           <td>{{ k.created_at ?? '—' }}</td>
           <td>{{ k.last_used_at ?? '从未使用' }}</td>
           <td>
-            <button v-if="k.enabled" class="btn btn-xs danger" :disabled="!auth.canWrite"
+            <button type="button" v-if="k.enabled" class="btn btn-xs danger" :disabled="!auth.canWrite"
                     @click="revoke(k.id, k.key_id)">吊销</button>
           </td>
         </tr>

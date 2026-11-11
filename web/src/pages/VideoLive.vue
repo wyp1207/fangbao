@@ -115,10 +115,10 @@ onBeforeUnmount(() => {
         <label>视频源</label>
         <DarkSelect v-if="options.length" v-model="currentId" :options="options" width="220px" />
         <span v-else class="muted small">{{ loading ? '读取中…' : '这台设备还没有可用视频流' }}</span>
-        <button class="btn btn-sm" :disabled="!current" @click="test">测试连通</button>
-        <button class="btn btn-sm" @click="load">刷新列表</button>
+        <button type="button" class="btn btn-sm" :disabled="!current" @click="test">测试连通</button>
+        <button type="button" class="btn btn-sm" @click="load">刷新列表</button>
         <span class="grow" />
-        <button class="btn btn-sm" :disabled="!current" title="去设备管理改这一路" @click="editSource">⚙ 摄像头配置</button>
+        <button type="button" class="btn btn-sm" :disabled="!current" title="去设备管理改这一路" @click="editSource">⚙ 摄像头配置</button>
         <router-link class="btn btn-sm" :to="{ name: 'cameras' }">去管理视频源</router-link>
       </div>
 

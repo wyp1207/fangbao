@@ -152,7 +152,7 @@ onMounted(load)
         <span>人工巡检</span>
         <span class="muted small">计划派发 → 扫码打点 → 现场记录 → 缺陷上报；扫码编号对不上会记录在案</span>
         <span class="grow" />
-        <button class="btn btn-sm primary" :disabled="!auth.canWrite" @click="openPlanCreate">新建计划</button>
+        <button type="button" class="btn btn-sm primary" :disabled="!auth.canWrite" @click="openPlanCreate">新建计划</button>
         <span class="grow" />
         <span class="tag" :class="pendingCount ? 'warn' : 'ok'">{{ pendingCount }} 个待执行</span>
       </div>
@@ -180,11 +180,11 @@ onMounted(load)
             </td>
             <td><span class="tag" :class="p.enabled ? 'ok' : 'warn'">{{ p.enabled ? '启用' : '停用' }}</span></td>
             <td>
-              <button class="btn btn-xs primary" :disabled="!auth.canWrite || !p.enabled" @click="generate(p)">
+              <button type="button" class="btn btn-xs primary" :disabled="!auth.canWrite || !p.enabled" @click="generate(p)">
                 生成任务
               </button>
-              <button class="btn btn-xs" :disabled="!auth.canWrite" @click="openPlanEdit(p)">编辑</button>
-              <button class="btn btn-xs danger" :disabled="!auth.canWrite" @click="removePlan(p)">删除</button>
+              <button type="button" class="btn btn-xs" :disabled="!auth.canWrite" @click="openPlanEdit(p)">编辑</button>
+              <button type="button" class="btn btn-xs danger" :disabled="!auth.canWrite" @click="removePlan(p)">删除</button>
             </td>
           </tr>
           <tr v-if="!plans.length">
@@ -199,7 +199,7 @@ onMounted(load)
         <span>执行任务</span>
         <span class="grow" />
         <DarkSelect v-model="status" :options="statusOptions" width="110px" @update:model-value="load" />
-        <button class="btn btn-sm ok" :disabled="loading" @click="load">刷新</button>
+        <button type="button" class="btn btn-sm ok" :disabled="loading" @click="load">刷新</button>
       </div>
 
       <table class="grid">
@@ -225,9 +225,9 @@ onMounted(load)
             <td class="num dim">{{ (t.due_at ?? '—').replace('T', ' ') }}</td>
             <td>
               <div class="row-actions">
-                <button class="btn btn-xs" @click="openDetail(t)">详情</button>
-                <button class="btn btn-xs" @click="router.push(`/m/task/${t.id}`)">手机打卡</button>
-                <button v-if="t.status !== 'done'" class="btn btn-xs primary"
+                <button type="button" class="btn btn-xs" @click="openDetail(t)">详情</button>
+                <button type="button" class="btn btn-xs" @click="router.push(`/m/task/${t.id}`)">手机打卡</button>
+                <button type="button" v-if="t.status !== 'done'" class="btn btn-xs primary"
                         :disabled="!auth.canWrite" @click="finish(t)">完成</button>
               </div>
             </td>
@@ -263,8 +263,8 @@ onMounted(load)
         <label class="fld"><span>备注</span><input class="input" v-model="planForm.note" /></label>
         <p class="dim small">改点位会覆盖原配置；已生成的任务不受影响。</p>
         <div class="acts">
-          <button class="btn btn-sm" @click="planEdit = null">取消</button>
-          <button class="btn btn-sm primary" @click="savePlan">保存</button>
+          <button type="button" class="btn btn-sm" @click="planEdit = null">取消</button>
+          <button type="button" class="btn btn-sm primary" @click="savePlan">保存</button>
         </div>
       </div>
     </div>
@@ -285,7 +285,7 @@ onMounted(load)
             </tr>
           </tbody>
         </table>
-        <div class="modal-actions"><button class="btn" @click="detail = null">关闭</button></div>
+        <div class="modal-actions"><button type="button" class="btn" @click="detail = null">关闭</button></div>
       </div>
     </div>
   </div>
@@ -306,8 +306,8 @@ onMounted(load)
         <label class="fld"><span>备注</span><input class="input" v-model="planForm.note" /></label>
         <p class="dim small">改点位会覆盖原配置；已生成的任务不受影响。</p>
         <div class="acts">
-          <button class="btn btn-sm" @click="planEdit = null">取消</button>
-          <button class="btn btn-sm primary" @click="savePlan">保存</button>
+          <button type="button" class="btn btn-sm" @click="planEdit = null">取消</button>
+          <button type="button" class="btn btn-sm primary" @click="savePlan">保存</button>
         </div>
       </div>
     </div>

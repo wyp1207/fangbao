@@ -137,12 +137,12 @@ onMounted(async () => {
       <div class="toolbar">
         <label>状态</label>
         <DarkSelect v-model="status" :options="statusOptions" width="120px" @update:model-value="load" />
-        <button class="btn btn-sm ok" :disabled="loading" @click="load">刷新</button>
+        <button type="button" class="btn btn-sm ok" :disabled="loading" @click="load">刷新</button>
       </div>
 
       <div v-if="error" class="errbar">
         <span>加载失败：{{ error }}</span>
-        <button class="btn btn-sm" :disabled="loading" @click="load">重试</button>
+        <button type="button" class="btn btn-sm" :disabled="loading" @click="load">重试</button>
       </div>
 
       <table class="grid">
@@ -167,13 +167,13 @@ onMounted(async () => {
             </td>
             <td>
               <span class="tag" :class="LEVEL_TONE[o.level]">{{ LEVEL[o.level] ?? o.level }}</span>
-              <button v-if="o.alarm" class="link" :title="`来源告警 #${o.alarm.id}：${o.alarm.message}`"
+              <button type="button" v-if="o.alarm" class="link" :title="`来源告警 #${o.alarm.id}：${o.alarm.message}`"
                       @click="$router.push({ name: 'alarms', query: { focus: o.alarm.id } })">告警#{{ o.alarm.id }}</button>
             </td>
             <td><span class="tag" :class="o.status === 'closed' ? 'ok' : o.status === 'review' ? '' : 'warn'">{{ o.status_label }}</span></td>
             <td class="dim">
               {{ o.assignee_id ? '#' + o.assignee_id : '未派' }}
-              <button v-if="o.mobile_url" class="link" title="复制手机处理链接"
+              <button type="button" v-if="o.mobile_url" class="link" title="复制手机处理链接"
                       @click="copyLink(o)">📱</button>
             </td>
             <td class="num dim">{{ (o.due_at ?? '—').replace('T', ' ') }}</td>
@@ -184,13 +184,13 @@ onMounted(async () => {
                   :model-value="''" :options="userOptions" width="96px" placeholder="派给"
                   @update:model-value="assign(o, $event)"
                 />
-                <button v-if="o.status === 'assigned'" class="btn btn-xs primary" :disabled="!auth.canWrite"
+                <button type="button" v-if="o.status === 'assigned'" class="btn btn-xs primary" :disabled="!auth.canWrite"
                         @click="move(o, 'processing')">开始处置</button>
-                <button v-if="o.status === 'processing'" class="btn btn-xs primary" :disabled="!auth.canWrite"
+                <button type="button" v-if="o.status === 'processing'" class="btn btn-xs primary" :disabled="!auth.canWrite"
                         @click="acting = o; resolution = o.resolution ?? ''">提交复核</button>
-                <button v-if="o.status === 'review'" class="btn btn-xs warn" :disabled="!auth.canWrite"
+                <button type="button" v-if="o.status === 'review'" class="btn btn-xs warn" :disabled="!auth.canWrite"
                         @click="acting = o; resolution = o.resolution ?? ''">复核销号</button>
-                <button v-if="o.status !== 'closed' && !o.escalated_at" class="act" title="超时升级"
+                <button type="button" v-if="o.status !== 'closed' && !o.escalated_at" class="act" title="超时升级"
                         :disabled="!auth.canWrite" @click="escalate(o)">↑</button>
               </div>
             </td>
@@ -214,9 +214,9 @@ onMounted(async () => {
                     placeholder="做了什么处理、换了什么件、还需要什么跟进" />
         </label>
         <div class="modal-actions">
-          <button class="btn" @click="acting = null">取消</button>
-          <button v-if="acting.status === 'processing'" class="btn primary" @click="move(acting, 'review')">提交复核</button>
-          <button v-else class="btn warn" @click="move(acting, 'closed')">确认销号</button>
+          <button type="button" class="btn" @click="acting = null">取消</button>
+          <button type="button" v-if="acting.status === 'processing'" class="btn primary" @click="move(acting, 'review')">提交复核</button>
+          <button type="button" v-else class="btn warn" @click="move(acting, 'closed')">确认销号</button>
         </div>
       </div>
     </div>

@@ -115,8 +115,8 @@ onMounted(async () => {
       </label>
 
       <div class="acts">
-        <button v-if="order.status === 'assigned'" class="big" :disabled="busy || !canAct" @click="accept">接单</button>
-        <button class="big ok" :disabled="busy || !canAct || order.status === 'closed'" @click="finish">
+        <button type="button" v-if="order.status === 'assigned'" class="big" :disabled="busy || !canAct" @click="accept">接单</button>
+        <button type="button" class="big ok" :disabled="busy || !canAct || order.status === 'closed'" @click="finish">
           {{ order.status === 'closed' ? '已完成' : '核实完成' }}
         </button>
       </div>

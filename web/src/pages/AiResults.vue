@@ -57,7 +57,7 @@ function pct(c: number): string {
           v-model="algo" width="150px" :options="[{ value: '', label: '全部算法' }, ...algorithms.map((a) => ({ value: a.code, label: a.name }))]"
           @update:model-value="load"
         />
-        <button class="btn btn-sm ok" :disabled="loading" @click="load">刷新</button>
+        <button type="button" class="btn btn-sm ok" :disabled="loading" @click="load">刷新</button>
       </div>
 
       <table class="grid">

@@ -66,8 +66,8 @@ onMounted(async () => {
 <template>
   <div class="sheet">
     <div class="toolbar no-print">
-      <button class="btn" @click="print">打印 / 另存为 PDF</button>
-      <button class="btn" @click="close()">关闭</button>
+      <button type="button" class="btn" @click="print">打印 / 另存为 PDF</button>
+      <button type="button" class="btn" @click="close()">关闭</button>
       <span class="hint">在打印对话框里选「另存为 PDF」即可得到 PDF 文件</span>
     </div>
 

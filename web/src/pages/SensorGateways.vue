@@ -124,7 +124,7 @@ onMounted(async () => {
           Modbus TCP / MQTT → 平台读数；和手工录入走同一条入库与判阈值路径
         </span>
         <span class="grow" />
-        <button class="btn btn-sm primary" :disabled="!auth.canWrite" @click="creating = true">新增网关</button>
+        <button type="button" class="btn btn-sm primary" :disabled="!auth.canWrite" @click="creating = true">新增网关</button>
       </div>
 
       <table class="grid">
@@ -153,8 +153,8 @@ onMounted(async () => {
             <td><span class="tag" :class="stateOf(g.id) === '正常' || stateOf(g.id) === '订阅中' ? 'ok' : 'warn'">{{ stateOf(g.id) }}</span></td>
             <td>
               <div class="row-actions">
-                <button class="btn btn-xs" :disabled="!auth.canWrite" @click="test(g)">测试</button>
-                <button class="act danger" :disabled="!auth.canWrite" @click="remove(g)">🗑</button>
+                <button type="button" class="btn btn-xs" :disabled="!auth.canWrite" @click="test(g)">测试</button>
+                <button type="button" class="act danger" :disabled="!auth.canWrite" @click="remove(g)">🗑</button>
               </div>
             </td>
           </tr>
@@ -208,8 +208,8 @@ onMounted(async () => {
           <input class="input" type="number" v-model.number="form.interval_s" /></label>
 
         <div class="modal-actions">
-          <button class="btn" @click="creating = false">取消</button>
-          <button class="btn primary" @click="create">创建</button>
+          <button type="button" class="btn" @click="creating = false">取消</button>
+          <button type="button" class="btn primary" @click="create">创建</button>
         </div>
       </div>
     </div>

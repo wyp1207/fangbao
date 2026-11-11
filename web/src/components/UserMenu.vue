@@ -201,8 +201,8 @@ onBeforeUnmount(() => {
         <label class="fld"><span>原密码</span><input class="input" type="password" v-model="oldPwd" /></label>
         <label class="fld"><span>新密码（至少 8 位，含字母和数字）</span><input class="input" type="password" v-model="newPwd" /></label>
         <div class="actions">
-          <button class="btn btn-sm" @click="pwdOpen = false">取消</button>
-          <button class="btn btn-sm primary" :disabled="pwdBusy" @click="submitPwd">确认修改</button>
+          <button type="button" class="btn btn-sm" @click="pwdOpen = false">取消</button>
+          <button type="button" class="btn btn-sm primary" :disabled="pwdBusy" @click="submitPwd">确认修改</button>
         </div>
       </div>
     </div>
@@ -212,7 +212,7 @@ onBeforeUnmount(() => {
         <div class="panel-title"><span>双因子认证 · {{ username }}</span></div>
         <template v-if="totpEnabled">
           <p class="um-ok">已开启：登录时需要输入 Authenticator 的 6 位动态码。</p>
-          <button class="btn btn-sm danger" @click="disableTotp">关闭双因子</button>
+          <button type="button" class="btn btn-sm danger" @click="disableTotp">关闭双因子</button>
         </template>
         <template v-else>
           <p class="um-hint">用 Google Authenticator / 微软 Authenticator 添加这个密钥：</p>
@@ -223,8 +223,8 @@ onBeforeUnmount(() => {
           </label>
           <p v-if="totpErr" class="um-err">{{ totpErr }}</p>
           <div class="um-actions">
-            <button class="btn btn-sm" @click="totpOpen = false">取消</button>
-            <button class="btn btn-sm primary" :disabled="totpBusy || totpCode.length !== 6" @click="enableTotp">开启</button>
+            <button type="button" class="btn btn-sm" @click="totpOpen = false">取消</button>
+            <button type="button" class="btn btn-sm primary" :disabled="totpBusy || totpCode.length !== 6" @click="enableTotp">开启</button>
           </div>
         </template>
       </div>

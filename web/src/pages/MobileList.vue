@@ -58,12 +58,12 @@ onMounted(load)
   <div class="ml">
     <header>
       <h3>{{ title }}</h3>
-      <button class="btn btn-sm" :disabled="loading" @click="load">刷新</button>
+      <button type="button" class="btn btn-sm" :disabled="loading" @click="load">刷新</button>
     </header>
 
     <div class="tabs">
-      <button :class="{ on: tab === 'task' }" @click="tab = 'task'; load()">巡检任务</button>
-      <button :class="{ on: tab === 'wo' }" @click="tab = 'wo'; load()">工单</button>
+      <button type="button" :class="{ on: tab === 'task' }" @click="tab = 'task'; load()">巡检任务</button>
+      <button type="button" :class="{ on: tab === 'wo' }" @click="tab = 'wo'; load()">工单</button>
     </div>
 
     <p v-if="error" class="err">{{ error }}</p>

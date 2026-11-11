@@ -73,9 +73,9 @@ onMounted(reload)
       <div class="toolbar">
         <label>动作</label>
         <DarkSelect v-model="action" :options="actionOptions" width="170px" />
-        <button class="btn btn-sm ok" :disabled="loading" @click="page = 1; reload()">查询</button>
-        <button class="btn btn-sm warn" @click="action = ''; page = 1; reload()">重置</button>
-        <button class="btn btn-sm" :disabled="verifying" @click="verifyChain">
+        <button type="button" class="btn btn-sm ok" :disabled="loading" @click="page = 1; reload()">查询</button>
+        <button type="button" class="btn btn-sm warn" @click="action = ''; page = 1; reload()">重置</button>
+        <button type="button" class="btn btn-sm" :disabled="verifying" @click="verifyChain">
           {{ verifying ? '校验中…' : '校验审计链' }}
         </button>
         <span class="grow" />
@@ -125,9 +125,9 @@ onMounted(reload)
       <div class="pager">
         <span>第 {{ page }}/{{ pageCount }} 页</span>
         <span class="spacer" />
-        <button :disabled="page <= 1" @click="goto(page - 1)">上一页</button>
-        <button class="on">{{ page }}</button>
-        <button :disabled="page >= pageCount" @click="goto(page + 1)">下一页</button>
+        <button type="button" :disabled="page <= 1" @click="goto(page - 1)">上一页</button>
+        <button type="button" class="on">{{ page }}</button>
+        <button type="button" :disabled="page >= pageCount" @click="goto(page + 1)">下一页</button>
       </div>
     </section>
   </div>

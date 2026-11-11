@@ -153,7 +153,7 @@ onMounted(() => applyPreset('7d'))
         <input class="input date" type="date" v-model="dateFrom" :disabled="preset !== 'custom'" />
         <span class="dim">至</span>
         <input class="input date" type="date" v-model="dateTo" :disabled="preset !== 'custom'" />
-        <button class="btn btn-sm ok" :disabled="loading" @click="load">统计</button>
+        <button type="button" class="btn btn-sm ok" :disabled="loading" @click="load">统计</button>
         <span class="grow" />
         <span class="muted small" v-if="data">{{ data.range.from }} ~ {{ data.range.to }}</span>
       </div>

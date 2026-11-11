@@ -167,7 +167,7 @@ onMounted(async () => {
         <span class="dim small">现场换云台、加传感器后在这里登记；首页面板按外设自动出现/消失</span>
         <div class="spacer" />
         <DarkSelect v-model="deviceId" :options="deviceOptions" width="240px" @update:model-value="load" />
-        <button class="btn" :disabled="loading" @click="load">刷新</button>
+        <button type="button" class="btn" :disabled="loading" @click="load">刷新</button>
       </div>
 
       <p v-if="caps.length" class="caps">
@@ -203,11 +203,11 @@ onMounted(async () => {
               <span class="tag" :class="p.enabled ? 'ok' : 'warn'">{{ p.enabled ? '是' : '否' }}</span>
             </td>
             <td>
-              <button class="btn btn-xs" :disabled="!auth.canWrite || !p.sensor_id" @click="openRule(p)">规则</button>
-              <button class="btn btn-xs" :disabled="!auth.canWrite" @click="toggle(p)">
+              <button type="button" class="btn btn-xs" :disabled="!auth.canWrite || !p.sensor_id" @click="openRule(p)">规则</button>
+              <button type="button" class="btn btn-xs" :disabled="!auth.canWrite" @click="toggle(p)">
                 {{ p.enabled ? '停用' : '启用' }}
               </button>
-              <button class="btn btn-xs danger" :disabled="!auth.canWrite" @click="remove(p)">删除</button>
+              <button type="button" class="btn btn-xs danger" :disabled="!auth.canWrite" @click="remove(p)">删除</button>
             </td>
           </tr>
           <tr v-if="!rows.length"><td colspan="7" class="dim">这台设备还没有登记外设</td></tr>
@@ -224,7 +224,7 @@ onMounted(async () => {
         <label>通道<input v-model="form.channel" class="input" placeholder="CH201 / /dev/ttyUSB0 / camera_02" /></label>
         <label>关联传感器<DarkSelect v-model="form.sensor_id" :options="sensorOptions" width="200px" /></label>
         <label>关联视频<DarkSelect v-model="form.video_id" :options="videoOptions" width="200px" /></label>
-        <button class="btn primary" :disabled="adding || !auth.canWrite" @click="add">添加</button>
+        <button type="button" class="btn primary" :disabled="adding || !auth.canWrite" @click="add">添加</button>
       </div>
       <p class="dim small">
         例：热像仪选「热像仪」+ 通道 CH201 → 首页出现热红外面板；
@@ -244,8 +244,8 @@ onMounted(async () => {
         </div>
         <p class="dim small">留空表示用传感器默认阈值；关闭后这条外设不再产生告警（仍记录读数）。</p>
         <div class="acts">
-          <button class="btn" @click="ruleFor = null">取消</button>
-          <button class="btn primary" @click="saveRule">保存</button>
+          <button type="button" class="btn" @click="ruleFor = null">取消</button>
+          <button type="button" class="btn primary" @click="saveRule">保存</button>
         </div>
       </div>
     </div>

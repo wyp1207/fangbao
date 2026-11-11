@@ -156,7 +156,7 @@ onMounted(async () => {
         <span>任务模板</span>
         <span class="muted small">先把"走哪几个点、每个点做什么"配好；真机到场一键下发</span>
         <span class="grow" />
-        <button class="btn btn-sm primary" :disabled="!auth.canWrite || !maps.length" @click="openCreate">新建模板</button>
+        <button type="button" class="btn btn-sm primary" :disabled="!auth.canWrite || !maps.length" @click="openCreate">新建模板</button>
       </div>
 
       <table class="grid">
@@ -179,10 +179,10 @@ onMounted(async () => {
             <td><span class="tag" :class="t.loop ? 'ok' : ''">{{ t.loop ? '循环' : '单次' }}</span></td>
             <td>
               <div class="row-actions">
-                <button class="btn btn-xs" disabled :title="dispatchTip(t)">下发</button>
-                <button class="btn btn-xs" title="复制一份，改两个点就是新路线" @click="duplicate(t)">复制</button>
-                <button class="act" title="编辑" :disabled="!auth.canWrite" @click="openEdit(t)">✎</button>
-                <button class="act danger" title="删除" :disabled="!auth.canWrite" @click="remove(t)">🗑</button>
+                <button type="button" class="btn btn-xs" disabled :title="dispatchTip(t)">下发</button>
+                <button type="button" class="btn btn-xs" title="复制一份，改两个点就是新路线" @click="duplicate(t)">复制</button>
+                <button type="button" class="act" title="编辑" :disabled="!auth.canWrite" @click="openEdit(t)">✎</button>
+                <button type="button" class="act danger" title="删除" :disabled="!auth.canWrite" @click="remove(t)">🗑</button>
               </div>
             </td>
           </tr>
@@ -240,8 +240,8 @@ onMounted(async () => {
         </p>
 
         <div class="modal-actions">
-          <button class="btn" @click="creating = false; editing = null">取消</button>
-          <button class="btn primary" @click="submit">保存</button>
+          <button type="button" class="btn" @click="creating = false; editing = null">取消</button>
+          <button type="button" class="btn primary" @click="submit">保存</button>
         </div>
       </div>
     </div>

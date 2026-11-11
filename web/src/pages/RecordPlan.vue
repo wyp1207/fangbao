@@ -165,9 +165,9 @@ onBeforeUnmount(() => window.clearInterval(timer))
             </td>
             <td>
               <div class="row-actions">
-                <button class="btn btn-sm" :disabled="paused || running[v.id]" :title="paused ? '保留策略待定，暂不落盘' : ''" @click="start(v)">开始录制</button>
-                <button class="btn btn-sm" :disabled="!running[v.id]" @click="stop(v)">停止</button>
-                <button class="link-btn" @click="$router.push({ name: 'record-playback' })">去回放</button>
+                <button type="button" class="btn btn-sm" :disabled="paused || running[v.id]" :title="paused ? '保留策略待定，暂不落盘' : ''" @click="start(v)">开始录制</button>
+                <button type="button" class="btn btn-sm" :disabled="!running[v.id]" @click="stop(v)">停止</button>
+                <button type="button" class="link-btn" @click="$router.push({ name: 'record-playback' })">去回放</button>
               </div>
             </td>
           </tr>
@@ -188,7 +188,7 @@ onBeforeUnmount(() => window.clearInterval(timer))
         <span>定时录制计划</span>
         <span class="muted">到点自动开录、过点自动停；只停由计划启动的录制，不碰手动开的</span>
         <span class="grow" />
-        <button class="btn btn-sm primary" :disabled="!videos.length" @click="openPlan">新增计划</button>
+        <button type="button" class="btn btn-sm primary" :disabled="!videos.length" @click="openPlan">新增计划</button>
       </div>
 
       <table class="grid">
@@ -215,8 +215,8 @@ onBeforeUnmount(() => window.clearInterval(timer))
             <td><span class="tag" :class="pl.enabled ? 'ok' : 'warn'">{{ pl.enabled ? '开' : '关' }}</span></td>
             <td>
               <div class="row-actions">
-                <button class="act" title="启用/停用" @click="togglePlan(pl)">{{ pl.enabled ? '⏸' : '▶' }}</button>
-                <button class="act danger" title="删除" @click="removePlan(pl)">🗑</button>
+                <button type="button" class="act" title="启用/停用" @click="togglePlan(pl)">{{ pl.enabled ? '⏸' : '▶' }}</button>
+                <button type="button" class="act danger" title="删除" @click="removePlan(pl)">🗑</button>
               </div>
             </td>
           </tr>
@@ -239,7 +239,7 @@ onBeforeUnmount(() => window.clearInterval(timer))
         <div class="fld">
           <span>星期</span>
           <div class="days">
-            <button v-for="(d, i) in DAY_LABELS" :key="i" class="day" :class="{ on: planForm.days[i] === '1' }" @click="toggleDay(i)">{{ d }}</button>
+            <button type="button" v-for="(d, i) in DAY_LABELS" :key="i" class="day" :class="{ on: planForm.days[i] === '1' }" @click="toggleDay(i)">{{ d }}</button>
           </div>
         </div>
         <div class="two">
@@ -248,8 +248,8 @@ onBeforeUnmount(() => window.clearInterval(timer))
         </div>
         <label class="fld"><span>备注</span><input class="input" v-model="planForm.note" /></label>
         <div class="modal-actions">
-          <button class="btn" @click="planOpen = false">取消</button>
-          <button class="btn primary" :disabled="!planForm.name.trim()" @click="submitPlan">保存</button>
+          <button type="button" class="btn" @click="planOpen = false">取消</button>
+          <button type="button" class="btn primary" :disabled="!planForm.name.trim()" @click="submitPlan">保存</button>
         </div>
       </div>
     </div>

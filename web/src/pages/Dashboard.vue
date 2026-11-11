@@ -4,7 +4,6 @@ import { useRouter } from 'vue-router'
 import Twin from '@/pages/Twin.vue'
 import MapCanvas from '@/components/MapCanvas.vue'
 import ScadaPanel from '@/components/ScadaPanel.vue'
-import VideoBox from '@/components/VideoBox.vue'
 import AnimatedNumber from '@/components/AnimatedNumber.vue'
 import DarkSelect from '@/components/DarkSelect.vue'
 import TopNav from '@/components/TopNav.vue'
@@ -192,8 +191,6 @@ const visibleVideo = computed(() => {
 })
 const thermalVideo = computed(() =>
   dashVideos.value.find((x) => /热|红外|thermal/i.test(x.name + x.group_name)) ?? null)
-const visibleStream = computed(() => visibleVideo.value?.go2rtc_url ?? '')
-const thermalStream = computed(() => thermalVideo.value?.go2rtc_url ?? '')
 
 // 消息中心未读数（和消息页用同一个 localStorage 时间戳）
 const msgUnread = ref(0)
@@ -283,9 +280,6 @@ function goVideo(v: { id: number } | null) {
   void router.push({ name: 'video', query: v ? { source: String(v.id) } : {} })
 }
 
-function openVideo(which: string) {
-  toast(`${which}通道未接入：真机联调后按 RTSP / WebRTC 接入`, 'warn', 3000)
-}
 const busyMotion = ref(false)
 // ---- 车体基础运动（按住走，松手停；每 100ms 一帧）----
 const motionState = computed(() => String((robot.snapshot?.status as { motion_state?: string } | undefined)?.motion_state ?? ''))
@@ -387,7 +381,6 @@ const videoHealth = ref<Record<number, { ok: boolean; reason: string }>>({})
 // 切车代次：旧设备的视频/探活响应晚到时直接丢弃，别把上一台车的画面探到新车头上
 let videoSeq = 0
 // 图片轮询：2.5 帧/秒够看现场，全幅 contain 不裁切，也不会把 go2rtc 的报错糊上来
-const tick = ref(0)
 
 // 用 MJPEG 长连接（一条连接连续出帧）；ticket 只在重连时变，不随帧刷新
 const liveTicket = ref<Record<number, number>>({})
@@ -426,7 +419,6 @@ function onLiveLoad(v: { id: number } | null) {
 const pickOpen = ref(false)
 const pickFor = ref<{ id: number; name: string; stream_name: string } | null>(null)
 const pickStreams = ref<{ name: string; source: string; web: boolean; ready: boolean; registered?: boolean }[]>([])
-const pickAll = ref(false)
 const pickQ = ref('')
 
 // 默认只列"已登记的摄像头 + 当前这路"，避免 35 路实验室流糊一脸
@@ -614,8 +606,6 @@ const sparkPoints = computed(() => {
     return `${x.toFixed(1)},${y.toFixed(1)}`
   }).join(' ')
 })
-const currentDevice = computed(() =>
-  devices.value.find((d) => String(d.id) === deviceId.value) ?? null)
 type FeedRow = { id: number; ts: string; text: string; level: string; badge: string; link: string }
 const msgTab = ref<'patrol' | 'alarm' | 'control'>('alarm')
 const tabTitle = computed(() => ({ patrol: '巡检消息', alarm: '告警内容', control: '控制指令' }[msgTab.value]))
@@ -747,7 +737,6 @@ async function loadCaps() {
 const canStand = computed(() => (caps.value.actions ?? []).some((a) => a.startsWith("posture")))
 // 首页渲染哪些面板由外设能力决定（注册表驱动，不再写死）
 const panels = computed(() => panelsFor(caps.value.capabilities ?? []))
-const hasPanel = (k: string) => panels.value.some((p) => p.key === k)
 // 没有云台能力就别停在云台 tab 上
 watch(panels, (list) => {
   if (!list.some((p) => p.key === 'ptz') && controlTab.value === 'ptz') controlTab.value = 'chassis'
@@ -773,9 +762,6 @@ async function doMotion(action: 'stand' | 'lie') {
   }
 }
 
-function tryControl() {
-  toast('写操作未开放：需真机联调通过 + 现场授权签字（采集表 01 表 15–17 行）', 'warn', 3200)
-}
 
 
 // 定位状态横幅：定位丢了 / 未知，都别让人误以为车知道自己在哪
@@ -797,7 +783,6 @@ const poseYawDeg = computed(() => {
   const p = robot.pose as { theta_rad?: number } | null
   return p ? (Number(p.theta_rad ?? 0) * 57.3).toFixed(1) : '—'
 })
-const galileo = computed(() => robot.snapshot?.galileo ?? {})
 const imageUrl = computed(() => (robot.currentMap
   ? api.mapPng(Number(deviceId.value) || 1, robot.currentMap)
   : ''))
@@ -835,8 +820,6 @@ const donut = computed(() => {
   }
 })
 
-type EnvSummary = Record<string, { name: string; unit: string; value: number | null; ts: string | null; calibrated: boolean }>
-const env = ref<EnvSummary>({})
 
 // 环境面板只显示"这台设备上真有"的传感器（X30 有 SF6/温湿度，JCROB 可能是噪声）
 const envSensors = ref<{ id: number; name: string; kind: string; unit: string;
@@ -939,9 +922,6 @@ async function loadEnv() {
   }
 }
 
-function num(v: unknown, digits = 2): string {
-  return typeof v === 'number' ? v.toFixed(digits) : '—'
-}
 
 async function loadSpark() {
   const first = envSensors.value[0]
@@ -1054,10 +1034,6 @@ onBeforeUnmount(() => {
   timers = []
 })
 
-async function logout() {
-  await auth.logout()
-  router.push({ name: 'login' })
-}
 </script>
 
 <template>
@@ -1124,7 +1100,7 @@ async function logout() {
         <div class="stat"><label>在线状态</label><b :class="robot.online ? 'green' : 'red'">{{ robot.online ? '在线' : '离线' }}</b></div>
         <div class="stat">
           <label>定位状态</label>
-          <button class="loc-chip" :class="locBanner?.tone || 'ok'" @click="openInitLoc">
+          <button type="button" class="loc-chip" :class="locBanner?.tone || 'ok'" @click="openInitLoc">
             <i class="dot" />{{ locBanner ? (locBanner.tone === 'danger' ? '定位丢失' : '状态未知') : '定位正常' }}
           </button>
         </div>
@@ -1148,12 +1124,12 @@ async function logout() {
               <span v-if="visibleVideo">原因：{{ healthOf(visibleVideo).reason }}</span>
               <span v-else>真机联调后，在「设备管理 → 摄像头」勾选「首页显示」即自动呈现</span>
               <div class="embed-acts">
-                <button v-if="visibleVideo" class="btn btn-sm" @click="loadVideoHealth()">重新探测</button>
-                <button class="btn btn-sm" @click="openUrl(visibleVideo)">更换地址</button>
+                <button type="button" v-if="visibleVideo" class="btn btn-sm" @click="loadVideoHealth()">重新探测</button>
+                <button type="button" class="btn btn-sm" @click="openUrl(visibleVideo)">更换地址</button>
               </div>
             </div>
-            <button class="embed-pick" title="从视频流里选一路" @click="openPick(visibleVideo)">换流</button>
-            <button class="embed-expand" title="打开视频监控" @click="goVideo(visibleVideo)">打开全屏页 ↗</button>
+            <button type="button" class="embed-pick" title="从视频流里选一路" @click="openPick(visibleVideo)">换流</button>
+            <button type="button" class="embed-expand" title="打开视频监控" @click="goVideo(visibleVideo)">打开全屏页 ↗</button>
           </div>
         </ScadaPanel>
 
@@ -1169,74 +1145,74 @@ async function logout() {
               <span v-if="thermalVideo">原因：{{ healthOf(thermalVideo).reason }}</span>
               <span v-else>热像仪接上后，勾选「首页显示」即自动呈现</span>
               <div class="embed-acts">
-                <button v-if="thermalVideo" class="btn btn-sm" @click="loadVideoHealth()">重新探测</button>
-                <button class="btn btn-sm" @click="openUrl(thermalVideo)">更换地址</button>
+                <button type="button" v-if="thermalVideo" class="btn btn-sm" @click="loadVideoHealth()">重新探测</button>
+                <button type="button" class="btn btn-sm" @click="openUrl(thermalVideo)">更换地址</button>
               </div>
             </div>
-            <button class="embed-expand" title="打开视频监控" :disabled="!thermalVideo"
+            <button type="button" class="embed-expand" title="打开视频监控" :disabled="!thermalVideo"
                     @click="goVideo(thermalVideo)">打开全屏页 ↗</button>
           </div>
         </ScadaPanel>
 
         <ScadaPanel title="实时控制" class="h-ctrl">
           <div v-if="ptzOn" class="ctrl-tabs">
-            <button :class="{ on: controlTab === 'ptz' }" @click="controlTab = 'ptz'; loadPtzPresets()">云台控制</button>
-            <button :class="{ on: controlTab === 'chassis' }" @click="controlTab = 'chassis'">车体控制</button>
+            <button type="button" :class="{ on: controlTab === 'ptz' }" @click="controlTab = 'ptz'; loadPtzPresets()">云台控制</button>
+            <button type="button" :class="{ on: controlTab === 'chassis' }" @click="controlTab = 'chassis'">车体控制</button>
           </div>
           <div v-if="controlTab === 'ptz' && ptzOn" class="ctrl-body">
             <div class="ptz-pad">
-              <button class="mp up" @pointerdown.prevent="ptzHoldStart('up')"
+              <button type="button" class="mp up" @pointerdown.prevent="ptzHoldStart('up')"
                       @pointerup.prevent="ptzHoldEnd" @pointerleave="ptzHoldEnd">▲</button>
-              <button class="mp left" @pointerdown.prevent="ptzHoldStart('left')"
+              <button type="button" class="mp left" @pointerdown.prevent="ptzHoldStart('left')"
                       @pointerup.prevent="ptzHoldEnd" @pointerleave="ptzHoldEnd">◀</button>
-              <button class="mp stop" @click="ptzCenter">停</button>
-              <button class="mp right" @pointerdown.prevent="ptzHoldStart('right')"
+              <button type="button" class="mp stop" @click="ptzCenter">停</button>
+              <button type="button" class="mp right" @pointerdown.prevent="ptzHoldStart('right')"
                       @pointerup.prevent="ptzHoldEnd" @pointerleave="ptzHoldEnd">▶</button>
-              <button class="mp down" @pointerdown.prevent="ptzHoldStart('down')"
+              <button type="button" class="mp down" @pointerdown.prevent="ptzHoldStart('down')"
                       @pointerup.prevent="ptzHoldEnd" @pointerleave="ptzHoldEnd">▼</button>
-              <button class="mp zi" @click="ptzMove('zoom_in')">＋</button>
-              <button class="mp zo" @click="ptzMove('zoom_out')">－</button>
+              <button type="button" class="mp zi" @click="ptzMove('zoom_in')">＋</button>
+              <button type="button" class="mp zo" @click="ptzMove('zoom_out')">－</button>
             </div>
             <div class="ctrl-meta">
               <div class="preset-head">
                 <b>预置位</b>
-                <button class="btn btn-xs" :disabled="ptzPresetBusy" @click="openPtzPresetForm">
+                <button type="button" class="btn btn-xs" :disabled="ptzPresetBusy" @click="openPtzPresetForm">
                   存当前
                 </button>
               </div>
               <div v-if="ptzPresets.length" class="preset-list">
                 <span v-for="p in ptzPresets" :key="p.preset_id" class="preset-chip">
-                  <button class="pc-go" :title="`转到预置位 ${p.preset_id}`" @click="ptzGoto(p.preset_id)">
+                  <button type="button" class="pc-go" :title="`转到预置位 ${p.preset_id}`" @click="ptzGoto(p.preset_id)">
                     {{ p.preset_id }} · {{ p.name || '未命名' }}
                   </button>
-                  <button class="pc-del" title="删除" @click="ptzDelete(p.preset_id, p.name)">×</button>
+                  <button type="button" class="pc-del" title="删除" @click="ptzDelete(p.preset_id, p.name)">×</button>
                 </span>
               </div>
               <p v-else-if="ptzPresetErr" class="preset-state bad" :title="ptzPresetErr">
-                云台未连接<button class="ps-retry" @click="loadPtzPresets">重试</button>
+                云台未连接<button type="button" class="ps-retry" @click="loadPtzPresets">重试</button>
               </p>
               <p v-else class="preset-state">暂无预置位</p>
             </div>
           </div>
           <div v-show="controlTab === 'chassis' || !ptzOn" class="ctrl-body">
             <div v-if="motionState" class="move-pad">
-              <button class="mp up" :class="{ on: moving === 'fwd' }"
+              <button type="button" class="mp up" :class="{ on: moving === 'fwd' }"
                       @pointerdown.prevent="moveStart('fwd')" @pointerup.prevent="moveEnd"
                       @pointerleave="moveEnd">▲</button>
-              <button class="mp left" :class="{ on: moving === 'left' }"
+              <button type="button" class="mp left" :class="{ on: moving === 'left' }"
                       @pointerdown.prevent="moveStart('left')" @pointerup.prevent="moveEnd"
                       @pointerleave="moveEnd">◀</button>
-              <button class="mp stop" @click="moveEnd">停</button>
-              <button class="mp right" :class="{ on: moving === 'right' }"
+              <button type="button" class="mp stop" @click="moveEnd">停</button>
+              <button type="button" class="mp right" :class="{ on: moving === 'right' }"
                       @pointerdown.prevent="moveStart('right')" @pointerup.prevent="moveEnd"
                       @pointerleave="moveEnd">▶</button>
-              <button class="mp down" :class="{ on: moving === 'back' }"
+              <button type="button" class="mp down" :class="{ on: moving === 'back' }"
                       @pointerdown.prevent="moveStart('back')" @pointerup.prevent="moveEnd"
                       @pointerleave="moveEnd">▼</button>
-              <button class="mp yl" :class="{ on: moving === 'yawL' }"
+              <button type="button" class="mp yl" :class="{ on: moving === 'yawL' }"
                       @pointerdown.prevent="moveStart('yawL')" @pointerup.prevent="moveEnd"
                       @pointerleave="moveEnd">↺</button>
-              <button class="mp yr" :class="{ on: moving === 'yawR' }"
+              <button type="button" class="mp yr" :class="{ on: moving === 'yawR' }"
                       @pointerdown.prevent="moveStart('yawR')" @pointerup.prevent="moveEnd"
                       @pointerleave="moveEnd">↻</button>
             </div>
@@ -1249,19 +1225,19 @@ async function logout() {
                 <span v-else>当前无任务 · 已就绪</span>
               </div>
               <div class="cmd-grid">
-                <button class="btn" :disabled="!!activeRun" @click="goTaskCenter">下发任务</button>
-                <button class="btn" :disabled="!activeRun" @click="runAction('pause')">暂停</button>
-                <button class="btn" :disabled="!activeRun" @click="runAction('resume')">继续</button>
-                <button class="btn" :disabled="!activeRun" @click="runAction('cancel')">取消</button>
+                <button type="button" class="btn" :disabled="!!activeRun" @click="goTaskCenter">下发任务</button>
+                <button type="button" class="btn" :disabled="!activeRun" @click="runAction('pause')">暂停</button>
+                <button type="button" class="btn" :disabled="!activeRun" @click="runAction('resume')">继续</button>
+                <button type="button" class="btn" :disabled="!activeRun" @click="runAction('cancel')">取消</button>
               </div>
             </div>
 
             <div class="ctrl-meta">
               <div v-if="canStand" class="pose-actions">
-                <button class="btn" :disabled="busyMotion" @click="doMotion('stand')">起立</button>
-                <button class="btn" :disabled="busyMotion" @click="doMotion('lie')">趴下</button>
-                <button class="btn" @click="moveMode('start')">开始运动</button>
-                <button class="btn" @click="moveMode('stop')">停止运动</button>
+                <button type="button" class="btn" :disabled="busyMotion" @click="doMotion('stand')">起立</button>
+                <button type="button" class="btn" :disabled="busyMotion" @click="doMotion('lie')">趴下</button>
+                <button type="button" class="btn" @click="moveMode('start')">开始运动</button>
+                <button type="button" class="btn" @click="moveMode('stop')">停止运动</button>
               </div>
               <p class="dim small" v-if="motionState">MotionState={{ motionState }}</p>
             </div>
@@ -1283,8 +1259,8 @@ async function logout() {
             />
             <Twin v-if="viewMode === '3d'" :key="`${deviceId}-${robot.currentMap}`" compact />
             <div class="view-toggle">
-              <button :class="{ on: viewMode === '2d' }" @click="viewMode = '2d'">2D</button>
-              <button :class="{ on: viewMode === '3d' }" @click="viewMode = '3d'">3D</button>
+              <button type="button" :class="{ on: viewMode === '2d' }" @click="viewMode = '2d'">2D</button>
+              <button type="button" :class="{ on: viewMode === '3d' }" @click="viewMode = '3d'">3D</button>
             </div>
           </div>
           <p v-if="mapError" class="red small">{{ mapError }}</p>
@@ -1295,13 +1271,13 @@ async function logout() {
           <div class="rt-body">
             <div class="rt-left">
               <div class="rt-tabs">
-                <button :class="{ on: msgTab === 'patrol' }" @click="msgTab = 'patrol'; loadFeed()">
+                <button type="button" :class="{ on: msgTab === 'patrol' }" @click="msgTab = 'patrol'; loadFeed()">
                   巡检消息<i v-if="unread.patrol" class="dot-new" />
                 </button>
-                <button :class="{ on: msgTab === 'alarm' }" @click="msgTab = 'alarm'; loadFeed()">
+                <button type="button" :class="{ on: msgTab === 'alarm' }" @click="msgTab = 'alarm'; loadFeed()">
                   告警消息<i v-if="unread.alarm" class="dot-new" />
                 </button>
-                <button :class="{ on: msgTab === 'control' }" @click="msgTab = 'control'; loadFeed()">
+                <button type="button" :class="{ on: msgTab === 'control' }" @click="msgTab = 'control'; loadFeed()">
                   控制消息<i v-if="unread.control" class="dot-new" />
                 </button>
               </div>
@@ -1452,8 +1428,8 @@ async function logout() {
         <p class="dim small">密码显示为 *** 表示沿用原密码：只改 IP / 路径也会保留原密码。</p>
         <p class="dim small">如果只是想换一路流，用「换流」更省事；这里适合相机换了 IP / 换了设备。</p>
         <div class="pick-acts">
-          <button class="btn btn-sm" @click="urlOpen = false">取消</button>
-          <button class="btn btn-sm primary" @click="saveUrl">保存</button>
+          <button type="button" class="btn btn-sm" @click="urlOpen = false">取消</button>
+          <button type="button" class="btn btn-sm primary" @click="saveUrl">保存</button>
         </div>
       </div>
     </div>
@@ -1476,8 +1452,8 @@ async function logout() {
         </p>
         <p v-else-if="ptzPresetNext == null" class="pf-warn">编号 1–{{ PTZ_PRESET_MAX }} 已用满，请填一个已有编号覆盖。</p>
         <div class="pick-acts">
-          <button class="btn btn-sm" @click="ptzPresetOpen = false">取消</button>
-          <button class="btn btn-sm primary" :disabled="ptzPresetBusy" @click="savePtzPreset">
+          <button type="button" class="btn btn-sm" @click="ptzPresetOpen = false">取消</button>
+          <button type="button" class="btn btn-sm primary" :disabled="ptzPresetBusy" @click="savePtzPreset">
             {{ ptzTargetExisting ? '覆盖保存' : '保存' }}
           </button>
         </div>
@@ -1489,7 +1465,7 @@ async function logout() {
         <h4>给「{{ pickFor?.name }}」换一路视频流</h4>
         <p class="dim small">当前：{{ pickFor?.stream_name || '未设置' }} · 流来自 go2rtc，改相机 IP 只需在 go2rtc 里改</p>
         <div class="pick-list">
-          <button v-for="s in pickFiltered" :key="s.name" class="pick-item"
+          <button type="button" v-for="s in pickFiltered" :key="s.name" class="pick-item"
                   :class="{ on: s.name === pickFor?.stream_name, off: !s.ready }"
                   @click="s.ready && chooseStream(s.name)">
             <b>{{ s.name }}</b>
@@ -1506,12 +1482,12 @@ async function logout() {
           </p>
           <p v-if="pickErr" class="dim small">
             go2rtc 地址：{{ go2rtcBase }}，连不上时换流不可用；可用「改地址」绕过。
-            <button class="btn btn-sm" style="margin-left:6px" @click="openPick(pickFor)">重试</button>
+            <button type="button" class="btn btn-sm" style="margin-left:6px" @click="openPick(pickFor)">重试</button>
           </p>
         </div>
         <div class="pick-acts">
-          <button class="btn btn-sm" @click="pickOpen = false">关闭</button>
-          <button class="btn btn-sm" @click="openUrl(pickFor)">改地址</button>
+          <button type="button" class="btn btn-sm" @click="pickOpen = false">关闭</button>
+          <button type="button" class="btn btn-sm" @click="openUrl(pickFor)">改地址</button>
         </div>
       </div>
     </div>
@@ -1532,7 +1508,7 @@ async function logout() {
     <Teleport to="body">
       <div v-if="locOpen" class="loc-modal" @click.self="locOpen = false">
         <div class="loc-card">
-          <header><b>定位</b><button class="x" @click="locOpen = false">✕</button></header>
+          <header><b>定位</b><button type="button" class="x" @click="locOpen = false">✕</button></header>
           <p class="loc-state" :class="locBanner?.tone || 'ok'">
             {{ locBanner?.text || '定位正常：位姿可信' }}
           </p>
@@ -1547,8 +1523,8 @@ async function logout() {
           </div>
           <p class="loc-tip">断电重启、被搬动、换地图后必须重置；发送后会回读校验位姿是否收敛。</p>
           <footer>
-            <button class="btn btn-sm" @click="locOpen = false">取消</button>
-            <button class="btn btn-sm primary" @click="saveInitLoc">重置定位</button>
+            <button type="button" class="btn btn-sm" @click="locOpen = false">取消</button>
+            <button type="button" class="btn btn-sm primary" @click="saveInitLoc">重置定位</button>
           </footer>
         </div>
       </div>
@@ -1632,9 +1608,6 @@ async function logout() {
   border: 1px solid rgba(160, 230, 255, 0.8);
   box-shadow: 0 0 12px rgba(80, 200, 255, 0.7);
 }
-.logo-text { line-height: 1.15; }
-.logo-text b { display: block; font-size: 15px; color: #fff; letter-spacing: 0.08em; }
-.logo-text i { font-style: normal; font-size: 9.5px; color: #9fd2ff; letter-spacing: 0.18em; }
 
 .tabs { display: flex; gap: 6px; }
 .tab {
@@ -1741,29 +1714,6 @@ async function logout() {
   background: #ff5a5a; color: #fff; font-size: 9.5px; font-style: normal;
 }
 
-.lock-mask {
-  position: fixed; inset: 0; z-index: 2147483100;
-  display: grid; place-items: center;
-  background: rgba(2, 12, 28, 0.72);
-  backdrop-filter: blur(6px);
-}
-.lock-box {
-  width: 320px; padding: 22px 22px 18px;
-  text-align: center;
-  background: linear-gradient(180deg, rgba(0, 112, 200, 0.97), rgba(0, 60, 118, 0.98));
-  border: 1px solid rgba(111, 227, 255, 0.6);
-  box-shadow: 0 0 40px rgba(0, 60, 140, 0.8);
-}
-.lock-icon { font-size: 26px; margin-bottom: 6px; }
-.lock-box h3 { margin: 0 0 4px; font-size: 15px; color: #fff; }
-.lock-box p { margin: 0 0 10px; font-size: 12px; }
-.lock-input {
-  width: 100%; padding: 8px 10px; margin-bottom: 8px;
-  background: rgba(0, 45, 90, 0.7); color: #eaf7ff;
-  border: 1px solid rgba(111, 227, 255, 0.45); outline: none;
-}
-.lock-input:focus { border-color: #7fe9ff; box-shadow: 0 0 10px rgba(80, 200, 255, 0.45); }
-.lock-actions { display: flex; justify-content: center; gap: 8px; margin-top: 4px; }
 .field { display: flex; align-items: center; gap: 6px; }
 .field label { color: #8fc4f0; }
 .select {
@@ -1811,7 +1761,6 @@ async function logout() {
 /* 视频面板 body 去内边距：no-pad 通过 body-class 落在 ScadaPanel 内部的 .t-body 上，
    scoped 的 .no-pad[data-v-xxx] 只能命中子组件根节点，必须用 :deep 才能打进去 */
 :deep(.t-body.no-pad) { padding: 6px; }
-.clickable { height: 100%; cursor: pointer; }
 
 /* 控制面板 */
 .ctrl-tabs { display: flex; gap: 6px; margin-bottom: 8px; }
@@ -1825,22 +1774,6 @@ async function logout() {
   background: linear-gradient(180deg, #b9ecff, #4fc3ff);
 }
 .ctrl-body { display: flex; gap: 12px; align-items: center; }
-.stick {
-  width: 84px; height: 84px; flex: none; border-radius: 50%;
-  border: 1px solid rgba(111, 227, 255, 0.45);
-  background: radial-gradient(circle, rgba(20, 110, 200, 0.55), rgba(0, 40, 90, 0.7));
-  display: grid; place-items: center; position: relative;
-}
-.stick::before, .stick::after {
-  content: ""; position: absolute; background: rgba(111, 227, 255, 0.25);
-}
-.stick::before { left: 50%; top: 10%; bottom: 10%; width: 1px; }
-.stick::after { top: 50%; left: 10%; right: 10%; height: 1px; }
-.knob {
-  width: 28px; height: 28px; border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #b9ecff, #2b9bff);
-  box-shadow: 0 0 14px rgba(80, 200, 255, 0.8);
-}
 .ctrl-meta { display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
 .ctrl-meta div { display: flex; justify-content: space-between; gap: 12px; }
 .ctrl-meta span { color: #9fd2ff; }
@@ -1875,15 +1808,6 @@ async function logout() {
 .trend { position: relative; height: 46px; display: flex; align-items: stretch; gap: 4px; }
 .t-head { display: flex; justify-content: space-between; font-size: 10.5px; color: #9fd2ff; margin-bottom: 2px; }
 .t-head em { font-style: normal; color: #ffe08a; }
-.t-plot {
-  position: relative; flex: 1; min-height: 54px;
-  display: grid; place-items: center;
-  border: 1px solid rgba(111, 227, 255, 0.18);
-  background:
-    repeating-linear-gradient(0deg, rgba(111, 227, 255, 0.12) 0 1px, transparent 1px 20px),
-    linear-gradient(180deg, rgba(0, 90, 170, 0.25), rgba(0, 50, 100, 0.25));
-}
-.t-plot span { font-size: 11px; color: #6f9ec9; }
 
 /* 环境 */
 .env-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; align-content: center; flex: 1; }
@@ -1928,7 +1852,6 @@ async function logout() {
   .board-title h1 { font-size: clamp(15px, 1.25vw, 20px); letter-spacing: 0.08em; }
   .wing { width: 22px; }
   .tab { padding: 5px 12px; font-size: 13px; }
-  .logo-text i { display: none; }
 }
 
 @media (max-width: 1600px) {
@@ -2001,7 +1924,6 @@ async function logout() {
   .env-cell { padding: 5px 6px; }
   .ctrl-meta { font-size: 11px; }
   .ctrl-meta p { display: none; }
-  .stick { width: 64px; height: 64px; }
   .donut { width: 92px; height: 92px; }
   .donut-center { width: 92px; }
   .donut-center b { font-size: 20px; }
@@ -2241,15 +2163,6 @@ async function logout() {
 }
 .live-box { display: flex; align-items: center; justify-content: center; }
 
-.loc-banner {
-  grid-column: 1 / -1;
-  position: sticky; top: 0; z-index: 30;
-  display: flex; align-items: center; gap: 12px;
-  padding: 12px 16px; border-radius: 10px; font-size: 14px; font-weight: 600;
-  letter-spacing: .5px;
-}
-.loc-banner b { flex: none; padding: 2px 8px; border-radius: 4px; background: rgba(0,0,0,.35); }
-.loc-banner span { flex: 1; }
 .loc-banner.danger {
   background: linear-gradient(90deg, rgba(255,60,60,.28), rgba(255,60,60,.10));
   border: 1px solid rgba(255,86,86,.75); color: #ffd7d7;
@@ -2332,13 +2245,6 @@ async function logout() {
 .loc-card footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 /* 实时消息整体下移 2mm，地图相应放大 */
 .rt { margin-top: 1mm; height: 218px; }
-.ctrl-empty {
-  flex: 1; display: flex; flex-direction: column; gap: 4px; justify-content: center;
-  padding: 8px 12px; border: 1px dashed rgba(0, 168, 255, .3); border-radius: 8px;
-  color: #9fd6ee; font-size: 12px;
-}
-.ctrl-empty b { color: #cfeaff; font-size: 13px; }
-.ctrl-empty span { color: #7fa8c4; }
 .ctrl-meta .pose-actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
 .ctrl-meta .pose-actions .btn {
   width: 100%; padding: 5px 6px; font-size: 12px; white-space: nowrap;
@@ -2420,7 +2326,6 @@ async function logout() {
 .cmd-state.warn i { background: #ffbe3c; }
 .cmd-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
 .cmd-grid .btn { padding: 7px 8px; font-size: 12.5px; }
-.cmd-hint { font-size: 11px; color: #7fa8c4; }
 .env-stale {
   font-style: normal; font-size: 10px; color: #ffbe3c; border: 1px solid rgba(255, 190, 60, .5);
   border-radius: 8px; padding: 0 5px; margin-left: 4px;
@@ -2428,6 +2333,15 @@ async function logout() {
 .env-age { font-style: normal; font-size: 10px; color: #7fa8c4; margin-left: 4px; }
 .env-cell.stale .env-value { color: #8fa6b8; }
 .env-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
-.env-count { font-style: normal; font-size: 10px; color: #7fd0ff; margin-left: 3px; }
 .env-age { font-style: normal; font-size: 10px; color: #7fa8c4; }
+
+/* 「今日任务状态」：窄屏标签列 60→52、数字 16→14、数字与单位间距 3→2、小字 8.5→8，
+   右侧数字/小字不再被裁。放在 .rt-grow 基础样式之后才生效；
+   实测 1280 也裁 8px、1440 裁 12px，断点取 1500。最坏情况（三位数）也不裁。 */
+@media (max-width: 1500px) {
+  .rt-grow { grid-template-columns: 52px repeat(3, 1fr); }
+  .rt-grow .gv { gap: 2px; }
+  .rt-grow .gv i { font-size: 14px; }
+  .rt-grow .gv em { font-size: 8px; }
+}
 </style>

@@ -86,7 +86,7 @@ function goSettings() {
         <span>告警规则</span>
         <span class="muted">阈值在「系统设置 → 告警」里改，保存即生效；环境类在「环境传感器」里逐台标定</span>
         <span class="grow" />
-        <button class="btn btn-sm primary" :disabled="!auth.canWrite" @click="goSettings">去修改阈值</button>
+        <button type="button" class="btn btn-sm primary" :disabled="!auth.canWrite" @click="goSettings">去修改阈值</button>
       </div>
 
       <table class="grid">
@@ -120,7 +120,7 @@ function goSettings() {
       </p>
 
       <div class="actions">
-        <button class="btn btn-sm" @click="robot.refreshAlarms()">刷新告警状态</button>
+        <button type="button" class="btn btn-sm" @click="robot.refreshAlarms()">刷新告警状态</button>
       </div>
     </section>
   </div>

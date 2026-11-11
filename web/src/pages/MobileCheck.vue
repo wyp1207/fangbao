@@ -174,7 +174,7 @@ onMounted(load)
         <span>扫码编号{{ cur.code ? `（点位码 ${cur.code}）` : '' }}</span>
         <div class="scanrow">
           <input class="input" v-model="code" :placeholder="cur.code ? '扫或输入点位码' : '无码点位可留空'" />
-          <button class="btn-scan" @click="scanCode">扫码</button>
+          <button type="button" class="btn-scan" @click="scanCode">扫码</button>
         </div>
         <em v-if="scanMsg" class="scanmsg">{{ scanMsg }}</em>
       </label>
@@ -200,13 +200,13 @@ onMounted(load)
       </label>
 
       <div class="acts">
-        <button class="big ok" :disabled="busy" @click="submit('ok')">正常</button>
-        <button class="big bad" :disabled="busy" @click="submit('abnormal')">异常</button>
-        <button class="big skip" :disabled="busy" @click="submit('skipped')">跳过</button>
+        <button type="button" class="big ok" :disabled="busy" @click="submit('ok')">正常</button>
+        <button type="button" class="big bad" :disabled="busy" @click="submit('abnormal')">异常</button>
+        <button type="button" class="big skip" :disabled="busy" @click="submit('skipped')">跳过</button>
       </div>
     </section>
 
-    <button class="finish" :disabled="busy || done < items.length" @click="finish">
+    <button type="button" class="finish" :disabled="busy || done < items.length" @click="finish">
       完成本次巡检（{{ done }}/{{ items.length }}）
     </button>
   </div>

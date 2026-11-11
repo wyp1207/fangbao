@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
 import TopNav from '@/components/TopNav.vue'
 import Breadcrumb from '@/components/Breadcrumb.vue'
 import UserMenu from '@/components/UserMenu.vue'
@@ -9,7 +8,6 @@ import logoUrl from '@/assets/logo.png'
 import { useRobotStore } from '@/stores/robot'
 import { usePlatformStore } from '@/stores/platform'
 
-const auth = useAuthStore()
 const robot = useRobotStore()
 const platform = usePlatformStore()
 const route = useRoute()
@@ -22,7 +20,6 @@ const state = computed(() => {
   return { text: robot.robotState, cls: 'ok' }
 })
 
-const alarmCount = computed(() => robot.alarms.filter((a) => !a.acked_at).length)
 
 // 返回上一页：只在"确实有上一页"时出现，避免在首页放一个点了没反应的按钮
 const canBack = ref(false)
@@ -59,11 +56,6 @@ function onKey(e: KeyboardEvent) {
   }
 }
 
-async function onLogout() {
-  await auth.logout()
-  robot.stop()
-  router.push({ name: 'login' })
-}
 </script>
 
 <template>
@@ -145,9 +137,6 @@ async function onLogout() {
   border: 1px solid rgba(160, 230, 255, 0.8);
   box-shadow: 0 0 12px rgba(80, 200, 255, 0.7);
 }
-.logo-text { line-height: 1.15; }
-.logo-text b { display: block; font-size: 15px; color: #fff; letter-spacing: 0.08em; }
-.logo-text i { font-style: normal; font-size: 9.5px; color: #9fd2ff; letter-spacing: 0.18em; }
 
 .tabs { display: flex; gap: 6px; min-width: 0; }
 .mini-title {
@@ -227,7 +216,6 @@ async function onLogout() {
 }
 @media (max-width: 1700px) {
   .state { display: none; }
-  .logo-text i { display: none; }
   .user { display: none; }
   .hdr { gap: 8px; padding: 0 10px; }
   .logout { padding: 3px 9px; font-size: 11.5px; }
@@ -246,6 +234,5 @@ async function onLogout() {
 @media (max-width: 820px) {
   .tabs .tab:nth-child(n + 3) { display: none; }
   .user { display: none; }
-  .logo-text b { font-size: 13px; }
 }
 </style>

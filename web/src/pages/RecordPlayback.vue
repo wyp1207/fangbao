@@ -147,9 +147,9 @@ async function clearCamera() {
         <DarkSelect v-model="videoId" :options="videoOptions" width="200px" />
         <label>日期</label>
         <input class="input date" type="date" v-model="date" />
-        <button class="btn btn-sm ok" :disabled="loading" @click="load">查询</button>
-        <button class="btn btn-sm warn" @click="reset">重置</button>
-        <button class="btn btn-sm danger" :disabled="!videoId"
+        <button type="button" class="btn btn-sm ok" :disabled="loading" @click="load">查询</button>
+        <button type="button" class="btn btn-sm warn" @click="reset">重置</button>
+        <button type="button" class="btn btn-sm danger" :disabled="!videoId"
                 title="删除这个摄像头的全部录像段" @click="clearCamera">清空该相机录像</button>
         <span class="grow" />
         <router-link class="btn btn-sm" :to="{ name: 'record-plan' }">去录像计划</router-link>
@@ -175,9 +175,9 @@ async function clearCamera() {
                 <td class="num dim">{{ mb(it.size) }} MB</td>
                 <td>
                   <div class="row-actions">
-                    <button class="act" title="播放" @click="play(it)">▶</button>
+                    <button type="button" class="act" title="播放" @click="play(it)">▶</button>
                     <a class="act" :href="api.recordingFileUrl(it.path)" :download="it.path.split('/').pop()" title="下载">⤓</a>
-                    <button class="act danger" title="删除" @click="remove(it)">🗑</button>
+                    <button type="button" class="act danger" title="删除" @click="remove(it)">🗑</button>
                   </div>
                 </td>
               </tr>

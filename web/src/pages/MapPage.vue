@@ -2,7 +2,6 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import MapCanvas from '@/components/MapCanvas.vue'
-import DarkSelect from '@/components/DarkSelect.vue'
 import { api, type LibraryMap, type MapMeta, type NavPoint, type PointDraft } from '@/api'
 import { ApiError } from '@/api/client'
 import { toast } from '@/composables/useToast'
@@ -17,7 +16,6 @@ const library = ref<LibraryMap[]>([])
 const libId = ref(0)
 const points = ref<NavPoint[]>([])
 const drafts = ref<PointDraft[]>([])
-const selectedPoint = ref<NavPoint | null>(null)
 const error = ref('')
 
 // 打点模式
@@ -261,7 +259,7 @@ onMounted(async () => {
         <span>机器人地图</span>
         <span class="muted small">{{ robotMaps.length }}</span>
       </div>
-      <button
+      <button type="button"
         v-for="m in robotMaps" :key="m.name" class="map-item"
         :class="{ active: !libId && m.name === selectedName }"
         @click="chooseRobot(m.name)"
@@ -273,9 +271,9 @@ onMounted(async () => {
 
       <div class="panel-title" style="margin-top: 14px">
         <span>平台地图库</span>
-        <button class="btn btn-xs" @click="openImport">导入</button>
+        <button type="button" class="btn btn-xs" @click="openImport">导入</button>
       </div>
-      <button
+      <button type="button"
         v-for="m in library" :key="m.id" class="map-item"
         :class="{ active: m.id === libId }"
         @click="chooseLib(m.id)"
@@ -301,7 +299,7 @@ onMounted(async () => {
 
       <div class="panel-title" style="margin-top: 14px">
         <span>点位（{{ pointRows.length }}）</span>
-        <button v-if="drafts.length" class="btn btn-xs" @click="toggleSelectAll">
+        <button type="button" v-if="drafts.length" class="btn btn-xs" @click="toggleSelectAll">
           {{ allDraftSelected ? '取消全选' : '全选草稿' }}
         </button>
       </div>
@@ -309,8 +307,8 @@ onMounted(async () => {
       <div v-if="selectedIds.length" class="bulk-bar">
         <span>已选 {{ selectedIds.length }}</span>
         <input class="input" v-model="bulkGroup" placeholder="分组名" style="width: 92px" />
-        <button class="btn btn-xs" @click="bulk('group')">改分组</button>
-        <button class="btn btn-xs danger" @click="bulk('delete')">删除</button>
+        <button type="button" class="btn btn-xs" @click="bulk('group')">改分组</button>
+        <button type="button" class="btn btn-xs danger" @click="bulk('delete')">删除</button>
       </div>
 
       <ul class="points">
@@ -320,7 +318,7 @@ onMounted(async () => {
           <span :class="{ draft: p.draft }">{{ p.draft ? '草' : '机' }}</span>
           <span>{{ p.name }}</span>
           <span class="muted mono">{{ p.x.toFixed(1) }}, {{ p.y.toFixed(1) }}</span>
-          <button v-if="p.draft" class="del" title="删除草稿" @click="removeDraft(p.id)">×</button>
+          <button type="button" v-if="p.draft" class="del" title="删除草稿" @click="removeDraft(p.id)">×</button>
         </li>
       </ul>
       <p class="muted small">
@@ -350,14 +348,14 @@ onMounted(async () => {
       <p v-if="error" class="danger small">{{ error }}</p>
 
       <div class="actions">
-        <button class="btn" :disabled="!libId" :title="libId ? '在图上打点并保存为草稿' : '机器人地图只读，先导入平台地图'" @click="startPick">
+        <button type="button" class="btn" :disabled="!libId" :title="libId ? '在图上打点并保存为草稿' : '机器人地图只读，先导入平台地图'" @click="startPick">
           新增点位
         </button>
-        <button class="btn" :disabled="!picking" @click="picking = false">退出打点</button>
+        <button type="button" class="btn" :disabled="!picking" @click="picking = false">退出打点</button>
         <template v-if="libId">
-          <button class="btn" title="CSV 列：name,x,y,theta,note" @click="pickCsv">导入点位 CSV</button>
-          <button class="btn" :disabled="!pointRows.length" @click="exportCsv">导出 CSV</button>
-          <button class="btn" title="下载一个只有表头的模板" @click="downloadTemplate">模板</button>
+          <button type="button" class="btn" title="CSV 列：name,x,y,theta,note" @click="pickCsv">导入点位 CSV</button>
+          <button type="button" class="btn" :disabled="!pointRows.length" @click="exportCsv">导出 CSV</button>
+          <button type="button" class="btn" title="下载一个只有表头的模板" @click="downloadTemplate">模板</button>
           <input ref="csvInput" type="file" accept=".csv,text/csv" style="display: none" @change="onCsv" />
         </template>
         <span class="spacer" />
@@ -375,8 +373,8 @@ onMounted(async () => {
         <label class="fld"><span>点位名称<i class="req">*</i></span><input class="input" v-model="draftName" autofocus /></label>
         <label class="fld"><span>备注</span><input class="input" v-model="draftNote" placeholder="如：1号配电柜正面" /></label>
         <div class="modal-actions">
-          <button class="btn" @click="pickAt = null">取消</button>
-          <button class="btn primary" @click="saveDraft">保存草稿</button>
+          <button type="button" class="btn" @click="pickAt = null">取消</button>
+          <button type="button" class="btn primary" @click="saveDraft">保存草稿</button>
         </div>
       </div>
     </div>
@@ -409,8 +407,8 @@ onMounted(async () => {
           原点填机器人建图时的 map 原点；不知道就填 0，等真机联调再校。
         </p>
         <div class="modal-actions">
-          <button class="btn" @click="importing = false">取消</button>
-          <button class="btn primary" :disabled="impBusy" @click="submitImport">{{ impBusy ? '导入中…' : '导入并查看' }}</button>
+          <button type="button" class="btn" @click="importing = false">取消</button>
+          <button type="button" class="btn primary" :disabled="impBusy" @click="submitImport">{{ impBusy ? '导入中…' : '导入并查看' }}</button>
         </div>
       </div>
     </div>

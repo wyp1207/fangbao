@@ -41,8 +41,8 @@ const spec = computed(() => PLACEHOLDERS[String(route.name)] ?? {
       <p v-if="spec.reference" class="muted small">{{ spec.reference }}</p>
 
       <div class="actions">
-        <button class="btn btn-sm" @click="router.back()">返回上一页</button>
-        <button class="btn btn-sm primary" @click="router.push({ name: 'dashboard' })">回到驾驶舱</button>
+        <button type="button" class="btn btn-sm" @click="router.back()">返回上一页</button>
+        <button type="button" class="btn btn-sm primary" @click="router.push({ name: 'dashboard' })">回到驾驶舱</button>
       </div>
     </section>
   </div>

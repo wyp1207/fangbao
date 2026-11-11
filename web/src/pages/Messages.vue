@@ -129,8 +129,8 @@ onBeforeUnmount(() => window.clearInterval(timer))
       <div class="toolbar">
         <label>类型</label>
         <DarkSelect v-model="filter" :options="filters" width="130px" />
-        <button class="btn btn-sm" :disabled="loading" @click="load">刷新</button>
-        <button class="btn btn-sm warn" @click="markAllRead">全部标为已读</button>
+        <button type="button" class="btn btn-sm" :disabled="loading" @click="load">刷新</button>
+        <button type="button" class="btn btn-sm warn" @click="markAllRead">全部标为已读</button>
         <span class="grow" />
         <span class="muted small">共 {{ rows.length }} 条</span>
       </div>
@@ -155,7 +155,7 @@ onBeforeUnmount(() => window.clearInterval(timer))
               <div v-if="m.body" class="dim small">{{ m.body }}</div>
             </td>
             <td>
-              <button v-if="(m.to as any)?.name" class="link-btn" @click="open(m)">查看</button>
+              <button type="button" v-if="(m.to as any)?.name" class="link-btn" @click="open(m)">查看</button>
               <span v-else class="dim">—</span>
             </td>
           </tr>

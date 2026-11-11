@@ -96,7 +96,7 @@ onMounted(load)
       <div class="toolbar">
         <label>范围</label>
         <DarkSelect v-model="hours" :options="rangeOptions" width="140px" @update:model-value="load" />
-        <button class="btn btn-sm ok" :disabled="loading" @click="load">刷新</button>
+        <button type="button" class="btn btn-sm ok" :disabled="loading" @click="load">刷新</button>
         <span class="grow" />
         <span class="muted small">共 {{ count }} 个采样点</span>
       </div>

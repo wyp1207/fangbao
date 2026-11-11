@@ -52,7 +52,7 @@ const emit = defineEmits<{ close: [] }>()
       </div>
 
       <div class="foot">
-        <button class="btn btn-sm primary" @click="emit('close')">知道了</button>
+        <button type="button" class="btn btn-sm primary" @click="emit('close')">知道了</button>
       </div>
     </div>
   </div>

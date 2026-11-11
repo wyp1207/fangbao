@@ -69,12 +69,12 @@ async function logout() {
         </template>
         <div class="ls-actions">
           <template v-if="!lock.expired">
-            <button class="ls-btn" @click="logout">退出登录</button>
-            <button class="ls-btn primary" :disabled="lock.busy" @click="lock.unlock()">
+            <button type="button" class="ls-btn" @click="logout">退出登录</button>
+            <button type="button" class="ls-btn primary" :disabled="lock.busy" @click="lock.unlock()">
               {{ lock.busy ? '验证中…' : '解锁' }}
             </button>
           </template>
-          <button v-else class="ls-btn primary" @click="logout">重新登录</button>
+          <button type="button" v-else class="ls-btn primary" @click="logout">重新登录</button>
         </div>
         <p class="ls-dim small">锁定期间无法操作大屏；忘记密码请让管理员在「用户管理」里重置</p>
       </div>

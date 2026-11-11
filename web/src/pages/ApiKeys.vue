@@ -84,7 +84,7 @@ onMounted(load)
           机器人、算法盒、厂内系统对接用；明文只显示一次，服务端只存哈希
         </span>
         <span class="grow" />
-        <button class="btn btn-sm primary" :disabled="!auth.canWrite || auth.user?.role !== 'admin'" @click="creating = true">
+        <button type="button" class="btn btn-sm primary" :disabled="!auth.canWrite || auth.user?.role !== 'admin'" @click="creating = true">
           新建密钥
         </button>
       </div>
@@ -110,7 +110,7 @@ onMounted(load)
             <td><span class="tag" :class="c.enabled ? 'ok' : 'warn'">{{ c.enabled ? '启用' : '已吊销' }}</span></td>
             <td class="num dim">{{ (c.last_used_at ?? '—').replace('T', ' ') }}</td>
             <td>
-              <button v-if="c.enabled" class="act danger" title="吊销" @click="revoke(c)">🗑</button>
+              <button type="button" v-if="c.enabled" class="act danger" title="吊销" @click="revoke(c)">🗑</button>
             </td>
           </tr>
           <tr v-if="!rows.length"><td colspan="7" class="dim">还没有密钥。给算法盒或机器人建一个。</td></tr>
@@ -140,8 +140,8 @@ onMounted(load)
           </div>
         </div>
         <div class="modal-actions">
-          <button class="btn" @click="creating = false">取消</button>
-          <button class="btn primary" @click="create">创建</button>
+          <button type="button" class="btn" @click="creating = false">取消</button>
+          <button type="button" class="btn primary" @click="create">创建</button>
         </div>
       </div>
     </div>
@@ -152,8 +152,8 @@ onMounted(load)
         <p class="warn small">关掉就看不到了；丢了只能吊销重建。</p>
         <div class="keybox">{{ newKey }}</div>
         <div class="modal-actions">
-          <button class="btn" @click="copy">复制</button>
-          <button class="btn primary" @click="newKey = ''">我已保存</button>
+          <button type="button" class="btn" @click="copy">复制</button>
+          <button type="button" class="btn primary" @click="newKey = ''">我已保存</button>
         </div>
       </div>
     </div>

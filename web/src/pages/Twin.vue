@@ -33,7 +33,6 @@ const threshold = ref(90)
 const layerOn = ref(true)
 const fxOn = ref(true)
 const cadMode = ref(true)  // CAD 线框风：黑底 + 细白线 + 等轴测（对齐客户给的 CAD 图）
-const fxLabel = ref('光效')
 // ---- 轨迹回放 ----
 const playHours = ref(24)
 const playPoints = ref<{ ts: string; x: number; y: number; theta: number }[]>([])
@@ -926,7 +925,7 @@ onBeforeUnmount(() => {
         <label><input v-model="cadMode" type="checkbox" @change="setCadMode(cadMode)" /> CAD 线框</label>
         <label><input v-model="layerOn" type="checkbox" @change="rebuildWalls" /> 高度分层</label>
         <label><input v-model="fxOn" type="checkbox" /> 光效</label>
-        <button class="btn btn-xs" @click="resetCamera">复位视角</button>
+        <button type="button" class="btn btn-xs" @click="resetCamera">复位视角</button>
       </div>
 
       <div v-if="!props.compact" class="play">
@@ -937,7 +936,7 @@ onBeforeUnmount(() => {
           <option :value="24">最近 24 小时</option>
           <option :value="72">最近 3 天</option>
         </select>
-        <button class="btn btn-xs primary" @click="togglePlay">{{ playing ? '暂停' : '播放' }}</button>
+        <button type="button" class="btn btn-xs primary" @click="togglePlay">{{ playing ? '暂停' : '播放' }}</button>
         <input class="slider" type="range" min="0" :max="Math.max(0, playPoints.length - 1)"
                step="1" v-model.number="playIndex" @input="applyPlayIndex" />
         <span class="mono">{{ playTime || '—' }}</span>
@@ -948,7 +947,7 @@ onBeforeUnmount(() => {
           <option :value="10">10×</option>
           <option :value="30">30×</option>
         </select>
-        <button class="btn btn-xs" @click="loadPlayback">刷新</button>
+        <button type="button" class="btn btn-xs" @click="loadPlayback">刷新</button>
       </div>
     </div>
   </div>

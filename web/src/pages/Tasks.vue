@@ -113,10 +113,10 @@ onMounted(reload)
         <DarkSelect v-model="stateFilter" :options="stateOptions" width="130px" />
         <label>循环</label>
         <DarkSelect v-model="loopFilter" :options="loopOptions" width="96px" />
-        <button class="btn btn-sm ok" :disabled="loading" @click="reload">查询</button>
-        <button class="btn btn-sm warn" @click="reset">重置</button>
+        <button type="button" class="btn btn-sm ok" :disabled="loading" @click="reload">查询</button>
+        <button type="button" class="btn btn-sm warn" @click="reset">重置</button>
         <span class="grow" />
-        <button class="btn btn-sm" @click="goTaskRuns()">新建任务</button>
+        <button type="button" class="btn btn-sm" @click="goTaskRuns()">新建任务</button>
       </div>
 
       <table class="grid">
@@ -143,9 +143,9 @@ onMounted(reload)
             <td class="num dim">{{ t.id.slice(0, 8) }}…</td>
             <td>
               <div class="row-actions">
-                <button class="act" title="查看详情" @click="detail = t">☰</button>
-                <button class="act" title="下发任务（未开放）" @click="goTaskRuns()">▶</button>
-                <button class="act danger" title="取消任务（未开放）" @click="goTaskRuns()">■</button>
+                <button type="button" class="act" title="查看详情" @click="detail = t">☰</button>
+                <button type="button" class="act" title="下发任务（未开放）" @click="goTaskRuns()">▶</button>
+                <button type="button" class="act danger" title="取消任务（未开放）" @click="goTaskRuns()">■</button>
               </div>
             </td>
           </tr>
@@ -158,12 +158,12 @@ onMounted(reload)
       <div class="pager">
         <span>共 {{ filtered.length }} 条 · 第 {{ page }}/{{ pageCount }} 页</span>
         <span class="spacer" />
-        <button :disabled="page <= 1" @click="goto(page - 1)">上一页</button>
-        <button
+        <button type="button" :disabled="page <= 1" @click="goto(page - 1)">上一页</button>
+        <button type="button"
           v-for="n in pageCount" :key="n"
           :class="{ on: n === page }" @click="goto(n)"
         >{{ n }}</button>
-        <button :disabled="page >= pageCount" @click="goto(page + 1)">下一页</button>
+        <button type="button" :disabled="page >= pageCount" @click="goto(page + 1)">下一页</button>
       </div>
 
       <p v-if="error" class="danger small">{{ error }}</p>
@@ -184,8 +184,8 @@ onMounted(reload)
         <div class="panel-title" style="margin-top: 12px"><span>动作序列</span></div>
         <pre class="json">{{ JSON.stringify(detail.sub_tasks, null, 2) }}</pre>
         <div class="modal-actions">
-          <button class="btn btn-sm" @click="tryWrite('下发')">下发</button>
-          <button class="btn btn-sm" @click="detail = null">关闭</button>
+          <button type="button" class="btn btn-sm" @click="tryWrite('下发')">下发</button>
+          <button type="button" class="btn btn-sm" @click="detail = null">关闭</button>
         </div>
       </div>
     </div>
@@ -193,10 +193,10 @@ onMounted(reload)
     <section class="panel">
       <div class="panel-title"><span>下发与执行</span></div>
       <div class="toolbar" style="margin-bottom: 8px">
-        <button class="btn btn-sm" @click="goTaskRuns()">下发</button>
-        <button class="btn btn-sm" @click="goTaskRuns()">暂停</button>
-        <button class="btn btn-sm" @click="goTaskRuns()">继续</button>
-        <button class="btn btn-sm" @click="goTaskRuns()">取消当前任务</button>
+        <button type="button" class="btn btn-sm" @click="goTaskRuns()">下发</button>
+        <button type="button" class="btn btn-sm" @click="goTaskRuns()">暂停</button>
+        <button type="button" class="btn btn-sm" @click="goTaskRuns()">继续</button>
+        <button type="button" class="btn btn-sm" @click="goTaskRuns()">取消当前任务</button>
         <span class="grow" />
         <span class="tag warn">写操作未开放</span>
       </div>

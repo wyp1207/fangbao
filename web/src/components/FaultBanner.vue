@@ -65,7 +65,7 @@ onBeforeUnmount(() => window.clearInterval(timer))
     </span>
     <span class="grow" />
     <router-link class="link" to="/settings">去系统设置看探测结果</router-link>
-    <button class="close" title="本次关闭，20 秒后如仍异常会再提示" @click="dismissed = true">×</button>
+    <button type="button" class="close" title="本次关闭，20 秒后如仍异常会再提示" @click="dismissed = true">×</button>
   </div>
 </template>
 

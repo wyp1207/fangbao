@@ -231,11 +231,11 @@ onMounted(() => { void reload(); void loadGo2rtc(); void loadDevices() })
         <DarkSelect v-model="groupFilter" :options="groups" width="150px" />
         <label>名称</label>
         <input class="input" v-model="keyword" placeholder="输入摄像头名称" />
-        <button class="btn btn-sm ok" :disabled="loading" @click="reload">查询</button>
-        <button class="btn btn-sm warn" @click="reset">重置</button>
+        <button type="button" class="btn btn-sm ok" :disabled="loading" @click="reload">查询</button>
+        <button type="button" class="btn btn-sm warn" @click="reset">重置</button>
         <span class="grow" />
-        <button class="btn btn-sm" @click="reload">刷新</button>
-        <button class="btn btn-sm primary" @click="openCreate">新增视频源</button>
+        <button type="button" class="btn btn-sm" @click="reload">刷新</button>
+        <button type="button" class="btn btn-sm primary" @click="openCreate">新增视频源</button>
       </div>
 
       <table class="grid">
@@ -264,7 +264,7 @@ onMounted(() => { void reload(); void loadGo2rtc(); void loadDevices() })
             <td class="mono url">{{ v.url }}</td>
             <td><span class="tag" :class="v.enabled ? 'ok' : 'danger'">{{ v.enabled ? '启用' : '停用' }}</span></td>
             <td>
-              <button class="dash-toggle" :class="{ on: v.show_on_dashboard }"
+              <button type="button" class="dash-toggle" :class="{ on: v.show_on_dashboard }"
                       :title="v.show_on_dashboard ? '已在大屏显示，点击取消' : '点击让它在首页大屏显示'"
                       @click="toggleDashboard(v)">
                 {{ v.show_on_dashboard ? '大屏显示' : '不上大屏' }}
@@ -272,12 +272,12 @@ onMounted(() => { void reload(); void loadGo2rtc(); void loadDevices() })
             </td>
             <td>
               <div class="row-actions">
-                <button class="act" title="预览画面" @click="$router.push({ name: 'video', query: { source: String(v.id) } })">▶</button>
-                <button class="act" title="编辑" @click="openEdit(v)">✎</button>
-                <button class="act" title="一键注册到 go2rtc（实时播放）" @click="registerGo2rtc(v)">⚡</button>
-                <button class="act" title="测试连通性" :disabled="testing === v.id" @click="test(v)">⇄</button>
-                <button class="act" :title="v.enabled ? '停用' : '启用'" @click="toggle(v)">{{ v.enabled ? '⏸' : '▶' }}</button>
-                <button class="act danger" title="删除" @click="remove(v)">🗑</button>
+                <button type="button" class="act" title="预览画面" @click="$router.push({ name: 'video', query: { source: String(v.id) } })">▶</button>
+                <button type="button" class="act" title="编辑" @click="openEdit(v)">✎</button>
+                <button type="button" class="act" title="一键注册到 go2rtc（实时播放）" @click="registerGo2rtc(v)">⚡</button>
+                <button type="button" class="act" title="测试连通性" :disabled="testing === v.id" @click="test(v)">⇄</button>
+                <button type="button" class="act" :title="v.enabled ? '停用' : '启用'" @click="toggle(v)">{{ v.enabled ? '⏸' : '▶' }}</button>
+                <button type="button" class="act danger" title="删除" @click="remove(v)">🗑</button>
               </div>
             </td>
           </tr>
@@ -316,8 +316,8 @@ onMounted(() => { void reload(); void loadGo2rtc(); void loadDevices() })
         </label>
         <label class="fld"><span>备注（可选）</span><input class="input" v-model="form.note" /></label>
         <div class="modal-actions">
-          <button class="btn btn-sm" @click="creating = false">取消</button>
-          <button class="btn btn-sm primary" @click="submitCreate">保存</button>
+          <button type="button" class="btn btn-sm" @click="creating = false">取消</button>
+          <button type="button" class="btn btn-sm primary" @click="submitCreate">保存</button>
         </div>
       </div>
     </div>
@@ -343,8 +343,8 @@ onMounted(() => { void reload(); void loadGo2rtc(); void loadDevices() })
         </label>
         <div class="modal-actions">
           <button class="btn btn-sm" type="button" @click="registerGo2rtc(editing)">一键注册到 go2rtc</button>
-          <button class="btn btn-sm" @click="editing = null">取消</button>
-          <button class="btn btn-sm primary" @click="submitEdit">保存</button>
+          <button type="button" class="btn btn-sm" @click="editing = null">取消</button>
+          <button type="button" class="btn btn-sm primary" @click="submitEdit">保存</button>
         </div>
       </div>
     </div>

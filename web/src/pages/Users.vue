@@ -24,14 +24,9 @@ const roleText: Record<string, string> = {
   admin: '超级管理员', sysadmin: '系统管理员', secadmin: '安全管理员',
   auditor: '审计管理员', safety: '安全员', operator: '操作员', viewer: '只读',
 }
-const roleTone: Record<string, string> = {
-  admin: 'danger', sysadmin: 'danger', secadmin: 'warn',
-  auditor: '', safety: 'warn', operator: 'ok', viewer: '',
-}
 
 const isAdmin = computed(() => auth.user?.role === 'admin')
 
-const editing = ref<UserRow | null>(null)
 const resetting = ref<UserRow | null>(null)
 const newPassword = ref('')
 
@@ -137,8 +132,8 @@ onMounted(reload)
 
         <div class="toolbar">
           <span class="grow" />
-          <button class="btn btn-sm" :disabled="loading" @click="reload">刷新</button>
-          <button class="btn btn-sm primary" @click="openCreate">新建账号</button>
+          <button type="button" class="btn btn-sm" :disabled="loading" @click="reload">刷新</button>
+          <button type="button" class="btn btn-sm primary" @click="openCreate">新建账号</button>
         </div>
 
         <table class="grid">
@@ -170,11 +165,11 @@ onMounted(reload)
               <td class="num dim">{{ (u.last_login_at ?? '—').replace('T', ' ').slice(0, 19) }}</td>
               <td>
                 <div class="row-actions">
-                  <button class="act" title="重置密码" @click="resetting = u; newPassword = ''">⚿</button>
-                  <button class="act" :title="u.is_active ? '停用' : '启用'" :disabled="u.id === auth.user?.id" @click="toggleActive(u)">
+                  <button type="button" class="act" title="重置密码" @click="resetting = u; newPassword = ''">⚿</button>
+                  <button type="button" class="act" :title="u.is_active ? '停用' : '启用'" :disabled="u.id === auth.user?.id" @click="toggleActive(u)">
                     {{ u.is_active ? '⏸' : '▶' }}
                   </button>
-                  <button class="act danger" title="删除账号" :disabled="u.id === auth.user?.id" @click="remove(u)">🗑</button>
+                  <button type="button" class="act danger" title="删除账号" :disabled="u.id === auth.user?.id" @click="remove(u)">🗑</button>
                 </div>
               </td>
             </tr>
@@ -201,8 +196,8 @@ onMounted(reload)
           <DarkSelect v-model="form.role" :options="roleOptions" width="180px" />
         </label>
         <div class="modal-actions">
-          <button class="btn btn-sm" @click="creating = false">取消</button>
-          <button class="btn btn-sm primary" :disabled="!form.username.trim() || form.password.length < 8" @click="submitCreate">创建</button>
+          <button type="button" class="btn btn-sm" @click="creating = false">取消</button>
+          <button type="button" class="btn btn-sm primary" :disabled="!form.username.trim() || form.password.length < 8" @click="submitCreate">创建</button>
         </div>
       </div>
     </div>
@@ -213,8 +208,8 @@ onMounted(reload)
         <div class="panel-title"><span>重置密码 · {{ resetting.username }}</span></div>
         <label class="fld"><span>新密码</span><input class="input" v-model="newPassword" type="password" placeholder="至少 6 位" /></label>
         <div class="modal-actions">
-          <button class="btn btn-sm" @click="resetting = null">取消</button>
-          <button class="btn btn-sm primary" @click="submitReset">确认重置</button>
+          <button type="button" class="btn btn-sm" @click="resetting = null">取消</button>
+          <button type="button" class="btn btn-sm primary" @click="submitReset">确认重置</button>
         </div>
       </div>
     </div>
@@ -225,7 +220,6 @@ onMounted(reload)
 .page { display: flex; flex-direction: column; gap: 12px; min-height: 100%; }
 .page > .panel { flex: 1; min-height: 0; }
 .small { font-size: 12px; line-height: 1.7; }
-.danger-text { color: #ff8a8a; }
 .modal-mask {
   position: fixed; inset: 0; z-index: 120;
   display: grid; place-items: center;

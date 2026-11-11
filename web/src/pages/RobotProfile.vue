@@ -45,9 +45,6 @@ const adapterOptions = computed(() => {
 })
 const currentAdapter = computed<AdapterMeta | null>(() => meta.value.adapters[form.value.adapter] ?? null)
 
-function adapterLabel(key: string): string {
-  return meta.value.adapters[key]?.label ?? key
-}
 
 async function load() {
   loading.value = true
@@ -181,8 +178,8 @@ onMounted(async () => {
 
       <div class="toolbar">
         <span class="grow" />
-        <button class="btn btn-sm" :disabled="loading" @click="load">刷新</button>
-        <button class="btn btn-sm primary" @click="openCreate">新增设备</button>
+        <button type="button" class="btn btn-sm" :disabled="loading" @click="load">刷新</button>
+        <button type="button" class="btn btn-sm primary" @click="openCreate">新增设备</button>
       </div>
 
       <table class="grid">
@@ -214,10 +211,10 @@ onMounted(async () => {
             </td>
             <td>
               <div class="row-actions">
-                <button class="act" title="测试连接（端口）" :disabled="testing === d.id" @click="test(d)">⇄</button>
-                <button class="act" title="读一次状态" :disabled="probing === d.id" @click="probeStatus(d)">◎</button>
-                <button class="act" title="编辑" @click="openEdit(d)">✎</button>
-                <button class="act danger" title="删除" :disabled="d.id === 1" @click="remove(d)">🗑</button>
+                <button type="button" class="act" title="测试连接（端口）" :disabled="testing === d.id" @click="test(d)">⇄</button>
+                <button type="button" class="act" title="读一次状态" :disabled="probing === d.id" @click="probeStatus(d)">◎</button>
+                <button type="button" class="act" title="编辑" @click="openEdit(d)">✎</button>
+                <button type="button" class="act danger" title="删除" :disabled="d.id === 1" @click="remove(d)">🗑</button>
               </div>
             </td>
           </tr>
@@ -288,8 +285,8 @@ onMounted(async () => {
         </div>
         <label class="fld"><span>备注</span><input class="input" v-model="form.note" /></label>
         <div class="modal-actions">
-          <button class="btn btn-sm" @click="creating = false">取消</button>
-          <button class="btn btn-sm primary" :disabled="!form.name.trim() || !form.ip.trim()" @click="submitCreate">保存</button>
+          <button type="button" class="btn btn-sm" @click="creating = false">取消</button>
+          <button type="button" class="btn btn-sm primary" :disabled="!form.name.trim() || !form.ip.trim()" @click="submitCreate">保存</button>
         </div>
       </div>
     </div>
@@ -326,8 +323,8 @@ onMounted(async () => {
         </div>
         <label class="fld"><span>备注</span><input class="input" v-model="form.note" /></label>
         <div class="modal-actions">
-          <button class="btn btn-sm" @click="editing = null">取消</button>
-          <button class="btn btn-sm primary" @click="submitEdit">保存</button>
+          <button type="button" class="btn btn-sm" @click="editing = null">取消</button>
+          <button type="button" class="btn btn-sm primary" @click="submitEdit">保存</button>
         </div>
       </div>
     </div>
