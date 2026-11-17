@@ -214,6 +214,33 @@ def test_poll_twice_is_idempotent(db, source):
     assert auth["calls"] == 1
 
 
+def test_poll_redacts_stream_url_credentials_in_result_json(db, source):
+    """原始记录要留档，但 RTSP 口令不能跟着进库。"""
+    record = {**SAMPLE, "id": "501",
+              "stream_url": "rtsp://admin:topsecret@192.168.1.14:554/live"}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/openapi/mc/v1/authenticate":
+            return httpx.Response(200, json={"accessToken": "userToken=test"})
+        return httpx.Response(200, json={
+            "data": [record], "current": 1, "page_size": 100, "total": 1,
+        })
+
+    crip, http = _crip(handler)
+    try:
+        result = poll_once(db, source.id, client=crip,
+                           now=datetime(2026, 11, 17, 12, 1, 0))
+    finally:
+        http.close()
+
+    assert result["inserted"] == 1
+    row = db.query(AiResult).filter(AiResult.source_id == source.id).one()
+    stored = json.loads(row.result_json)
+    assert "topsecret" not in json.dumps(stored, ensure_ascii=False)
+    assert stored["raw"]["stream_url"] == "rtsp://192.168.1.14:554/live"
+    assert stored["raw"]["id"] == "501"
+
+
 def test_backfill_writes_range_without_moving_poll_cursor(db, source):
     bodies: list[dict] = []
     auth = {"calls": 0}

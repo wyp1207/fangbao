@@ -16,6 +16,7 @@ import json
 import logging
 from datetime import datetime, timedelta
 from typing import Any, Callable
+from urllib.parse import urlsplit, urlunsplit
 
 from sqlalchemy.orm import Session
 
@@ -127,6 +128,38 @@ def normalize_log(record: dict[str, Any], base_url: str) -> dict[str, Any]:
 # ---------- 写入 ----------
 
 
+def _strip_userinfo(value: str) -> str:
+    """把 `rtsp://user:pass@host/...` 的 userinfo 去掉，保留可回看的地址。"""
+    if "://" not in value:
+        return value
+    try:
+        parts = urlsplit(value)
+    except ValueError:
+        return value
+    if parts.username is None and parts.password is None:
+        return value
+    host = parts.hostname or ""
+    if ":" in host:
+        host = f"[{host}]"
+    netloc = host + (f":{parts.port}" if parts.port else "")
+    return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+
+
+def _redact_raw(value: Any) -> Any:
+    """原始记录入库前递归去掉 URL 里的账号口令。
+
+    `normalize_log` 返回的 `raw_json` 仍是原文（供调用方/测试核对）；
+    真正落库的是脱敏副本，避免相机 RTSP 口令被长期存进平台库。
+    """
+    if isinstance(value, dict):
+        return {k: _redact_raw(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_redact_raw(v) for v in value]
+    if isinstance(value, str):
+        return _strip_userinfo(value)
+    return value
+
+
 def _write_result(db: Session, source_id: int, item: dict[str, Any]) -> bool:
     """同源同 external_event_id 已存在就跳过；返回是否新增。"""
     exists = (
@@ -149,7 +182,7 @@ def _write_result(db: Session, source_id: int, item: dict[str, Any]) -> bool:
         boxes_json=(json.dumps(item["boxes"], ensure_ascii=False)
                     if item["boxes"] else None),
         result_json=json.dumps(
-            {"raw": item["raw_json"], "image_url": item["image_url"]},
+            {"raw": _redact_raw(item["raw_json"]), "image_url": item["image_url"]},
             ensure_ascii=False,
         ),
     ))
