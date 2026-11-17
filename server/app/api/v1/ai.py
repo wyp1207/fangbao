@@ -16,6 +16,7 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Header, Request
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -23,7 +24,7 @@ from app.api.deps import get_current_user
 from app.services.api_auth import require_scope, session_or_key
 from app.core.errors import BadRequest, NotFound, PlatformError
 from app.db.session import get_db
-from app.models.ai import AiAlgorithm, AiResult
+from app.models.ai import AiAlgorithm, AiPresetRule, AiResult, AiStream
 from app.models.user import User
 
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -172,13 +173,138 @@ def list_results(
     return {"total": len(rows), "items": [_out(r, names.get(r.algorithm)) for r in rows]}
 
 
+@router.get("/streams")
+def list_streams(
+    robot_id: int | None = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> dict:
+    q = db.query(AiStream).order_by(AiStream.id)
+    if robot_id is not None:
+        q = q.filter(AiStream.robot_id == robot_id)
+    items = [
+        {"id": s.id, "robot_id": s.robot_id, "stream_type": s.stream_type,
+         "role": s.role, "channel": s.channel, "resolution": s.resolution,
+         "fps": s.fps, "codec": s.codec, "status": s.status, "note": s.note}
+        for s in q.all()
+    ]
+    return {"total": len(items), "items": items}
+
+
+class SnapshotIn(BaseModel):
+    stream_id: int
+    preset_id: int | None = None
+
+
+def _do_capture(db: Session, s: AiStream, preset_id: int | None) -> dict:
+    """抓一路并写一条 snapshot 结果；失败抛 BadRequest。"""
+    from urllib.parse import urlsplit
+
+    from app.services.snapshot import capture_isapi, save_ai_shot
+
+    if s.status != "active" or not s.rtsp_url:
+        raise BadRequest("视频流未启用或没有地址", code="STREAM_INACTIVE")
+    u = urlsplit(s.rtsp_url)
+    if not u.hostname or not u.username:
+        raise BadRequest("视频流地址缺少主机或账号", code="BAD_STREAM_URL")
+    channel = s.channel or "101"
+    picture = f"http://{u.hostname}/ISAPI/Streaming/channels/{channel}/picture"
+    try:
+        data = capture_isapi(picture, u.username, u.password or "")
+        saved = save_ai_shot(data, s.stream_type)
+    except RuntimeError as exc:
+        raise BadRequest(str(exc), code="SNAPSHOT_FAILED") from exc
+
+    rec = AiResult(
+        algorithm="snapshot",
+        preset_id=preset_id,
+        stream_type=s.stream_type,
+        image_path=saved["path"],
+        confidence=1.0,
+        ts=datetime.now().replace(microsecond=0),
+    )
+    db.add(rec)
+    db.commit()
+    db.refresh(rec)
+    return {"result_id": rec.id, "stream_id": s.id, "stream_type": s.stream_type,
+            "preset_id": preset_id, **saved,
+            "captured_at": rec.ts.isoformat(timespec="seconds")}
+
+
+@router.post("/snapshots/capture")
+def capture_snapshot(
+    body: SnapshotIn,
+    db: Session = Depends(get_db),
+    me: User = Depends(get_current_user),
+) -> dict:
+    """按 ai_stream 用 ISAPI Digest 抓一张 JPEG，落盘并返回地址。"""
+    s = db.get(AiStream, body.stream_id)
+    if s is None:
+        raise NotFound("视频流不存在")
+    return _do_capture(db, s, body.preset_id)
+
+
+class PtzCaptureIn(BaseModel):
+    preset_id: int
+    dwell_s: int = 20
+    stream_ids: list[int] = Field(default_factory=list)
+
+
+@router.post("/ptz/goto_capture")
+def ptz_goto_capture(
+    body: PtzCaptureIn,
+    db: Session = Depends(get_db),
+    me: User = Depends(get_current_user),
+) -> dict:
+    """转到预置位，等 dwell 秒，再抓指定流。
+
+    P0 用固定 dwell；位置校验（ISAPI status 容差）留在下一版。
+    """
+    import time
+
+    from app.services import ptz_presets
+
+    if not 1 <= body.preset_id <= 32:
+        raise BadRequest("预置位必须是 1–32", code="BAD_PRESET")
+    ok, why = ptz_presets.goto_preset(body.preset_id)
+    if not ok:
+        raise BadRequest(f"转到预置位失败：{why}", code="PTZ_GOTO_FAILED")
+    dwell = max(0, min(int(body.dwell_s), 60))
+    if dwell:
+        time.sleep(dwell)
+
+    ids = body.stream_ids or [
+        s.id for s in db.query(AiStream)
+        .filter(AiStream.robot_id == 2, AiStream.status == "active")
+        .filter(AiStream.stream_type.in_(["visible", "thermal"]))
+        .all()
+    ]
+    out = []
+    for sid in ids:
+        s = db.get(AiStream, sid)
+        if s is None:
+            continue
+        out.append(_do_capture(db, s, body.preset_id))
+    return {"preset_id": body.preset_id, "dwell_s": dwell, "captures": out}
+
+
+@router.get("/snapshots/{day}/{name}")
+def get_snapshot(day: str, name: str):
+    """抓图文件访问。day=YYYYMMDD，name 只取 basename，防目录穿越。"""
+    from app.services.snapshot import AI_SHOT_ROOT
+
+    safe_name = Path(name).name
+    path = AI_SHOT_ROOT / day / safe_name
+    if not path.exists():
+        raise NotFound("图片不存在")
+    return FileResponse(path, media_type="image/jpeg")
+
+
 @router.get("/results/{result_id}/image")
 def get_result_image(
     result_id: int, db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    from fastapi.responses import FileResponse
-
     r = db.get(AiResult, result_id)
     if not r or not r.image_path:
         raise NotFound("没有原图")

@@ -117,3 +117,42 @@ def probe_frame(stream: str, base: str, timeout: float = 2.5) -> tuple[bool, str
     if len(data) < 1024:
         return False, "相机无画面（0 字节）"
     return True, f"{len(data)}B"
+
+
+# AI 抓图：独立目录，避免和巡检照片混在一起
+AI_SHOT_ROOT = Path(__file__).resolve().parents[3] / "data" / "ai_snapshots"
+
+
+def capture_isapi(picture_url: str, username: str, password: str,
+                  timeout: float = 3.0) -> bytes:
+    """用 ISAPI Digest 抓一张 JPEG。stdlib 自带 Digest，不必引 requests。"""
+    if not picture_url:
+        raise RuntimeError("没有抓图地址")
+    mgr = urllib.request.HTTPPasswordMgrWithDefaultRealm()
+    mgr.add_password(None, picture_url, username, password)
+    opener = urllib.request.build_opener(urllib.request.HTTPDigestAuthHandler(mgr))
+    try:
+        with opener.open(picture_url, timeout=timeout) as resp:
+            data = resp.read()
+            ctype = (resp.headers.get("Content-Type") or "").lower()
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(f"ISAPI 抓图失败：{exc.__class__.__name__}") from exc
+    if "image/jpeg" not in ctype and not data.startswith(b"\xff\xd8"):
+        raise RuntimeError(f"ISAPI 返回的不是 JPEG（{ctype or 'unknown'}）")
+    if len(data) < 1024:
+        raise RuntimeError(f"ISAPI 抓图过小（{len(data)}B）")
+    return data
+
+
+def save_ai_shot(data: bytes, stream_type: str) -> dict:
+    """保存 AI 抓图，返回 {path, url, bytes}。"""
+    if len(data) < 1024:
+        raise RuntimeError(f"图片过小（{len(data)}B）")
+    day = datetime.now().strftime("%Y%m%d")
+    folder = AI_SHOT_ROOT / day
+    folder.mkdir(parents=True, exist_ok=True)
+    name = f"{stream_type}-{int(time.time())}-{uuid4().hex[:8]}.jpg"
+    (folder / name).write_bytes(data)
+    rel = f"ai_snapshots/{day}/{name}"
+    return {"path": rel, "url": f"/api/v1/ai/snapshots/{day}/{name}", "bytes": len(data)}
+
