@@ -82,6 +82,8 @@ class AiResult(Base):
     confidence: Mapped[float] = mapped_column(Float, default=0.0)
     image_path: Mapped[str | None] = mapped_column(String(200), nullable=True)
     boxes_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 盒子原始记录 + 图片 URL（Phase 4 先不下载原图，保留可回补的线索）
+    result_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     review_state: Mapped[str | None] = mapped_column(String(16), nullable=True)
     diagnosis_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     evidence_clip: Mapped[str | None] = mapped_column(String(255), nullable=True)
