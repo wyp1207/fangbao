@@ -33,6 +33,10 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 
 ROOT = Path(__file__).resolve().parents[3] / "data" / "ai_images"
 
+# 演示数据在 ai_result 里靠 source_id 区分：99 是本机演示种子，不是真实回调。
+# 页面要给出“演示数据”角标，接口必须能一眼看出哪些行是演示、有多少条。
+DEMO_SOURCE_ID = 99
+
 DEFAULT_ALGORITHMS = [
     ("meter", "表计读数", "device", "MPa"),
     ("defect", "设备缺陷", "device", None),
@@ -89,6 +93,8 @@ def _out(r: AiResult, algorithm_name: str | None = None,
         "ts": r.ts.isoformat(timespec="seconds") if r.ts else None,
         "alarm_id": r.alarm_id,
         "alarm_level": alarm_level,
+        # 演示种子行（source_id=99）：前端据此打 DEMO 角标，别和真实回调混在一起
+        "demo": r.source_id == DEMO_SOURCE_ID,
     }
 
 
@@ -257,11 +263,17 @@ def result_stats(
         .filter(AlarmRecord.level == "warn")
         .scalar() or 0
     )
+    demo = (
+        db.query(func.count(AiResult.id))
+        .filter(AiResult.source_id == DEMO_SOURCE_ID)
+        .scalar() or 0
+    )
     return {
         "total": total,
         "today": today,
         "p1": p1,
         "p2": p2,
+        "demo": demo,
         "by_camera": [
             {"external_camera_id": cid, "camera_name": name, "count": count}
             for cid, name, count in camera_rows

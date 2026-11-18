@@ -55,10 +55,10 @@ def _make(db, ids: list[int], *, camera: int | None = 13, algorithm: str = "行�
           confidence: float = 0.9, ts: datetime | None = None,
           boxes: list[dict] | None = None, review_state: str | None = None,
           source_url: str | None = None, image_path: str | None = None,
-          external_algorithm_id: int | None = 101,
+          external_algorithm_id: int | None = 101, source_id: int = 1,
           alarm: AlarmRecord | None = None) -> AiResult:
     row = AiResult(
-        source_id=1,
+        source_id=source_id,
         external_event_id=uuid.uuid4().hex,
         algorithm=algorithm,
         external_camera_id=camera,
@@ -121,6 +121,17 @@ def test_result_fields_expose_external_camera_and_evidence(auth_client, db, crea
     assert item["boxes"] == [{"label": "person", "score": 0.8123, "x": 10, "y": 20}]
     assert item["image"] == f"/api/v1/ai/results/{row.id}/image"
     assert item["confidence"] == pytest.approx(0.8123)
+    assert item["demo"] is False          # 真实回调（source_id=1）不算演示
+
+
+def test_result_demo_flag_comes_from_source_id(auth_client, db, created):
+    real = _make(db, created, camera=12, algorithm="行人闯入")
+    demo = _make(db, created, camera=14, algorithm="火焰识别", source_id=99)
+
+    items = {i["id"]: i for i in _items(auth_client, created)}
+
+    assert items[real.id]["demo"] is False
+    assert items[demo.id]["demo"] is True
 
 
 def test_missing_optional_fields_are_null_not_error(auth_client, db, created):
@@ -260,6 +271,7 @@ def test_stats_totals_groups_and_p1_p2(auth_client, db, created):
     assert stats["today"] == 17          # 昨天那条火焰不算今日
     assert stats["p1"] == 1              # critical
     assert stats["p2"] == 1              # warn
+    assert stats["demo"] == 0            # 本用例没有 source_id=99 的行
 
     cameras = {c["external_camera_id"]: c for c in stats["by_camera"]}
     assert cameras[14]["count"] == 13    # 火焰 1 + 12 个算法
@@ -274,6 +286,19 @@ def test_stats_totals_groups_and_p1_p2(auth_client, db, created):
     assert algorithms[1] == {"algorithm": "行人闯入", "count": 2}
 
 
+def test_stats_counts_demo_rows_from_source_id_99(auth_client, db, created):
+    # 真实回调 2 条 + 演示种子 3 条：demo 只数 source_id=99，且计入 total
+    _make(db, created, camera=12, algorithm="行人闯入", source_id=1)
+    _make(db, created, camera=13, algorithm="安全帽识别", source_id=1)
+    for i in range(3):
+        _make(db, created, camera=14, algorithm="火焰识别", source_id=99)
+
+    stats = auth_client.get("/api/v1/ai/results/stats").json()
+
+    assert stats["demo"] == 3
+    assert stats["total"] == 5
+
+
 def test_stats_is_zero_safe_on_empty_db(auth_client):
     # 模块级 fixture 已清空；不创建任何行
     stats = auth_client.get("/api/v1/ai/results/stats").json()
@@ -282,5 +307,6 @@ def test_stats_is_zero_safe_on_empty_db(auth_client):
     assert stats["today"] == 0
     assert stats["p1"] == 0
     assert stats["p2"] == 0
+    assert stats["demo"] == 0
     assert stats["by_camera"] == []
     assert stats["by_algorithm"] == []

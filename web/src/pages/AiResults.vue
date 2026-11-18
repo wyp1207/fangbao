@@ -166,6 +166,7 @@ function closeImage() {
     <section class="panel">
       <div class="panel-title">
         <span>AI 识别结果</span>
+        <span v-if="(stats?.demo ?? 0) > 0" class="tag warn">演示数据</span>
         <span class="muted small">真实回调回看 · 每 15 秒自动刷新（页面隐藏时暂停）</span>
         <span class="grow" />
         <div class="filters">
@@ -199,7 +200,10 @@ function closeImage() {
         <tbody>
           <tr v-for="r in rows" :key="r.id">
             <td class="num dim">{{ (r.ts ?? '—').replace('T', ' ') }}</td>
-            <td>{{ cameraText(r) }}</td>
+            <td>
+              {{ cameraText(r) }}
+              <span v-if="r.demo" class="tag warn demo-badge" title="演示种子数据（source_id=99）">DEMO</span>
+            </td>
             <td>
               {{ r.algorithm_name }}
               <span v-if="r.review_state" class="tag" style="margin-left: 6px">{{ r.review_state }}</span>
@@ -263,6 +267,15 @@ function closeImage() {
 .kpi b { font-size: 20px; color: #fff; font-variant-numeric: tabular-nums; }
 .kpi.danger { border-left-color: #ff5a5a; }
 .kpi.warn { border-left-color: #ffcf3f; }
+
+/* 行内 DEMO 角标：沿用全局 .tag 配色，只收小一号，免得抢相机名的位置 */
+.demo-badge {
+  font-size: 10.5px;
+  line-height: 15px;
+  padding: 0 5px;
+  margin-left: 6px;
+  vertical-align: 1px;
+}
 
 .thumb {
   width: 60px; height: 44px; object-fit: cover;

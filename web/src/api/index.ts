@@ -197,6 +197,8 @@ export interface AiResultItem {
   ts: string | null
   alarm_id: number | null
   alarm_level: 'critical' | 'warn' | null
+  /** 演示种子行（source_id=99），不是真实回调 */
+  demo: boolean
 }
 
 export interface AiResultStats {
@@ -204,6 +206,7 @@ export interface AiResultStats {
   today: number
   p1: number
   p2: number
+  demo: number
   by_camera: { external_camera_id: number | null; camera_name: string | null; count: number }[]
   by_algorithm: { algorithm: string; count: number }[]
 }
