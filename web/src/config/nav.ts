@@ -50,7 +50,7 @@ export const NAV: NavGroup[] = [
     items: [
       { name: 'alarms', label: '告警记录', real: true },
       { name: 'work-orders', label: '工单', real: true },
-      { name: 'ai-results', label: 'AI 识别结果' },
+      { name: 'ai-results', label: 'AI 识别结果', real: true },
           { name: 'alarm-rules', real: true, label: '告警规则' },
     ],
   },
