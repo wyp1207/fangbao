@@ -14,6 +14,9 @@
    进了库就会把"今日告警数"和图片目录一起污染。
 2. 图片只是证据：下载失败/超限/不是 JPEG 都只记 `result_json.image_error`，
    `ai_result` 照写、`image_path` 留空——不能因为图挂了把识别结果也丢了。
+
+入库之后调 `ai_alarm.evaluate` 决定要不要建告警。告警判断失败只记日志：
+盒子收到非 2xx 会一直重推，不能因为告警这条支路把已经入库的结果再打回去。
 """
 
 from __future__ import annotations
@@ -33,6 +36,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.ai import AiResult
+from app.services import ai_alarm
 
 log = logging.getLogger(__name__)
 
@@ -237,7 +241,7 @@ def _find(db: Session, event_id: str) -> int | None:
 
 
 def ingest(db: Session, body: Any) -> dict[str, Any]:
-    """归一化 + 幂等 + 下载图片 + 写一条 `ai_result`（本轮不建告警）。
+    """归一化 + 幂等 + 下载图片 + 写一条 `ai_result`，再按规则决定是否建告警。
 
     返回 dict 而不是抛异常，调用方（回调接口）据此回 `ingested` 并保持 200。
     """
@@ -304,6 +308,14 @@ def ingest(db: Session, body: Any) -> dict[str, Any]:
     log.info("AI 回调入库 result=%s event=%s camera=%s algorithm=%s boxes=%s image=%s",
              rec.id, event_id, item["external_camera_id"], item["algorithm"],
              len(item["boxes"]), image_path or f"失败({image_error})")
+
+    # 告警是下游支路：规则没命中/去重/store 异常都不能影响"已入库"这个事实
+    try:
+        ai_alarm.evaluate(db, rec)
+    except Exception as exc:  # noqa: BLE001 - 告警失败不阻塞入库
+        log.warning("AI 告警评估失败 result=%s: %s: %s",
+                    rec.id, type(exc).__name__, exc)
+
     return {"ingested": True, "skipped": False, "duplicate": False, "result_id": rec.id,
             "image_path": image_path, "image_ok": image_path is not None,
             "image_error": image_error, "reason": None}
