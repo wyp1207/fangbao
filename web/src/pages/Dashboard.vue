@@ -2308,6 +2308,7 @@ onBeforeUnmount(() => {
   white-space: normal; overflow: visible; text-overflow: clip;
   word-break: break-all; overflow-wrap: anywhere;
   text-align: right;            /* 值居右，和左侧标签拉开，一眼能扫 */
+  width: 100%; max-width: none;  /* 覆盖上面 66% 的限制，真正贴到最右 */
 }
 /* 点位多时面板内滚动，细滚动条 */
 .t-panel:has(.points) :deep(.t-body) { max-height: 214px; overflow-y: auto; }
