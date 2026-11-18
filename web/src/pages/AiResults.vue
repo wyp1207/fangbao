@@ -222,7 +222,7 @@ function closeImage() {
             </td>
             <td>
               <span v-if="r.alarm_id" class="tag" :class="alarmClass(r)">{{ alarmText(r) }}</span>
-              <span v-else class="dim small">未触发</span>
+              <span v-else class="dim small">未告警</span>
             </td>
             <td>
               <img
