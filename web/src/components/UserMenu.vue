@@ -166,7 +166,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="root" class="um">
+  <div v-if="auth.user" ref="root" class="um">
     <button class="trigger" type="button" @click="toggle" :title="`当前账号：${username}`">
       <span class="avatar">{{ initial }}</span>
       <span class="uname">{{ username }}</span>
