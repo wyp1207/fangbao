@@ -9,6 +9,7 @@ const algorithms = ref<{ code: string; name: string }[]>([])
 const algo = ref('')
 const camera = ref('')
 const confidence = ref('')
+const level = ref('')
 const loading = ref(false)
 const error = ref('')
 const preview = ref<AiResultItem | null>(null)
@@ -38,6 +39,14 @@ const confidenceOptions = [
   { value: '0.4', label: '≥ 40%' },
   { value: '0.6', label: '≥ 60%' },
   { value: '0.8', label: '≥ 80%' },
+]
+
+/** 告警级别：后端按 alarm_record.level 过滤，none 表示没建告警的结果。 */
+const levelOptions = [
+  { value: '', label: '全部级别' },
+  { value: 'p1', label: 'P1 严重' },
+  { value: 'p2', label: 'P2 一般' },
+  { value: 'none', label: '未告警' },
 ]
 
 /** 已注册算法（手工推送用 code）+ 真实回调里出现过的算法名，合并去重。 */
@@ -73,6 +82,7 @@ async function load() {
       algorithm: algo.value || undefined,
       external_camera_id: camera.value ? Number(camera.value) : undefined,
       min_confidence: confidence.value ? Number(confidence.value) : undefined,
+      level: (level.value || undefined) as 'p1' | 'p2' | 'none' | undefined,
       limit: 200,
     })
     rows.value = res.items
@@ -172,6 +182,7 @@ function closeImage() {
           <DarkSelect v-model="algo" width="170px" :options="algoOptions" @update:model-value="load" />
           <DarkSelect v-model="camera" width="150px" :options="cameraOptions" @update:model-value="load" />
           <DarkSelect v-model="confidence" width="130px" :options="confidenceOptions" @update:model-value="load" />
+          <DarkSelect v-model="level" width="140px" :options="levelOptions" @update:model-value="load" />
           <button type="button" class="btn btn-sm ok" :disabled="loading" @click="refreshAll">刷新</button>
         </div>
       </div>

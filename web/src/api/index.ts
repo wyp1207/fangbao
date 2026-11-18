@@ -385,6 +385,8 @@ export const api = {
     camera_id?: number
     external_camera_id?: number
     min_confidence?: number
+    /** p1=critical、p2=warn、none=未建告警（alarm_id 为空） */
+    level?: 'p1' | 'p2' | 'none'
     since?: string
     limit?: number
   } = {}) => {

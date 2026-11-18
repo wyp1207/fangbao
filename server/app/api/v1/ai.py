@@ -171,12 +171,18 @@ def push_result(
     return {**_out(rec, algo.name), "duplicated": False, "auth": kind}
 
 
+# 页面上的告警级别口径：P1/critical、P2/warn；none 表示没建告警的结果。
+# 其他值一律忽略（不加过滤），避免脏参数把列表筛空。
+LEVEL_FILTER = {"p1": "critical", "p2": "warn"}
+
+
 @router.get("/results")
 def list_results(
     algorithm: str | None = None,
     camera_id: int | None = None,
     external_camera_id: int | None = None,
     min_confidence: float | None = None,
+    level: str | None = None,
     since: datetime | None = None,
     limit: int = 50,
     db: Session = Depends(get_db),
@@ -192,6 +198,18 @@ def list_results(
         q = q.filter(AiResult.external_camera_id == external_camera_id)
     if min_confidence is not None:
         q = q.filter(AiResult.confidence >= min_confidence)
+    if level in LEVEL_FILTER:
+        # EXISTS 而不是 join：alarm_record 一条对一条，但 EXISTS 不会因关联把结果行翻倍
+        q = q.filter(
+            db.query(AlarmRecord.id)
+            .filter(
+                AlarmRecord.id == AiResult.alarm_id,
+                AlarmRecord.level == LEVEL_FILTER[level],
+            )
+            .exists()
+        )
+    elif level == "none":
+        q = q.filter(AiResult.alarm_id.is_(None))
     if since is not None:
         # 库里 ts 是无时区的本地时间；带 Z/偏移的入参先换算成本地 naive 再比
         if since.tzinfo is not None:

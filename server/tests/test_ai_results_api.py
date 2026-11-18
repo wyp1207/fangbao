@@ -212,6 +212,69 @@ def test_filters_combine(auth_client, db, created):
     assert kept[0]["camera_name"] == "dog-云台"
 
 
+# ---------- 2.1 告警级别过滤（p1/p2/none） ----------
+
+
+def test_filter_by_level_p1_keeps_critical_only(auth_client, db, created):
+    p1 = _make(db, created, camera=12, alarm=_alarm(db, "critical"))
+    p2 = _make(db, created, camera=13, alarm=_alarm(db, "warn"))
+    plain = _make(db, created, camera=14)
+
+    kept = _items(auth_client, created, level="p1")
+
+    assert [i["id"] for i in kept] == [p1.id]
+    assert kept[0]["alarm_level"] == "critical"
+    assert p2.id not in [i["id"] for i in kept]
+    assert plain.id not in [i["id"] for i in kept]
+
+
+def test_filter_by_level_p2_keeps_warn_only(auth_client, db, created):
+    p1 = _make(db, created, camera=12, alarm=_alarm(db, "critical"))
+    p2 = _make(db, created, camera=13, alarm=_alarm(db, "warn"))
+    plain = _make(db, created, camera=14)
+
+    kept = _items(auth_client, created, level="p2")
+
+    assert [i["id"] for i in kept] == [p2.id]
+    assert kept[0]["alarm_level"] == "warn"
+    assert p1.id not in [i["id"] for i in kept]
+    assert plain.id not in [i["id"] for i in kept]
+
+
+def test_filter_by_level_none_keeps_rows_without_alarm(auth_client, db, created):
+    _make(db, created, camera=12, alarm=_alarm(db, "critical"))
+    _make(db, created, camera=13, alarm=_alarm(db, "warn"))
+    plain = _make(db, created, camera=14)
+
+    kept = _items(auth_client, created, level="none")
+
+    assert [i["id"] for i in kept] == [plain.id]
+    assert kept[0]["alarm_id"] is None
+    assert kept[0]["alarm_level"] is None
+
+
+def test_level_combines_with_camera_filter(auth_client, db, created):
+    wanted = _make(db, created, camera=12, alarm=_alarm(db, "critical"))
+    _make(db, created, camera=13, alarm=_alarm(db, "critical"))
+    _make(db, created, camera=12, alarm=_alarm(db, "warn"))
+    _make(db, created, camera=12)
+
+    kept = _items(auth_client, created, external_camera_id=12, level="p1")
+
+    assert [i["id"] for i in kept] == [wanted.id]
+    assert kept[0]["external_camera_id"] == 12
+    assert kept[0]["alarm_level"] == "critical"
+
+
+def test_unknown_level_is_ignored(auth_client, db, created):
+    p1 = _make(db, created, camera=12, alarm=_alarm(db, "critical"))
+    plain = _make(db, created, camera=14)
+
+    kept = _items(auth_client, created, level="p3")
+
+    assert {i["id"] for i in kept} == {p1.id, plain.id}
+
+
 def test_results_sorted_by_id_desc(auth_client, db, created):
     ids = [
         _make(db, created, camera=12).id,
