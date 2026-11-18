@@ -239,7 +239,10 @@ def test_message_and_raise_external_arguments(db, store, result_factory):
     assert call["value"] == pytest.approx(0.917047)
     assert call["camera_id"] is None
     assert call["robot_id"] == 2
-    assert set(call) == {"metric", "level", "message", "value", "camera_id", "robot_id"}
+    # metric 保持告警中心口径，去重维度单独用相机+算法（多相机不能互相吞）
+    assert call["dedupe_key"] == f"{ROBOT_CAMERA}:行人闯入"
+    assert set(call) == {"metric", "level", "message", "value", "camera_id",
+                         "robot_id", "dedupe_key"}
 
 
 def test_missing_camera_name_falls_back_to_id(db, store, result_factory):

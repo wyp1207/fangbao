@@ -366,16 +366,24 @@ class AlarmStore:
 
     def raise_external(self, *, metric: str, level: str, message: str,
                        value: Any = None, camera_id: int | None = None,
-                       robot_id: int | None = None) -> Alarm | None:
-        """平台侧非遥测来源的告警（如环境传感器超限）。同样去重、同样落库。"""
+                       robot_id: int | None = None,
+                       dedupe_key: str | None = None) -> Alarm | None:
+        """平台侧非遥测来源的告警（如环境传感器超限）。同样去重、同样落库。
+
+        `dedupe_key` 是可选去重维度：不传就退回按 `metric` 去重（磁盘、传感器
+        等一指标一事实的来源行为不变）；AI 识别传 `"{camera_id}:{algorithm}"`——
+        同一个算法在不同相机上是不同现场事实，只按 `metric`（`ai_{algorithm}`）
+        去重会把第二台相机的告警静默吞掉，而告警中心又要求 metric 保持原口径。
+        """
+        dkey = dedupe_key or metric
         if self._is_shelved(metric):
             return None
         now = time.monotonic()
         with self._lock:
-            last = self._last_raised.get(metric)
+            last = self._last_raised.get(dkey)
             if last is not None and now - last < self.dedupe_s:
                 return None
-            self._last_raised[metric] = now
+            self._last_raised[dkey] = now
             alarm = Alarm(id=0, metric=metric, level=level, message=message, value=value)
             alarm.camera_id = camera_id  # type: ignore[attr-defined]
             if self._session_factory is not None:

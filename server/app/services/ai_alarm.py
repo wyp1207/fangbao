@@ -14,6 +14,9 @@
 - 同一 (external_camera_id, algorithm) 60s 内只建一条：一次闯入盒子会连续推
   好几帧，逐帧建告警等于刷屏。单 worker + 内存字典够用，重启丢窗口不是问题
   （重启后本来就该重新看现场，而不是继续压着不报）。
+- 这里的相机维度窗口必须和 `AlarmStore.raise_external` 的 `dedupe_key` 一致：
+  metric 是 `ai_{algorithm}`（告警中心按算法归类），但同算法在 12/13/14 三路
+  相机上是三个独立现场事实，只按 metric 去重会把后两路静默吞掉。
 
 `evaluate` 的 `now` / `store` 是刻意留的注入点：时间可注入才测得了 60/61 秒的
 去重边界；store 可注入才能脱离数据库验证"建了什么级别的告警、消息长什么样"。
@@ -123,12 +126,15 @@ def evaluate(db: Session, result: AiResult, *, now: float | None = None,
     message = f"{camera_name} 检测到 {algorithm}（置信度 {confidence:.2f}）"
     try:
         alarm = alarm_store.raise_external(
-            metric=f"ai_{algorithm}",
+            metric=f"ai_{algorithm}",          # 告警中心口径：同一算法归到同一个 metric
             level=level,
             message=message,
             value=confidence,
             camera_id=None,
             robot_id=ROBOT_ID,
+            # 但去重要按相机分开：同一算法在不同机器人相机上是不同的现场事实，
+            # 只按 metric 去重会把第二台相机的告警吞掉。
+            dedupe_key=f"{camera_id}:{algorithm}",
         )
     except Exception:
         # 没建成就不该占用去重窗口，否则一次故障会让这类告警静默 60s
