@@ -17,13 +17,16 @@ onUnauthorized(() => {
   const had = auth.isLoggedIn
   auth.user = null
   try { sessionStorage.removeItem('jc_signed_in') } catch { /* ignore */ }
+  // 本来就没登录（首访、密码错、登录前的 /settings 探测）不算“会话过期”，
+  // 不要给登录页塞 expired=1，否则第一次打开就提示“会话已过期”。
+  if (!had) return
   const current = router.currentRoute.value
   if (current.name === 'login') return
   void router.push({
     name: 'login',
     query: { ...(current.fullPath !== '/' ? { redirect: current.fullPath } : {}), expired: '1' },
   })
-  if (had) console.warn('[auth] 登录已过期，已退回登录页')
+  console.warn('[auth] 登录已过期，已退回登录页')
 })
 
 app.mount('#app')

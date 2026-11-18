@@ -1,6 +1,7 @@
-import { onBeforeUnmount, onMounted } from 'vue'
+import { onBeforeUnmount, onMounted, watch } from 'vue'
 import { api } from '@/api'
 import { useLockStore } from '@/stores/lock'
+import { useAuthStore } from '@/stores/auth'
 import { toast } from '@/composables/useToast'
 
 /**
@@ -24,8 +25,11 @@ export function useIdleSessionGuard() {
 
   const bump = () => { lastActive = Date.now() }
   const events = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'wheel']
+  const auth = useAuthStore()
 
   async function loadSetting() {
+    // 未登录不请求 /settings：首访 401 会触发全局拦截，把 /login 误标成 expired=1
+    if (!auth.user) return
     try {
       const res = await api.settings()
       const v = res.values as Record<string, unknown>
@@ -59,6 +63,8 @@ export function useIdleSessionGuard() {
   onMounted(() => {
     void loadSetting()
     refreshTimer = window.setInterval(() => { void loadSetting() }, REFRESH_SETTING_MS)
+    // 登录成功后再读空闲设置（登录前读会 401）
+    watch(() => auth.user, (u) => { if (u) void loadSetting() })
     window.addEventListener('jc:settings-updated', onSettingsSaved)
     events.forEach((e) => window.addEventListener(e, bump, { passive: true }))
     window.addEventListener('visibilitychange', bump)
