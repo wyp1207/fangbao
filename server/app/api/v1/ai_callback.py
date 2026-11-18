@@ -1,14 +1,18 @@
-"""AI 回调接收端：边缘盒子把原始 payload 推过来，平台只落盘，不做映射。
+"""AI 回调接收端：边缘盒子把真实 payload 推过来 → 原始 JSON 落盘 → 归一化入库。
 
-为什么单独一个入口、且不写库：盒子侧回调格式随算法/固件变，本轮先"原样收、
-带时间戳和脱敏后的请求头存下来"，等拿到真实 payload 再决定怎么映射到 ai_result
-和告警。所以这里刻意不写 ai_result、不建告警、不校验业务字段。
+两层职责分开，顺序不能反：
+1. 先把原始 body 原样落盘（``data/ai_callbacks/<YYYYMMDD>/<uuid>.json``）；
+2. 再调 ``ai_callback_ingest.ingest`` 归一化写 ``ai_result``，并按事件日下载
+   证据图。入库/下载失败只记日志、回 200 且 ``ingested=false``——盒子收到非 2xx
+   会一直重推，原始 payload 已经落盘，没必要把回调打成失败。
+
+下载放在线程池里跑（超时 5s）：ingest 是同步阻塞代码，直接在 async 入口里跑会
+把事件循环一起卡住，慢盒子会拖死所有接口。
+
+本轮仍不建告警（下一步）。
 
 鉴权用共享令牌（env ``AI_CALLBACK_TOKEN``），不走登录/CSRF：盒子拿不到浏览器
 会话。没配令牌就一律拒绝（fail-closed），避免"忘了配 = 人人可写盘"。
-
-落盘：``data/ai_callbacks/<YYYYMMDD>/<uuid>.json``，先写临时文件再原子替换，
-保证平台重启/写满盘时不会留下半截 JSON。
 """
 
 from __future__ import annotations
@@ -23,9 +27,11 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Request
+from starlette.concurrency import run_in_threadpool
 
 from app.core.errors import PlatformError, Unauthorized
 from app.core.redaction import MASK, redact_obj
+from app.services import ai_callback_ingest
 
 log = logging.getLogger(__name__)
 
@@ -116,6 +122,14 @@ def _save(source_key: str, headers: dict[str, Any], raw: bytes) -> tuple[str, Pa
     return ident, path
 
 
+def _ingest(body: Any) -> dict[str, Any]:
+    """在自己的 session 里跑：这个函数会被丢进线程池，不能复用请求线程的会话。"""
+    from app.db.session import SessionLocal
+
+    with SessionLocal() as db:
+        return ai_callback_ingest.ingest(db, body)
+
+
 @router.get("/ping")
 def ping() -> dict:
     """盒子/浏览器连通性自检：只回 ok，不暴露任何配置。"""
@@ -127,5 +141,23 @@ async def receive_callback(source_key: str, request: Request, token: str | None 
     _require_token(request, token)          # 先鉴权，别为无效请求浪费 IO
     raw = await _read_body(request)
     ident, _path = _save(source_key, _redacted_headers(request), raw)
-    # 先落盘再回 200：盒子收到成功才会删本地队列
-    return {"ok": True, "id": ident, "bytes": len(raw)}
+    # 先落盘再入库：入库失败也不会丢盒子推过来的原始 payload
+    body = _decode_body(raw)
+    try:
+        result = await run_in_threadpool(_ingest, body)
+    except Exception:  # noqa: BLE001 - 入库失败不能把回调打成非 2xx
+        log.exception("AI 回调入库失败 id=%s（原始 payload 已落盘）", ident)
+        result = {"ingested": False, "skipped": False, "duplicate": False,
+                  "result_id": None, "image_ok": False}
+    # 盒子收到 200 才会删本地队列
+    return {
+        "ok": True,
+        "id": ident,
+        "bytes": len(raw),
+        "ingested": bool(result.get("ingested")),
+        "skipped": bool(result.get("skipped")),
+        "duplicate": bool(result.get("duplicate")),
+        "result_id": result.get("result_id"),
+        "image": bool(result.get("image_ok")),
+    }
+

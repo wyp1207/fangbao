@@ -129,8 +129,11 @@ def test_saved_headers_are_redacted(client, cb_dir):
     assert saved["headers"]["x-box-id"] == "BOX-1"
 
 
-def test_callback_does_not_write_ai_result(client, cb_dir):
-    """本轮只收原始 payload：不许顺手写 ai_result / 建告警。"""
+def test_callback_ignores_non_callback_body(client, cb_dir):
+    """不是真实回调（没有 snowflake/timestamp）就不许写 ai_result。
+
+    真实 18 字段 payload 的入库路径见 `test_ai_callback_ingest.py`。
+    """
     from app.db.session import SessionLocal
     from app.models.ai import AiResult
 
@@ -138,5 +141,6 @@ def test_callback_does_not_write_ai_result(client, cb_dir):
         before = db.query(AiResult).count()
     r = client.post(f"{URL}?token={TOKEN}", json={"type": "intrusion"})
     assert r.status_code == 200, r.text
+    assert r.json()["ingested"] is False
     with SessionLocal() as db:
         assert db.query(AiResult).count() == before

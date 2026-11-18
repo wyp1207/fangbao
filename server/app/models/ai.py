@@ -84,6 +84,12 @@ class AiResult(Base):
     boxes_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     # 盒子原始记录 + 图片 URL（Phase 4 先不下载原图，保留可回补的线索）
     result_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 真实回调（.170 webhook）的盒子侧标识：平台相机/算法台账还没做映射，
+    # 先把盒子原值存下来，后面建告警、按盒子字段对账时不用再猜
+    external_camera_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    external_camera_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    external_algorithm_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     review_state: Mapped[str | None] = mapped_column(String(16), nullable=True)
     diagnosis_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     evidence_clip: Mapped[str | None] = mapped_column(String(255), nullable=True)
