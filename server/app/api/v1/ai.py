@@ -18,6 +18,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, Header, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -25,6 +26,7 @@ from app.services.api_auth import require_scope, session_or_key
 from app.core.errors import BadRequest, NotFound, PlatformError
 from app.db.session import get_db
 from app.models.ai import AiAlgorithm, AiPresetRule, AiResult, AiStream
+from app.models.alarm import AlarmRecord
 from app.models.user import User
 
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -69,16 +71,24 @@ def _save_image(b64: str) -> str:
     return f"ai_images/{name}"
 
 
-def _out(r: AiResult, algorithm_name: str | None = None) -> dict:
+def _out(r: AiResult, algorithm_name: str | None = None,
+         alarm_level: str | None = None) -> dict:
     return {
         "id": r.id, "algorithm": r.algorithm, "algorithm_name": algorithm_name or r.algorithm,
         "camera_id": r.camera_id, "point_id": r.point_id,
+        # 真实回调（.170）的盒子侧标识：平台相机台账还没映射，先原样给前端看
+        "external_camera_id": r.external_camera_id,
+        "camera_name": r.external_camera_name,
+        "external_algorithm_id": r.external_algorithm_id,
         "value": r.value, "text": r.text, "confidence": r.confidence,
         "image": f"/api/v1/ai/results/{r.id}/image" if r.image_path else None,
+        "source_url": r.source_url,
+        "review_state": r.review_state,
         "has_image": bool(r.image_path),
         "boxes": json.loads(r.boxes_json) if r.boxes_json else [],
         "ts": r.ts.isoformat(timespec="seconds") if r.ts else None,
         "alarm_id": r.alarm_id,
+        "alarm_level": alarm_level,
     }
 
 
@@ -159,18 +169,108 @@ def push_result(
 def list_results(
     algorithm: str | None = None,
     camera_id: int | None = None,
+    external_camera_id: int | None = None,
+    min_confidence: float | None = None,
+    since: datetime | None = None,
     limit: int = 50,
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ) -> dict:
+    """结果列表：默认按 id 倒序（最新在前），limit 硬上限 200。"""
     q = db.query(AiResult).order_by(AiResult.id.desc())
     if algorithm:
         q = q.filter(AiResult.algorithm == algorithm)
     if camera_id is not None:
         q = q.filter(AiResult.camera_id == camera_id)
-    rows = q.limit(min(limit, 200)).all()
+    if external_camera_id is not None:
+        q = q.filter(AiResult.external_camera_id == external_camera_id)
+    if min_confidence is not None:
+        q = q.filter(AiResult.confidence >= min_confidence)
+    if since is not None:
+        # 库里 ts 是无时区的本地时间；带 Z/偏移的入参先换算成本地 naive 再比
+        if since.tzinfo is not None:
+            since = since.astimezone().replace(tzinfo=None)
+        q = q.filter(AiResult.ts >= since)
+    rows = q.limit(max(1, min(limit, 200))).all()
     names = {a.code: a.name for a in db.query(AiAlgorithm).all()}
-    return {"total": len(rows), "items": [_out(r, names.get(r.algorithm)) for r in rows]}
+    # 一次查完这页的告警级别，避免每行再查一次
+    alarm_ids = [r.alarm_id for r in rows if r.alarm_id]
+    levels = dict(
+        db.query(AlarmRecord.id, AlarmRecord.level)
+        .filter(AlarmRecord.id.in_(alarm_ids))
+        .all()
+    ) if alarm_ids else {}
+    return {
+        "total": len(rows),
+        "items": [
+            _out(r, names.get(r.algorithm), levels.get(r.alarm_id))
+            for r in rows
+        ],
+    }
+
+
+@router.get("/results/stats")
+def result_stats(
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> dict:
+    """结果总览：给页面顶部统计卡和相机/算法分组用。
+
+    P1/P2 只统计真的建了告警的结果（alarm_id 能 join 到 alarm_record），
+    告警级别沿用平台既有口径：critical=P1、warn=P2。
+    """
+    today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    total = db.query(func.count(AiResult.id)).scalar() or 0
+    today = (
+        db.query(func.count(AiResult.id))
+        .filter(AiResult.ts >= today_start)
+        .scalar() or 0
+    )
+
+    camera_rows = (
+        db.query(
+            AiResult.external_camera_id,
+            func.max(AiResult.external_camera_name),
+            func.count(AiResult.id),
+        )
+        .group_by(AiResult.external_camera_id)
+        .order_by(func.count(AiResult.id).desc())
+        .all()
+    )
+    algorithm_rows = (
+        db.query(AiResult.algorithm, func.count(AiResult.id))
+        .group_by(AiResult.algorithm)
+        .order_by(func.count(AiResult.id).desc())
+        .limit(10)
+        .all()
+    )
+
+    p1 = (
+        db.query(func.count(AiResult.id))
+        .join(AlarmRecord, AlarmRecord.id == AiResult.alarm_id)
+        .filter(AlarmRecord.level == "critical")
+        .scalar() or 0
+    )
+    p2 = (
+        db.query(func.count(AiResult.id))
+        .join(AlarmRecord, AlarmRecord.id == AiResult.alarm_id)
+        .filter(AlarmRecord.level == "warn")
+        .scalar() or 0
+    )
+    return {
+        "total": total,
+        "today": today,
+        "p1": p1,
+        "p2": p2,
+        "by_camera": [
+            {"external_camera_id": cid, "camera_name": name, "count": count}
+            for cid, name, count in camera_rows
+        ],
+        "by_algorithm": [
+            {"algorithm": algo, "count": count}
+            for algo, count in algorithm_rows
+        ],
+    }
 
 
 @router.get("/streams")

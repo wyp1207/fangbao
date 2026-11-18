@@ -179,6 +179,35 @@ export interface PointDraft {
   synced: boolean
 }
 
+export interface AiResultItem {
+  id: number
+  algorithm: string
+  algorithm_name: string
+  camera_id: number | null
+  external_camera_id: number | null
+  camera_name: string | null
+  external_algorithm_id: number | null
+  value: number | null
+  text: string | null
+  confidence: number
+  image: string | null
+  source_url: string | null
+  review_state: string | null
+  boxes: Record<string, unknown>[]
+  ts: string | null
+  alarm_id: number | null
+  alarm_level: 'critical' | 'warn' | null
+}
+
+export interface AiResultStats {
+  total: number
+  today: number
+  p1: number
+  p2: number
+  by_camera: { external_camera_id: number | null; camera_name: string | null; count: number }[]
+  by_algorithm: { algorithm: string; count: number }[]
+}
+
 export interface AlarmPage {
   total: number
   items: AlarmItem[]
@@ -348,10 +377,21 @@ export const api = {
     return request<Record<string, unknown>>(`/reports/summary${q.length ? '?' + q.join('&') : ''}`)
   },
   aiAlgorithms: () => request<{ code: string; name: string; category: string }[]>('/ai/algorithms'),
-  aiResults: (params: { algorithm?: string; camera_id?: number; limit?: number } = {}) => {
-    const qs = Object.entries(params).filter(([, v]) => v).map(([k, v]) => `${k}=${v}`).join('&')
-    return request<{ total: number; items: Record<string, unknown>[] }>(`/ai/results${qs ? '?' + qs : ''}`)
+  aiResults: (params: {
+    algorithm?: string
+    camera_id?: number
+    external_camera_id?: number
+    min_confidence?: number
+    since?: string
+    limit?: number
+  } = {}) => {
+    const qs = Object.entries(params)
+      .filter(([, v]) => v !== undefined && v !== null && v !== '')
+      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+      .join('&')
+    return request<{ total: number; items: AiResultItem[] }>(`/ai/results${qs ? '?' + qs : ''}`)
   },
+  aiResultStats: () => request<AiResultStats>('/ai/results/stats'),
   apiClients: () => request<Record<string, unknown>[]>('/api-clients'),
   createApiClient: (body: { name: string; scopes: string[] }) =>
     request<Record<string, unknown>>('/api-clients', { method: 'POST', body }),
