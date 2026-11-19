@@ -38,10 +38,10 @@ export const NAV: NavGroup[] = [
     key: 'patrol', label: '巡检管理',
     items: [
       { name: 'tasks', label: '任务管理', real: true },
-          { name: 'task-templates', label: '任务模板' },
-          { name: 'task-runs', label: '任务执行' },
+      { name: 'task-templates', label: '任务模板', real: true },
+      { name: 'task-runs', label: '任务执行', real: true },
       { name: 'points', label: '巡检点位', real: true },
-          { name: 'inspection', label: '人工巡检' },
+      { name: 'inspection', label: '人工巡检', real: true },
       { name: 'task-calendar', real: true, label: '任务日历' },
     ],
   },

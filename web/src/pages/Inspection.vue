@@ -246,29 +246,7 @@ onMounted(load)
         </div>
         <p class="muted small">
           进度 {{ detail.progress?.done ?? 0 }}/{{ detail.progress?.total ?? 0 }}
-          <template v-if="detail.progress?.abnormal"> · 异常 {{ detail.progress.abnormal }}
-    <div v-if="planEdit" class="mask" @click.self="planEdit = null">
-      <div class="plan-dlg">
-        <h3>{{ planEdit.id ? "编辑计划 #" + planEdit.id : "新建巡检计划" }}</h3>
-        <div class="grid2">
-          <label class="fld"><span>名称</span><input class="input" v-model="planForm.name" /></label>
-          <label class="fld"><span>场站</span><input class="input" v-model="planForm.station" /></label>
-          <label class="fld"><span>班次</span><input class="input" v-model="planForm.shift" /></label>
-          <label class="fld"><span>启用</span>
-            <DarkSelect v-model="planForm.enabled" :options="[{ value: '1', label: '启用' }, { value: '0', label: '停用' }]" width="120px" />
-          </label>
-        </div>
-        <label class="fld"><span>点位（每行一个）</span>
-          <textarea class="input" rows="6" v-model="planForm.itemsText" /></label>
-        <label class="fld"><span>备注</span><input class="input" v-model="planForm.note" /></label>
-        <p class="dim small">改点位会覆盖原配置；已生成的任务不受影响。</p>
-        <div class="acts">
-          <button type="button" class="btn btn-sm" @click="planEdit = null">取消</button>
-          <button type="button" class="btn btn-sm primary" @click="savePlan">保存</button>
-        </div>
-      </div>
-    </div>
-</template>
+          <template v-if="detail.progress?.abnormal"> · 异常 {{ detail.progress.abnormal }}</template>
         </p>
         <table class="grid">
           <thead><tr><th style="width: 50px">序</th><th style="width: 160px">点位</th><th style="width: 100px">扫码</th>
@@ -288,7 +266,6 @@ onMounted(load)
         <div class="modal-actions"><button type="button" class="btn" @click="detail = null">关闭</button></div>
       </div>
     </div>
-  </div>
 
     <div v-if="planEdit" class="mask" @click.self="planEdit = null">
       <div class="plan-dlg">
@@ -311,6 +288,7 @@ onMounted(load)
         </div>
       </div>
     </div>
+  </div>
 </template>
 
 <style scoped>
