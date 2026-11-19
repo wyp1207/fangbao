@@ -6,6 +6,7 @@ import { ApiError } from '@/api/client'
 import DarkSelect from '@/components/DarkSelect.vue'
 import { toast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
+import { inspectionPhotoUrl as photoUrl } from '@/utils/inspectionPhoto'
 
 interface Plan {
   id: number
@@ -123,20 +124,36 @@ async function generate(p: Plan) {
   }
 }
 
-// 库里只存相对路径（inspection_photos/<日期>/<文件>），静态网关在
-// /api/v1/inspection/photos/<日期>/<文件>；老数据可能已经是接口路径，别再拼一次。
-function photoUrl(u: string): string {
-  if (!u) return ''
-  if (u.startsWith('/')) return u
-  return `/api/v1/inspection/photos/${u.replace(/^inspection_photos\//, '')}`
-}
-
 async function openDetail(t: Task) {
   try {
     detail.value = (await api.inspectionTask(t.id)) as unknown as typeof detail.value
   } catch (e) {
     detail.value = null
     toast(e instanceof ApiError ? e.message : '任务详情读取失败', 'danger')
+  }
+}
+
+// 异常项转工单：人工巡检页承诺“缺陷上报”，这里给出闭环入口
+const woBusy = ref<number | null>(null)
+async function toWorkOrder(i: any) {
+  if (!detail.value) return
+  if (!window.confirm(`把「${i.point_name}」的异常转成工单？`)) return
+  woBusy.value = i.id
+  try {
+    const o = await api.createWorkOrder({
+      title: `人工巡检异常：${i.point_name}`,
+      source: 'inspection',
+      source_id: i.id,
+      level: 'warn',
+      due_hours: 24,
+      description: [i.note, (i.checks ?? []).join('、')].filter(Boolean).join('；') || null,
+      photos: (i.photos ?? []).map((u: string) => photoUrl(u)),
+    }) as { code?: string; id?: number }
+    toast(`已转工单 ${o.code ?? '#' + o.id}`, 'ok', 5000)
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : '转工单失败', 'danger')
+  } finally {
+    woBusy.value = null
   }
 }
 
@@ -266,7 +283,7 @@ onMounted(load)
         <table class="grid">
           <thead><tr><th style="width: 50px">序</th><th style="width: 150px">点位</th><th style="width: 80px">扫码</th>
             <th style="width: 80px">结论</th><th style="width: 170px">检查项</th>
-            <th style="width: 110px">照片</th><th>备注</th></tr></thead>
+            <th style="width: 110px">照片</th><th>备注</th><th style="width: 90px">操作</th></tr></thead>
           <tbody>
             <tr v-for="i in detail.items" :key="i.id">
               <td>{{ i.seq }}</td>
@@ -284,6 +301,13 @@ onMounted(load)
                 <span v-if="!(i.photos ?? []).length" class="dim">—</span>
               </td>
               <td class="dim small">{{ i.note || '—' }}</td>
+              <td>
+                <button v-if="i.result === 'abnormal'" type="button" class="btn btn-xs danger"
+                        :disabled="!auth.canWrite || woBusy === i.id" @click="toWorkOrder(i)">
+                  {{ woBusy === i.id ? '提交中…' : '转工单' }}
+                </button>
+                <span v-else class="dim">—</span>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -325,7 +349,7 @@ onMounted(load)
 .bar { height: 5px; background: rgba(0, 40, 80, 0.6); border-radius: 3px; overflow: hidden; margin-bottom: 2px; }
 .bar i { display: block; height: 100%; background: linear-gradient(90deg, #29d4ff, #6ff0c0); }
 .modal-mask { position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; background: rgba(2, 14, 30, 0.66); }
-.modal { width: 720px; max-height: 90vh; overflow: auto; padding: 14px 16px;
+.modal { width: 900px; max-height: 90vh; overflow: auto; padding: 14px 16px;
   background: linear-gradient(180deg, rgba(0, 112, 200, 0.97), rgba(0, 60, 118, 0.98));
   border: 1px solid rgba(111, 227, 255, 0.6); }
 .modal-actions { display: flex; justify-content: flex-end; margin-top: 8px; }

@@ -11,6 +11,7 @@ import { useRoute } from 'vue-router'
 import { api } from '@/api'
 import { ApiError } from '@/api/client'
 import { toast } from '@/composables/useToast'
+import { inspectionPhotoUrl as photoUrl } from '@/utils/inspectionPhoto'
 
 interface Item {
   id: number
@@ -183,7 +184,7 @@ onMounted(load)
         <span>现场照片（可选，最多 6MB）</span>
         <input type="file" accept="image/*" capture="environment" class="filein" @change="uploadPhoto" />
         <div v-if="photos.length || cur.photos?.length" class="thumbs">
-          <img v-for="(u, i) in [...(cur.photos ?? []), ...photos]" :key="i" :src="u" alt="现场照片" />
+          <img v-for="(u, i) in [...(cur.photos ?? []), ...photos]" :key="i" :src="photoUrl(u)" alt="现场照片" />
         </div>
         <em v-if="uploading" class="scanmsg">上传中…</em>
       </label>
