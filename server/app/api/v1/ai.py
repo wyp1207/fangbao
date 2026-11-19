@@ -176,6 +176,24 @@ def push_result(
 LEVEL_FILTER = {"p1": "critical", "p2": "warn"}
 
 
+@router.get("/results/by-alarm/{alarm_id}")
+def result_by_alarm(
+    alarm_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> dict:
+    """告警详情用：找这条告警关联的最新一条 AI 结果（含框、图）。"""
+    r = (
+        db.query(AiResult)
+        .filter(AiResult.alarm_id == alarm_id)
+        .order_by(AiResult.id.desc())
+        .first()
+    )
+    if r is None:
+        raise NotFound("这条告警没有关联的 AI 检测结果")
+    return _out(r)
+
+
 @router.get("/results")
 def list_results(
     algorithm: str | None = None,

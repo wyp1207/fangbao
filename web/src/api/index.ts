@@ -397,6 +397,8 @@ export const api = {
     return request<{ total: number; items: AiResultItem[] }>(`/ai/results${qs ? '?' + qs : ''}`)
   },
   aiResultStats: () => request<AiResultStats>('/ai/results/stats'),
+  aiResultByAlarm: (alarmId: number) =>
+    request<AiResultItem>(`/ai/results/by-alarm/${alarmId}`),
   apiClients: () => request<Record<string, unknown>[]>('/api-clients'),
   createApiClient: (body: { name: string; scopes: string[] }) =>
     request<Record<string, unknown>>('/api-clients', { method: 'POST', body }),

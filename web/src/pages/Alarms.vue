@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { api, type AlarmItem } from '@/api'
+import { api, type AlarmItem, type AiResultItem } from '@/api'
 import { useRobotStore } from '@/stores/robot'
 import { useAuthStore } from '@/stores/auth'
 import DarkSelect from '@/components/DarkSelect.vue'
@@ -124,6 +124,63 @@ function goPlayback(a: AlarmItem) {
       t: when.slice(11, 19),
     },
   })
+}
+
+// ---- AI 告警：检测框图片 ----
+const aiShot = ref<AiResultItem | null>(null)
+const aiShotLoading = ref(false)
+const aiShotError = ref('')
+const shotW = ref(0)
+const shotH = ref(0)
+
+function isAiAlarm(a: AlarmItem): boolean {
+  return (a.metric ?? '').startsWith('ai_')
+}
+
+async function openAiShot(a: AlarmItem) {
+  aiShotError.value = ''
+  aiShotLoading.value = true
+  shotW.value = 0
+  shotH.value = 0
+  try {
+    aiShot.value = await api.aiResultByAlarm(a.id)
+  } catch (e) {
+    aiShot.value = null
+    aiShotError.value = e instanceof ApiError ? e.message : '没有关联的检测结果'
+  } finally {
+    aiShotLoading.value = false
+  }
+}
+
+function closeAiShot() {
+  aiShot.value = null
+  aiShotError.value = ''
+}
+
+function boxStyle(b: Record<string, unknown>): Record<string, string> {
+  const rect = (b.rect ?? {}) as Record<string, number>
+  if (!shotW.value || !shotH.value) return { display: 'none' }
+  const x = Number(rect.x ?? 0)
+  const y = Number(rect.y ?? 0)
+  const w = Number(rect.width ?? 0)
+  const h = Number(rect.height ?? 0)
+  return {
+    left: `${(x / shotW.value) * 100}%`,
+    top: `${(y / shotH.value) * 100}%`,
+    width: `${(w / shotW.value) * 100}%`,
+    height: `${(h / shotH.value) * 100}%`,
+  }
+}
+
+function boxLabel(b: Record<string, unknown>): string {
+  const s = Number(b.score ?? 0)
+  return Number.isFinite(s) ? `${Math.round(s * 100)}%` : ''
+}
+
+function onShotLoad(e: Event) {
+  const el = e.target as HTMLImageElement
+  shotW.value = el.naturalWidth
+  shotH.value = el.naturalHeight
 }
 
 // ---- 搁置（检修/标定期间临时屏蔽）----
@@ -326,6 +383,8 @@ watch([levelFilter, ackFilter], async () => { page.value = 1; await reload() })
                 <button type="button" class="act" title="处置（写清做了什么）" :disabled="!auth.canWrite || !!a.closed_at" @click="openAct(a, 'handle')">✎</button>
                 <button type="button" v-if="a.camera_id" class="act" title="看当时的录像"
                         @click="goPlayback(a)">▶</button>
+                <button type="button" v-if="isAiAlarm(a)" class="act" title="查看 AI 检测框图片"
+                        @click="openAiShot(a)">图</button>
                 <button type="button" v-if="!a.work_order_id" class="act" title="转工单（派单闭环）"
                         :disabled="!auth.canWrite || !!a.closed_at" @click="asWorkOrder(a)">→</button>
                 <button type="button" v-else class="act ok" :title="`已生成工单 #${a.work_order_id}，点击查看`"
@@ -405,6 +464,29 @@ watch([levelFilter, ackFilter], async () => { page.value = 1; await reload() })
     </div>
   </div>
 
+    <div v-if="aiShot || aiShotLoading || aiShotError" class="ai-mask" @click.self="closeAiShot">
+      <div class="ai-dlg">
+        <div class="ai-head">
+          <b>AI 检测结果</b>
+          <span v-if="aiShot" class="dim small">
+            {{ aiShot.algorithm_name }} · {{ aiShot.camera_name || '—' }} ·
+            {{ Math.round((aiShot.confidence ?? 0) * 100) }}%
+          </span>
+          <span class="grow" />
+          <button type="button" class="act" title="关闭" @click="closeAiShot">✕</button>
+        </div>
+        <p v-if="aiShotLoading" class="dim">读取检测结果…</p>
+        <p v-if="aiShotError" class="danger small">{{ aiShotError }}</p>
+        <div v-if="aiShot && aiShot.image" class="ai-frame">
+          <img :src="aiShot.image" alt="AI 检测图" @load="onShotLoad" />
+          <span v-for="(b, i) in aiShot.boxes" :key="i" class="ai-box" :style="boxStyle(b)">
+            <em>{{ boxLabel(b) }}</em>
+          </span>
+        </div>
+        <p v-else-if="aiShot" class="dim small">这条告警没有保存检测图。</p>
+      </div>
+    </div>
+
     <div v-if="shelveFor" class="mask" @click.self="shelveFor = null">
       <div class="shelve-dlg">
         <h3>搁置告警 #{{ shelveFor.id }}</h3>
@@ -435,6 +517,18 @@ watch([levelFilter, ackFilter], async () => { page.value = 1; await reload() })
 .input.area { resize: vertical; font-family: inherit; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .small { font-size: 11.5px; }
+
+/* AI 检测框图 */
+.ai-mask { position: fixed; inset: 0; z-index: 220; display: grid; place-items: center; background: rgba(2, 10, 22, .82); }
+.ai-dlg { width: min(920px, 92vw); max-height: 90vh; overflow: auto; padding: 12px 14px 14px;
+  background: linear-gradient(180deg, rgba(6, 46, 92, .98), rgba(4, 24, 48, .99));
+  border: 1px solid rgba(111, 227, 255, .55); }
+.ai-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.ai-frame { position: relative; line-height: 0; border: 1px solid rgba(111, 227, 255, .35); }
+.ai-frame img { width: 100%; height: auto; display: block; }
+.ai-box { position: absolute; border: 2px solid #ffd23f; box-shadow: 0 0 0 1px rgba(0,0,0,.45) inset; }
+.ai-box em { position: absolute; left: -2px; top: -18px; padding: 0 5px; font-style: normal;
+  font-size: 11px; line-height: 18px; color: #08243f; background: #ffd23f; white-space: nowrap; }
 
 .page { display: flex; flex-direction: column; gap: 12px; min-height: 100%; }
 .page > .panel:first-of-type { flex: 1; min-height: 0; overflow: auto; }
