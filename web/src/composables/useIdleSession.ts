@@ -18,14 +18,32 @@ const REFRESH_SETTING_MS = 60_000
 
 export function useIdleSessionGuard() {
   let lastActive = Date.now()
-  let idleMinutes = FALLBACK_MINUTES
-  let enabled = true
   let timer = 0
   let refreshTimer = 0
 
   const bump = () => { lastActive = Date.now() }
   const events = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'wheel']
   const auth = useAuthStore()
+
+  // 上次成功读到的设置：后端/代理短暂不可达时沿用，不能凭空退回“5 分钟必锁”，
+  // 否则一断网就把人锁在门外（/auth/verify 也连不上，解不开）。
+  const CACHE_KEY = 'jc_idle_cfg'
+  function readCache(): { enabled: boolean; minutes: number } | null {
+    try {
+      const raw = sessionStorage.getItem(CACHE_KEY)
+      if (!raw) return null
+      const o = JSON.parse(raw) as { enabled?: unknown; minutes?: unknown }
+      const m = Number(o.minutes)
+      return {
+        enabled: o.enabled !== false,
+        minutes: Number.isFinite(m) && m > 0 ? m : FALLBACK_MINUTES,
+      }
+    } catch { return null }
+  }
+  const cached = readCache()
+  // 没有可信设置前默认不锁（锁了也解不开）；读到后再按服务端值执行。
+  let enabled = cached ? cached.enabled : false
+  let idleMinutes = cached ? cached.minutes : FALLBACK_MINUTES
 
   async function loadSetting() {
     // 未登录不请求 /settings：首访 401 会触发全局拦截，把 /login 误标成 expired=1
@@ -37,10 +55,11 @@ export function useIdleSessionGuard() {
       enabled = v['security.idle_lock_enabled'] !== false
       const n = Number(v['security.idle_minutes'])
       idleMinutes = Number.isFinite(n) && n > 0 ? n : FALLBACK_MINUTES
+      try {
+        sessionStorage.setItem(CACHE_KEY, JSON.stringify({ enabled, minutes: idleMinutes }))
+      } catch { /* 隐私模式忽略 */ }
     } catch {
-      // 读不到就按默认开、5 分钟，绝不因为设置接口挂了就永不锁屏
-      enabled = true
-      idleMinutes = FALLBACK_MINUTES
+      // 读不到：有缓存就用缓存；没有就保持“不锁”，等下次恢复再读
     }
   }
 

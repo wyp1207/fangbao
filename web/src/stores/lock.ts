@@ -48,6 +48,9 @@ export const useLockStore = defineStore('lock', () => {
       if (sessionGone(e)) {
         expired.value = true
         error.value = '登录已过期，请重新登录'
+      } else if (e instanceof TypeError || /Failed to fetch|NetworkError|负载均衡/.test(String((e as Error)?.message ?? ''))) {
+        // 后端/代理不可达：不是密码错，明确提示并允许重试
+        error.value = '无法连接后端服务，请检查服务是否正常后重试'
       } else {
         error.value = e instanceof Error ? e.message : '密码不正确'
       }
