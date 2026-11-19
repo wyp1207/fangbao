@@ -25,10 +25,12 @@ from app.services.api_auth import require_scope
 from app.core.errors import BadRequest, NotFound, PlatformError
 from app.db.session import get_db
 from app.models.map_library import PointDraft
-from app.models.task_run import TaskRun, TaskRunStep
+from app.models.task_run import TaskEvent, TaskRun, TaskRunStep
 from app.models.task_template import TaskTemplate
 from app.models.user import User
 from app.services.messages import audit
+from app.services.task_events import KIND_LABELS as EVENT_LABELS
+from app.services.task_events import list_events, safe_log
 
 router = APIRouter(prefix="/task-runs", tags=["task-runs"])
 
@@ -39,6 +41,8 @@ STATUS_LABELS = {
     "failed": "失败",
     "cancelled": "已取消",
 }
+
+# 事件 kind → 中文标签统一放在 task_events.KIND_LABELS（前端另有一份，离线也能显示）
 
 
 class RunIn(BaseModel):
@@ -146,6 +150,28 @@ def get_run(run_id: int, db: Session = Depends(get_db),
     return _run_out(r, steps)
 
 
+def _event_out(e: TaskEvent) -> dict:
+    try:
+        data = json.loads(e.data_json) if e.data_json else None
+    except Exception:  # noqa: BLE001
+        data = e.data_json          # 坏 JSON 也照原样给出，不为展示方便改历史
+    return {
+        "id": e.id, "run_id": e.run_id, "seq": e.seq, "kind": e.kind,
+        "kind_label": EVENT_LABELS.get(e.kind, e.kind),
+        "message": e.message, "data": data, "actor": e.actor,
+        "created_at": e.created_at.isoformat(timespec="seconds") if e.created_at else None,
+    }
+
+
+@router.get("/{run_id}/events")
+def list_run_events(run_id: int, db: Session = Depends(get_db),
+                    _: User = Depends(get_current_user)) -> dict:
+    """任务执行事件时间线（详情弹层用），按 seq 升序。"""
+    if not db.get(TaskRun, run_id):
+        raise NotFound("执行记录不存在")
+    return {"items": [_event_out(e) for e in list_events(db, run_id)]}
+
+
 @router.post("", dependencies=[Depends(require_csrf)])
 def create_run(
     body: RunIn,
@@ -182,6 +208,10 @@ def create_run(
     for s in steps:
         s.run_id = run.id
         db.add(s)
+    safe_log(db, run.id, "created",
+             f"创建执行计划（{len(steps)} 个点位）",
+             data={"template_id": body.template_id, "steps": len(steps)},
+             actor=me.username)
     db.commit()
     db.refresh(run)
 
@@ -328,6 +358,9 @@ def retry_step(
     step.error = None
     step.finished_at = datetime.now()
     step.result_json = json.dumps({"capture": res, "retried": True}, ensure_ascii=False)
+    safe_log(db, run.id, "step_retry", f"第 {seq} 点动作重试成功",
+             data={"seq": seq, "action": step.action, "point": step.point_name},
+             actor=me.username)
     db.commit()
     audit(db=db, action="task_run.retry_step", target=f"{run.name}#{seq}", user=me)
     return {"ok": True, "seq": seq}
@@ -447,6 +480,11 @@ def cancel_run(
 
     if r.status == "planned":
         r.status = "cancelled"
+        safe_log(db, r.id, "cancelled",
+                 f"计划未下发，直接作废：{reason or '未填原因'}",
+                 data={"reason": (reason or "")[:200] or "未填原因",
+                       "dispatched": False},
+                 actor=me.username)
         db.commit()
         db.refresh(r)
         audit(db=db, action="task_run.cancel", target=r.name, user=me,

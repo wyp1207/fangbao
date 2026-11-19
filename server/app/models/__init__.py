@@ -11,10 +11,10 @@ from app.models.robot import Robot
 from app.models.sensor import Sensor, SensorReading
 from app.models.sensor_gateway import SensorGateway
 from app.models.setting import Setting
-from app.models.task_run import TaskRun, TaskRunStep
+from app.models.task_run import TaskEvent, TaskRun, TaskRunStep
 from app.models.task_template import TaskTemplate
 from app.models.telemetry import TelemetrySample
 from app.models.user import LoginAttempt, PasswordHistory, User
 from app.models.video_source import VideoSource
 
-__all__ = ["Base", "AiAlgorithm", "AiResult", "ApiClient", "AlarmRecord", "InspectionItem", "InspectionPlan", "InspectionTask", "WorkOrder", "PlatformMap", "PointDraft", "MessageRecord", "NotifyChannel", "NotifyLog", "OperationLog", "RecordPlan", "Robot", "Sensor", "SensorGateway", "SensorReading", "Setting", "TaskRun", "TaskRunStep", "TaskTemplate", "TelemetrySample", "LoginAttempt", "PasswordHistory", "User", "VideoSource"]
+__all__ = ["Base", "AiAlgorithm", "AiResult", "ApiClient", "AlarmRecord", "InspectionItem", "InspectionPlan", "InspectionTask", "WorkOrder", "PlatformMap", "PointDraft", "MessageRecord", "NotifyChannel", "NotifyLog", "OperationLog", "RecordPlan", "Robot", "Sensor", "SensorGateway", "SensorReading", "Setting", "TaskEvent", "TaskRun", "TaskRunStep", "TaskTemplate", "TelemetrySample", "LoginAttempt", "PasswordHistory", "User", "VideoSource"]

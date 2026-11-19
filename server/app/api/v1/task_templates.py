@@ -219,6 +219,10 @@ def dispatch_template(
         db.add(TaskRunStep(run_id=run.id, seq=i + 1, point_id=a.get("point_id"),
                            point_name=names.get(a.get("point_id")),
                            action=a.get("action", "photo"), status="pending"))
+    from app.services.task_events import safe_log
+
+    safe_log(db, run.id, "created", f"由模板「{tpl.name}」创建执行计划",
+             data={"template_id": tpl.id, "steps": len(actions)}, actor=me.username)
     db.commit()
     db.refresh(run)
 

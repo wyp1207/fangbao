@@ -216,6 +216,19 @@ export interface AlarmPage {
   items: AlarmItem[]
 }
 
+/** 任务执行事件（task_event）：一步状态迁移一条，只追加 */
+export interface TaskEventItem {
+  id: number
+  run_id: number
+  seq: number
+  kind: string
+  kind_label?: string
+  message: string
+  data: Record<string, unknown> | null
+  actor: string
+  created_at: string | null
+}
+
 export interface AlarmItem {
   work_order_id?: number | null
   priority?: string | null
@@ -455,6 +468,9 @@ export const api = {
   },
   taskReportUrl: (id: number) => `/api/v1/task-runs/${id}/report.xlsx`,
   taskRun: (id: number) => request<Record<string, unknown>>(`/task-runs/${id}`),
+  /** 执行事件时间线：按 seq 升序，详情弹层用 */
+  taskRunEvents: (id: number) =>
+    request<{ items: TaskEventItem[] }>(`/task-runs/${id}/events`),
   createTaskRun: (body: Record<string, unknown>) =>
     request<Record<string, unknown>>('/task-runs', { method: 'POST', body }),
   dispatchTaskRun: (id: number) =>

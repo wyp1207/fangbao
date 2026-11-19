@@ -19,7 +19,7 @@ from app.models.robot import Robot
 from app.models.sensor import Sensor, SensorReading  # noqa: F401
 from app.models.sensor_gateway import SensorGateway  # noqa: F401
 from app.models.setting import Setting  # noqa: F401
-from app.models.task_run import TaskRun, TaskRunStep  # noqa: F401
+from app.models.task_run import TaskEvent, TaskRun, TaskRunStep  # noqa: F401
 from app.models.task_template import TaskTemplate  # noqa: F401
 from app.models.telemetry import TelemetrySample  # noqa: F401
 from app.models.user import LoginAttempt, PasswordHistory, User  # noqa: F401

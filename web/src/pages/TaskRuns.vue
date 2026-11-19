@@ -35,6 +35,15 @@ interface Step {
   result: Record<string, unknown> | null
   error: string | null
 }
+// 执行事件：一步状态迁移一条（后端 task_event，按 seq 递增，只追加）
+interface EventRow {
+  id: number
+  seq: number
+  kind: string
+  message: string
+  actor: string
+  created_at: string | null
+}
 
 const auth = useAuthStore()
 const rows = ref<RunRow[]>([])
@@ -43,7 +52,8 @@ const status = ref('')
 const loading = ref(false)
 const error = ref('')
 const page = ref(1)                       // 1 起：第几页
-const detail = ref<(RunRow & { steps: Step[]; progress: { total: number; ok: number; failed: number } }) | null>(null)
+const detail = ref<(RunRow & { steps: Step[]; events: EventRow[]; progress: { total: number; ok: number; failed: number } }) | null>(null)
+const eventsError = ref('')
 const templates = ref<{ id: number; name: string }[]>([])
 const creating = ref(false)
 const form = ref({ templateId: '', name: '', note: '' })
@@ -60,6 +70,17 @@ const STATUS_TEXT: Record<string, string> = {
 }
 const STATUS_TONE: Record<string, string> = {
   planned: 'warn', running: '', done: 'ok', failed: 'danger', cancelled: 'warn',
+}
+// 事件类型：中文标签 + 颜色（failed/cancelled 红、done 绿、paused 黄、其它蓝=默认 .tag）
+const EVENT_TEXT: Record<string, string> = {
+  created: '创建', dispatched: '已下发', paused: '暂停', resumed: '继续',
+  cancelled: '取消', step_retry: '步骤重试', done: '完成', failed: '失败',
+}
+const EVENT_TONE: Record<string, string> = {
+  failed: 'danger', cancelled: 'danger', done: 'ok', paused: 'warn',
+}
+function eventTone(kind: string): string {
+  return EVENT_TONE[kind] ?? ''
 }
 const statusOptions = [
   { value: '', label: '全部' },
@@ -111,8 +132,17 @@ function goPage(p: number) {
 }
 
 async function openDetail(r: RunRow) {
+  eventsError.value = ''
   try {
-    detail.value = (await api.taskRun(r.id)) as unknown as typeof detail.value
+    // 详情和事件并行拉：事件是旁路，拉失败也不该让详情整块打不开
+    const [d, ev] = await Promise.all([
+      api.taskRun(r.id),
+      api.taskRunEvents(r.id).catch(() => null),
+    ])
+    const merged = d as unknown as NonNullable<typeof detail.value>
+    merged.events = (ev?.items ?? []) as unknown as EventRow[]
+    if (!ev) eventsError.value = '执行事件加载失败'
+    detail.value = merged
   } catch (e) {
     toast(e instanceof ApiError ? e.message : '详情读取失败', 'danger')
   }
@@ -379,6 +409,25 @@ onMounted(async () => {
           </tbody>
         </table>
 
+        <!-- 执行事件时间线：时间 / 类型 / 消息，按后端 seq 升序 -->
+        <div class="timeline-head">
+          <span>执行事件</span>
+          <span class="muted small">
+            <template v-if="detail.events?.length">共 {{ detail.events.length }} 条</template>
+            <template v-else>下发、暂停、重试、完成都会记一条</template>
+          </span>
+        </div>
+        <div v-if="eventsError" class="errbar"><span>{{ eventsError }}</span></div>
+        <ol v-else-if="detail.events?.length" class="timeline">
+          <li v-for="ev in detail.events" :key="ev.id">
+            <span class="ev-time num">{{ (ev.created_at ?? '').replace('T', ' ').slice(5, 19) || '—' }}</span>
+            <span class="tag" :class="eventTone(ev.kind)">{{ EVENT_TEXT[ev.kind] ?? ev.kind }}</span>
+            <span class="ev-msg">{{ ev.message }}</span>
+            <span v-if="ev.actor && ev.actor !== 'system'" class="dim small">{{ ev.actor }}</span>
+          </li>
+        </ol>
+        <p v-else class="muted small ev-empty">暂无事件</p>
+
         <div class="modal-actions">
           <button type="button" class="btn" @click="detail = null">关闭</button>
         </div>
@@ -429,4 +478,20 @@ onMounted(async () => {
 .fld > span { display: block; font-size: 12px; color: #9fd2ff; margin-bottom: 5px; }
 .fld .input { width: 100%; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+/* 执行事件时间线 */
+.timeline-head {
+  display: flex; align-items: baseline; gap: 8px;
+  margin: 14px 0 6px; padding-top: 10px;
+  border-top: 1px solid rgba(111, 227, 255, 0.25);
+}
+.timeline-head > span:first-child { font-size: 13px; color: #9fd2ff; }
+.timeline { list-style: none; margin: 0; padding: 0; max-height: 210px; overflow: auto; }
+.timeline > li {
+  display: flex; align-items: baseline; gap: 9px;
+  padding: 4px 2px; font-size: 12.5px;
+  border-bottom: 1px dashed rgba(111, 227, 255, 0.14);
+}
+.ev-time { flex: none; width: 104px; color: #8fc4e8; }
+.ev-msg { flex: 1; min-width: 0; word-break: break-all; }
+.ev-empty { margin: 2px 0 0; }
 </style>

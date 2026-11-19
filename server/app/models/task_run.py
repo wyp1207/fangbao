@@ -70,3 +70,28 @@ class TaskRunStep(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     result_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     error: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+
+class TaskEvent(Base):
+    """任务执行事件（时间线，只追加）。
+
+    为什么单独一张表：`task_run.status` 只有一个"当前值"，"什么时候下发的、
+    中途暂停过几次、哪一步重试了、最后是超时还是车端报失败"全都看不到，
+    只能翻服务日志。参考 Open-RMF 的 task state 变化、Nav2 行为树节点事件、
+    Temporal 的 activity history：把每次状态迁移按 (run_id, seq) 追加下来，
+    前端详情里就是一条能复盘的时间线。
+
+    kind 是稳定的英文字面量（前端翻中文），新类型只追加、不改旧值。
+    seq 按 run 从 1 递增；事件失败不能影响主流程（调用方用 safe_log）。
+    """
+
+    __tablename__ = "task_event"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    run_id: Mapped[int] = mapped_column(Integer, index=True)
+    seq: Mapped[int] = mapped_column(Integer, default=0)
+    kind: Mapped[str] = mapped_column(String(24))
+    message: Mapped[str] = mapped_column(String(255), default="")
+    data_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    actor: Mapped[str] = mapped_column(String(64), default="system")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, index=True)

@@ -21,6 +21,7 @@ from datetime import datetime, timedelta
 
 from app.core.errors import BadRequest, PlatformError
 from app.models.task_run import TaskRun
+from app.services import task_events
 from app.services.async_bridge import run_async
 from app.models.task_run import TaskRunStep
 from app.models.task_template import TaskTemplate
@@ -52,6 +53,16 @@ def _require_write() -> None:
             "写操作未开启：需真机联调通过 + 现场授权书，然后在系统设置开启「允许下发任务」",
             code="WRITE_LOCKED", status_code=403,
         )
+
+
+def _event(db, run: TaskRun, kind: str, message: str,
+           data: dict | None = None, actor: str = "system") -> None:
+    """落一条执行事件。
+
+    时间线是**旁路**：事件写不进去（表锁/磁盘满/字段超长）绝不能把下发、
+    暂停、取消带崩，所以统一走 safe_log——它自己 try/except 只记日志。
+    """
+    task_events.safe_log(db, run.id, kind, message, data=data, actor=actor)
 
 
 def _call(fn, *args):
@@ -283,6 +294,10 @@ def dispatch(db, run: TaskRun, adapter) -> TaskRun:
     run.last_progress_at = datetime.now()
     run.dispatch_state = "sent"
     run.order_json = json.dumps(order, ensure_ascii=False)
+    _event(db, run, "dispatched",
+           f"已下发到机器人（order_id={order_id}）",
+           data={"order_id": order_id, "external_id": run.external_id,
+                 "attempt": run.dispatch_attempt, "steps": len(steps)})
     db.commit()
     db.refresh(run)
     log.info("任务下发 #%s order=%s → %s", run.id, order_id, run.external_id)
@@ -326,6 +341,10 @@ def _poll_until_done(run_id: int, adapter, timeout_s: int = 1800) -> None:
                     if st.status in ("pending", "running"):
                         st.status = "ok" if state == "FINISHED" else "failed"
                         st.finished_at = datetime.now()
+                _event(db, run, "done" if state == "FINISHED" else "failed",
+                       ("机器人报告任务完成" if state == "FINISHED"
+                        else "机器人报告任务失败"),
+                       data={"state": state, "steps": len(steps)})
                 db.commit()
             return
     # 超时：明确标失败，不留在 running 里让人猜
@@ -335,6 +354,9 @@ def _poll_until_done(run_id: int, adapter, timeout_s: int = 1800) -> None:
             run.status = "failed"
             run.dispatch_error = f"超过 {timeout_s // 60} 分钟未收到完成状态"
             run.finished_at = datetime.now()
+            _event(db, run, "failed",
+                   f"超过 {timeout_s // 60} 分钟未收到完成状态（超时）",
+                   data={"reason": "timeout"})
             db.commit()
 
 
@@ -359,6 +381,8 @@ def pause(db, run: TaskRun, adapter) -> TaskRun:
     if cruising:
         cruise_mod.runner.pause(run.id)
     run.paused_at = datetime.now()
+    _event(db, run, "paused", "任务暂停",
+           data={"robot_busy": bool(cruising)})
     db.commit()
     return run
 
@@ -378,6 +402,7 @@ def resume(db, run: TaskRun, adapter) -> TaskRun:
         cruise_mod.runner.resume(run.id)
     run.paused_at = None
     run.last_progress_at = datetime.now()
+    _event(db, run, "resumed", "任务继续执行")
     db.commit()
     return run
 
@@ -414,10 +439,15 @@ def cancel(db, run: TaskRun, adapter, reason: str = "") -> TaskRun:
     if stopped:
         run.status = "cancelled"
         run.dispatch_error = reason or "人工取消"
+        _event(db, run, "cancelled", f"任务已取消：{reason or '人工取消'}",
+               data={"reason": reason or "人工取消", "stopped": True})
     else:
         run.status = "failed"
         run.dispatch_error = ("已发取消但车端仍在执行（回读仍 RUNNING），"
                              "请用急停或现场处理")
+        _event(db, run, "cancelled",
+               "已发取消但车端未确认停止，任务标为失败",
+               data={"reason": reason or "人工取消", "stopped": False})
     db.commit()
     return run
 
@@ -539,6 +569,8 @@ def mark_stale_runs(session_factory) -> int:
         for r in stale:
             r.status = "failed"
             r.dispatch_error = "服务重启，任务状态未知；请确认机器人是否仍在执行"
+            _event(db, r, "failed", "服务重启，任务状态未知",
+                   data={"reason": "restart"})
             n += 1
         if n:
             db.commit()

@@ -21,6 +21,7 @@ from datetime import datetime
 from app.models.map_library import PointDraft
 from app.models.task_run import TaskRun
 from app.services.async_bridge import run_async
+from app.services.task_events import safe_log
 from app.models.task_run import TaskRunStep
 
 log = logging.getLogger(__name__)
@@ -193,6 +194,13 @@ class CruiseRunner:
             if failed:
                 run.dispatch_error = f"{failed} 个点位失败，详见各点结果"
             run.finished_at = datetime.now()
+            # 时间线旁路：事件写不进去也不能影响任务收尾
+            safe_log(db, run_id,
+                     "cancelled" if stop.is_set() else ("done" if failed == 0 else "failed"),
+                     ("已人工取消" if stop.is_set()
+                      else (f"巡航完成（{failed} 个点位失败）" if failed
+                            else "巡航完成，全部点位成功")),
+                     data={"failed_steps": failed, "cancelled": stop.is_set()})
             db.commit()
         self._cancel.pop(run_id, None)
         self._pause.pop(run_id, None)
