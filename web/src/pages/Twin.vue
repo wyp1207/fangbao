@@ -460,6 +460,9 @@ function updateAlarms(list: { id: number; message: string; level: string; metric
     alarmGroup.traverse((o) => {
       const mesh = o as THREE.Mesh
       mesh.geometry?.dispose?.()
+      // CSS2D 的 DOM 节点不会跟着 group 一起消失：不手动 remove，重复调用就会留一层
+      // 相同的标签在原地（两张一模一样的汇总标签叠着）。
+      ;(o as unknown as { element?: HTMLElement }).element?.remove()
     })
   }
   alarmGroup = new THREE.Group()
@@ -492,12 +495,20 @@ function updateAlarms(list: { id: number; message: string; level: string; metric
     ring.rotation.x = -Math.PI / 2
     ring.position.set(ax, 0.03, ay)
     alarmGroup!.add(ring)
-    if (!props.compact) {
-      const lbl = new CSS2DObject(label(a.message.slice(0, 16), a.level === 'critical' ? 'danger' : 'warn'))
-      lbl.position.set(ax, 2.6, ay)
-      alarmGroup!.add(lbl)
-    }
   })
+  // 每条告警都挂文字会在机器人周围叠成一团；只在机器人上方放一个汇总标签。
+  if (!props.compact && recent.length) {
+    const critical = recent.filter((a) => a.level === 'critical').length
+    const text = recent.length === 1
+      ? recent[0].message.slice(0, 18)
+      : `空间告警 ${recent.length} 条${critical ? `（严重 ${critical}）` : ''}`
+    const lbl = new CSS2DObject(label(text, critical ? 'danger' : 'warn'))
+    // 和「机器人」标签锚在同一个点(3.5m)：世界坐标里再抬高多少米，都会被相机缩放吃掉
+    //（2.8m 与 3.5m 俯视时投影只差几像素），所以改用固定屏幕偏移把汇总标签抬到它上方。
+    lbl.position.set(Number(pose.x), 3.5, Number(pose.y))
+    lbl.element.style.marginTop = '-40px'
+    alarmGroup!.add(lbl)
+  }
   scene.add(alarmGroup)
 }
 
