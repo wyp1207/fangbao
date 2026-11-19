@@ -9,6 +9,9 @@ from __future__ import annotations
 
 import json
 
+import pytest
+from sqlalchemy.exc import IntegrityError
+
 from app.db.session import Base, SessionLocal, engine
 from app.models.task_run import TaskEvent, TaskRun, TaskRunStep
 from app.services import task_events
@@ -121,6 +124,50 @@ def test_log_persists_fields_and_json_data():
             assert row.actor == "alice"
             assert json.loads(row.data_json or "{}") == {"order_id": "JC-R000001-A01"}
             assert row.created_at is not None
+        finally:
+            _drop(db, rid)
+
+
+def test_unique_run_seq_blocks_duplicate_row():
+    """(run_id, seq) 唯一：并发撞号必须报 IntegrityError，不能静默写两条。"""
+    _ensure()
+    with SessionLocal() as db:
+        run = _mk_run(db, 161)
+        rid = run.id
+        try:
+            task_events.log(db, rid, "created", "第一条")
+            db.commit()
+            with pytest.raises(IntegrityError):
+                db.add(TaskEvent(run_id=rid, seq=1, kind="created", message="撞号"))
+                db.flush()
+            db.rollback()
+        finally:
+            _drop(db, rid)
+
+
+def test_log_retries_on_seq_conflict(monkeypatch):
+    """撞号后重算 seq 再写：算出的 seq 已被占用时，第二次必须落到 max(seq)+1。"""
+    _ensure()
+    with SessionLocal() as db:
+        run = _mk_run(db, 162)
+        rid = run.id
+        try:
+            task_events.log(db, rid, "created", "占位")
+            db.commit()
+
+            real_next = task_events._next_seq
+            calls = {"n": 0}
+
+            def fake_next(db_, run_id):
+                calls["n"] += 1
+                return 1 if calls["n"] == 1 else real_next(db_, run_id)
+
+            monkeypatch.setattr(task_events, "_next_seq", fake_next)
+            ev = task_events.log(db, rid, "dispatched", "撞号重试")
+            db.commit()
+            assert ev.seq == 2
+            assert calls["n"] >= 2, "撞号必须重算 seq，不能一次失败就放弃"
+            assert [e.seq for e in task_events.list_events(db, rid)] == [1, 2]
         finally:
             _drop(db, rid)
 

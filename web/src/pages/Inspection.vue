@@ -51,6 +51,8 @@ async function load() {
     plans.value = (await api.inspectionPlans()) as unknown as Plan[]
     const res = await api.inspectionTasks({ status: status.value })
     tasks.value = res.items as unknown as Task[]
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : '巡检数据读取失败', 'danger')
   } finally {
     loading.value = false
   }
@@ -121,8 +123,21 @@ async function generate(p: Plan) {
   }
 }
 
+// 库里只存相对路径（inspection_photos/<日期>/<文件>），静态网关在
+// /api/v1/inspection/photos/<日期>/<文件>；老数据可能已经是接口路径，别再拼一次。
+function photoUrl(u: string): string {
+  if (!u) return ''
+  if (u.startsWith('/')) return u
+  return `/api/v1/inspection/photos/${u.replace(/^inspection_photos\//, '')}`
+}
+
 async function openDetail(t: Task) {
-  detail.value = (await api.inspectionTask(t.id)) as unknown as typeof detail.value
+  try {
+    detail.value = (await api.inspectionTask(t.id)) as unknown as typeof detail.value
+  } catch (e) {
+    detail.value = null
+    toast(e instanceof ApiError ? e.message : '任务详情读取失败', 'danger')
+  }
 }
 
 async function finish(t: Task) {
@@ -249,8 +264,9 @@ onMounted(load)
           <template v-if="detail.progress?.abnormal"> · 异常 {{ detail.progress.abnormal }}</template>
         </p>
         <table class="grid">
-          <thead><tr><th style="width: 50px">序</th><th style="width: 160px">点位</th><th style="width: 100px">扫码</th>
-            <th style="width: 90px">结论</th><th>备注</th></tr></thead>
+          <thead><tr><th style="width: 50px">序</th><th style="width: 150px">点位</th><th style="width: 80px">扫码</th>
+            <th style="width: 80px">结论</th><th style="width: 170px">检查项</th>
+            <th style="width: 110px">照片</th><th>备注</th></tr></thead>
           <tbody>
             <tr v-for="i in detail.items" :key="i.id">
               <td>{{ i.seq }}</td>
@@ -259,6 +275,14 @@ onMounted(load)
               <td><span class="tag" :class="i.result === 'ok' ? 'ok' : i.result === 'abnormal' ? 'danger' : 'warn'">
                 {{ i.result === 'ok' ? '正常' : i.result === 'abnormal' ? '异常' : i.result === 'skipped' ? '跳过' : '未做' }}
               </span></td>
+              <td class="dim small">{{ (i.checks ?? []).join('、') || '—' }}</td>
+              <td>
+                <a v-for="(u, k) in (i.photos ?? []).slice(0, 2)" :key="k" :href="photoUrl(u)" target="_blank" class="shot-link">
+                  <img :src="photoUrl(u)" alt="现场照片" class="shot" />
+                </a>
+                <span v-if="(i.photos ?? []).length > 2" class="dim small">+{{ i.photos.length - 2 }}</span>
+                <span v-if="!(i.photos ?? []).length" class="dim">—</span>
+              </td>
               <td class="dim small">{{ i.note || '—' }}</td>
             </tr>
           </tbody>
@@ -296,6 +320,8 @@ onMounted(load)
 .small { font-size: 12px; }
 .num { font-variant-numeric: tabular-nums; }
 .btn-xs { padding: 2px 8px; font-size: 12px; }
+.shot-link { display: inline-block; margin-right: 4px; }
+.shot { width: 42px; height: 32px; object-fit: cover; border: 1px solid rgba(111,227,255,.45); }
 .bar { height: 5px; background: rgba(0, 40, 80, 0.6); border-radius: 3px; overflow: hidden; margin-bottom: 2px; }
 .bar i { display: block; height: 100%; background: linear-gradient(90deg, #29d4ff, #6ff0c0); }
 .modal-mask { position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; background: rgba(2, 14, 30, 0.66); }

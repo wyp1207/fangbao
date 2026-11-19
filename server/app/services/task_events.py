@@ -22,6 +22,7 @@ import logging
 from datetime import datetime
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.task_run import TaskEvent
@@ -50,27 +51,41 @@ def _next_seq(db: Session, run_id: int) -> int:
 
 def log(db: Session, run_id: int, kind: str, message: str,
         data: dict | None = None, actor: str = "system") -> TaskEvent:
-    """追加一条事件（不 commit，跟随调用方的事务）。seq 按 run 递增。"""
-    event = TaskEvent(
-        run_id=run_id,
-        seq=_next_seq(db, run_id),
-        kind=(kind or "")[:24],
-        message=(message or "")[:255],
-        data_json=json.dumps(data, ensure_ascii=False) if data is not None else None,
-        actor=(actor or "system")[:64],
-        created_at=datetime.now(),
-    )
-    # 用 SAVEPOINT 包一层：就算写库本身失败，也不会把业务事务打成
-    # "PendingRollbackError"（那样主流程的 commit 反而会挂）。
-    try:
-        with db.begin_nested():
-            db.add(event)
-            db.flush()
-    except Exception:
-        if db.contains(event):
-            db.expunge(event)
-        raise
-    return event
+    """追加一条事件（不 commit，跟随调用方的事务）。seq 按 run 递增。
+
+    (run_id, seq) 有唯一约束：并发写者（下发轮询/巡航/HTTP/对账）撞号时
+    重算一次 seq 再写，最多 3 次；仍失败交给调用方处理。
+    """
+    last: Exception | None = None
+    for _ in range(3):
+        event = TaskEvent(
+            run_id=run_id,
+            seq=_next_seq(db, run_id),
+            kind=(kind or "")[:24],
+            message=(message or "")[:255],
+            data_json=json.dumps(data, ensure_ascii=False) if data is not None else None,
+            actor=(actor or "system")[:64],
+            created_at=datetime.now(),
+        )
+        # 用 SAVEPOINT 包一层：就算写库本身失败，也不会把业务事务打成
+        # "PendingRollbackError"（那样主流程的 commit 反而会挂）。
+        try:
+            with db.begin_nested():
+                db.add(event)
+                db.flush()
+            return event
+        except IntegrityError as exc:
+            last = exc
+            # SQLAlchemy 2.x 没有 Session.contains()，用 in（__contains__）判断
+            if event in db:
+                db.expunge(event)
+            continue
+        except Exception:
+            if event in db:
+                db.expunge(event)
+            raise
+    assert last is not None
+    raise last
 
 
 def safe_log(db: Session, run_id: int, kind: str, message: str,
@@ -79,8 +94,10 @@ def safe_log(db: Session, run_id: int, kind: str, message: str,
     try:
         return log(db, run_id, kind, message, data=data, actor=actor)
     except Exception:  # noqa: BLE001
-        logger.warning("任务事件写入失败 run=%s kind=%s（主流程继续）",
-                       run_id, kind, exc_info=True)
+        logger.warning("任务事件写入失败 run=%s kind=%s message=%s data=%s（主流程继续）",
+                       run_id, kind, (message or "")[:120],
+                       json.dumps(data, ensure_ascii=False)[:300] if data else None,
+                       exc_info=True)
         return None
 
 
