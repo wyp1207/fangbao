@@ -204,7 +204,10 @@ async function refreshMsgUnread() {
     msgUnread.value = res.items.filter((m) => m.ts > readTs).length
   } catch { /* 消息拿不到不影响大屏 */ }
 }
-const devices = ref<{ id: number; name: string; station: string; adapter?: string; version?: string | null }[]>([])
+const devices = ref<{ id: number; name: string; station: string; adapter?: string; version?: string | null; mode?: string }[]>([])
+const currentDevice = computed(() => devices.value.find((d) => d.id === Number(deviceId.value)) ?? null)
+// 模拟器设备：电量/位姿/在线都是造出来的，界面必须明确标注，不能当真机数据
+const isMockDevice = computed(() => currentDevice.value?.mode === 'mock')
 const site = ref('')
 const deviceId = ref('1')
 
@@ -1021,7 +1024,7 @@ onMounted(async () => {
   // 切设备/首次挂载共用同一套定时器；清掉旧的再建，避免多组轮询
   startTimers()
   void api.devices().then((rows) => {
-    devices.value = rows.map((d) => ({ id: d.id, name: d.name, station: d.station, adapter: d.adapter, version: d.version }))
+    devices.value = rows.map((d) => ({ id: d.id, name: d.name, station: d.station, adapter: d.adapter, version: d.version, mode: d.mode }))
     site.value = rows[0]?.station ?? '未分场站'
   }).catch(() => undefined)
   await loadMap()
@@ -1068,6 +1071,9 @@ onBeforeUnmount(() => {
       <div class="sb-left">
         <div class="field"><label>当前场站</label><DarkSelect :model-value="site" :options="sites" width="190px" @update:model-value="onSite" /></div>
         <div class="field"><label>当前设备</label><DarkSelect :model-value="deviceId" :options="deviceOptions" width="170px" @update:model-value="onDevice" /></div>
+        <span v-if="isMockDevice" class="mock-badge" title="当前设备为模拟模式：在线状态、电量、位姿均为模拟数据，不代表真机">
+          模拟数据
+        </span>
         <span class="tool-icons">
           <button class="ti" type="button" title="锁定屏幕" @click="lockStore.lock()">
             <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -1096,7 +1102,7 @@ onBeforeUnmount(() => {
       <div class="clock"><b>{{ clock.time }}</b><i>{{ clock.date }}</i></div>
 
       <div class="sb-right">
-        <div class="stat"><label>电量</label><b class="gold"><AnimatedNumber :value="battery" suffix="%" /></b><span class="battery"><i :style="{ width: (battery ?? 0) + '%' }" /></span></div>
+        <div class="stat"><label>电量</label><b class="gold"><AnimatedNumber :value="battery" :suffix="battery === null ? '' : '%'" /></b><span class="battery"><i :style="{ width: (battery ?? 0) + '%' }" /></span></div>
         <div class="stat"><label>在线状态</label><b :class="robot.online ? 'green' : 'red'">{{ robot.online ? '在线' : '离线' }}</b></div>
         <div class="stat">
           <label>定位状态</label>
@@ -1688,6 +1694,11 @@ onBeforeUnmount(() => {
   position: relative; z-index: 35;   /* 让场站/设备下拉能盖在主体之上 */
 }
 .sb-left { display: flex; align-items: center; gap: 12px; justify-self: start; min-width: 0; }
+.mock-badge {
+  padding: 1px 7px; border-radius: 2px; font-size: 11px; font-weight: 700;
+  color: #1b2a00; background: #ffd23f; border: 1px solid #ffe58a;
+  white-space: nowrap; cursor: help;
+}
 .sb-right { display: flex; align-items: center; gap: 14px; justify-self: end; }
 .tool-icons { display: flex; gap: 6px; }
 .ti {
