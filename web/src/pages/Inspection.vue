@@ -149,7 +149,9 @@ async function toWorkOrder(i: any) {
       description: [i.note, (i.checks ?? []).join('、')].filter(Boolean).join('；') || null,
       photos: (i.photos ?? []).map((u: string) => photoUrl(u)),
     }) as { code?: string; id?: number }
-    toast(`已转工单 ${o.code ?? '#' + o.id}`, 'ok', 5000)
+    const code = o.code ?? (o.id ? `#${o.id}` : '')
+    i.work_order = code
+    toast(`已转工单 ${code}`, 'ok', 5000)
   } catch (e) {
     toast(e instanceof ApiError ? e.message : '转工单失败', 'danger')
   } finally {
@@ -302,7 +304,8 @@ onMounted(load)
               </td>
               <td class="dim small">{{ i.note || '—' }}</td>
               <td>
-                <button v-if="i.result === 'abnormal'" type="button" class="btn btn-xs danger"
+                <span v-if="i.work_order" class="tag ok" :title="`已转工单 ${i.work_order}`">已转 {{ i.work_order }}</span>
+                <button v-else-if="i.result === 'abnormal'" type="button" class="btn btn-xs danger"
                         :disabled="!auth.canWrite || woBusy === i.id" @click="toWorkOrder(i)">
                   {{ woBusy === i.id ? '提交中…' : '转工单' }}
                 </button>

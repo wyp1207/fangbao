@@ -259,7 +259,18 @@ def get_task(task_id: int, db: Session = Depends(get_db),
     if not t:
         raise NotFound("任务不存在")
     rows = db.query(InspectionItem).filter(InspectionItem.task_id == task_id).all()
-    return _task_out(t, rows)
+    out = _task_out(t, rows)
+    # 已转工单回显：同一异常项重复点“转工单”会产生重复工单，这里把已有单号带回前端
+    item_ids = [i.id for i in rows]
+    if item_ids:
+        orders = (db.query(WorkOrder)
+                  .filter(WorkOrder.source == "inspection",
+                          WorkOrder.source_id.in_(item_ids))
+                  .all())
+        by_item = {o.source_id: o.code or f"#{o.id}" for o in orders if o.source_id}
+        for it in out.get("items", []):
+            it["work_order"] = by_item.get(it["id"])
+    return out
 
 
 class CheckIn(BaseModel):
