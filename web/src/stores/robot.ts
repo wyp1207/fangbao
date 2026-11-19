@@ -33,6 +33,7 @@ export const useRobotStore = defineStore('robot', {
     /** 位姿 WebSocket：200ms 一帧，配合前端插值，机器人不再"瞬移" */
     startWs() {
       const dev = this.deviceId
+      if (!dev) return                       // 当前场站没有设备：不连 WS
       const proto = location.protocol === 'https:' ? 'wss' : 'ws'
       try {
         ws?.close()
@@ -67,6 +68,7 @@ export const useRobotStore = defineStore('robot', {
     },
     async refresh() {
       const dev = this.deviceId
+      if (!dev) return                       // 没有设备就不轮询，避免 404 刷屏
       try {
         const snap = await api.status(dev)
         // 切车后旧请求可能才回来：别用它覆盖新车的状态
@@ -92,6 +94,18 @@ export const useRobotStore = defineStore('robot', {
       void this.loadMaps().catch(() => { /* 地图失败不阻塞状态 */ })
       this.startWs()
     },
+    /**
+     * 当前场站没有设备：停 WS、清快照，别让首页继续显示上一站的机器人。
+     * 之后切到有设备的场站时再走 setDevice，会重新拉状态和地图。
+     */
+    clearDevice() {
+      this.stopWs()
+      this.deviceId = 0
+      this.snapshot = null
+      this.maps = []
+      this.currentMap = ''
+      this.lastError = ''
+    },
     async refreshAlarms() {
       try {
         this.alarms = (await api.alarms()).items
@@ -107,6 +121,11 @@ export const useRobotStore = defineStore('robot', {
     async loadMaps() {
       // 必须带 deviceId：api.maps()/api.currentMap() 默认都是 1，切车后就会拿到 1 号车的地图
       const dev = this.deviceId
+      if (!dev) {
+        this.maps = []
+        this.currentMap = ''
+        return
+      }
       const maps = await api.maps(dev)
       const current = await api.currentMap(dev)
       if (dev !== this.deviceId) return   // 旧车的图晚到，丢弃

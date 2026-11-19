@@ -15,6 +15,7 @@ import { ApiError } from '@/api/client'
 import { panelsFor } from '@/components/panels/registry'
 import { useRobotStore } from '@/stores/robot'
 import { useLockStore } from '@/stores/lock'
+import { useSiteStore } from '@/stores/site'
 import { api, type MapMeta, type NavPoint } from '@/api'
 import logoUrl from '@/assets/logo.png'
 
@@ -22,10 +23,15 @@ const robot = useRobotStore()
 const lockStore = useLockStore()
 const auth = useAuthStore()
 const platform = usePlatformStore()
+const siteStore = useSiteStore()
 const router = useRouter()
 
 const mapMeta = ref<MapMeta | null>(null)
 const points = ref<NavPoint[]>([])
+
+// 首页视频空态占位素材：只是 UI 示意，不是现场画面（角标必须一直显示）
+const PH_VISIBLE = '/placeholders/robot-inspection.jpg'
+const PH_THERMAL = '/placeholders/thermal.jpg'
 const trail = ref<{ x: number; y: number }[]>([])
 const mapError = ref('')
 const now = ref(new Date())
@@ -204,49 +210,36 @@ async function refreshMsgUnread() {
     msgUnread.value = res.items.filter((m) => m.ts > readTs).length
   } catch { /* 消息拿不到不影响大屏 */ }
 }
-const devices = ref<{ id: number; name: string; station: string; adapter?: string; version?: string | null; mode?: string }[]>([])
+// 场站上下文：设备列表来自 site store（只含当前站），切站由 store 统一处理
+const devices = computed(() => siteStore.devices)
+const deviceId = ref('')
 const currentDevice = computed(() => devices.value.find((d) => d.id === Number(deviceId.value)) ?? null)
 // 模拟器设备：电量/位姿/在线都是造出来的，界面必须明确标注，不能当真机数据
 const isMockDevice = computed(() => currentDevice.value?.mode === 'mock')
-const site = ref('')
-const deviceId = ref('1')
-
-const sites = computed(() => {
-  const names = [...new Set(devices.value.map((d) => d.station).filter(Boolean))]
-  return (names.length ? names : ['未分场站']).map((n) => ({ value: n, label: n }))
-})
-// 设备下拉列出全部设备（含其他场站的），选谁就自动切到它的场站。
-// 之前按场站过滤，结果"实验室"里的两台在默认场站下根本选不到。
 const deviceOptions = computed(() =>
-  devices.value.map((d) => ({
-    value: String(d.id),
-    label: d.station && d.station !== site.value ? `${d.name}（${d.station}）` : d.name,
-  })),
+  devices.value.map((d) => ({ value: String(d.id), label: d.name })),
 )
+const siteOptions = computed(() => siteStore.siteOptions)
 
-function onSite(v: string) {
-  site.value = v
-  const hit = devices.value.find((d) => d.station === v)
-  if (hit) {
-    // 走同一条切设备流程：视频/地图/云台/能力/任务一起换
-    onDevice(String(hit.id))
-  } else {
-    toast('该场站暂无设备', 'warn')
+async function onSite(v: string) {
+  const id = Number(v)
+  if (!id || id === siteStore.currentSiteId) return
+  try {
+    await siteStore.setSite(id)
+    if (!devices.value.length) toast('该场站暂无设备', 'warn', 3500)
+  } catch {
+    toast('切换场站失败：设备列表没读出来', 'danger', 5000)
   }
 }
-function onDevice(v: string) {
-  deviceId.value = v
+
+/** 切设备/切场站后，把首页跟设备绑定的数据整体重载；3D 由 Twin 的 key 变化重建 */
+function reloadForDevice(showToast = false) {
+  const id = robot.deviceId ? String(robot.deviceId) : ''
+  deviceId.value = id
   const seq = ++videoSeq
   // 先清掉上一台车的探活结果：旧图不能再渲染，新结果回来前统一显示"检测中"
   videoHealth.value = {}
-  const hit = devices.value.find((d) => String(d.id) === v)
-  robot.setDevice(Number(v))
-  toast('已切换到 ' + (hit?.name ?? v), 'ok')
-  // 先按新设备拿视频源，再探活；否则会拿旧 ids 去探新车，健康结果对不上
-  void loadVideoRows(seq)
-  void loadMap()
-  // 轨迹/地图报错属于上一台车，切车先清掉，避免"新车的轨迹里还有旧车"
-  // （目标点提示在 Twin 内部，Dashboard 没有对应状态，之前这行引用了未定义的 gotoHint）
+  // 轨迹/报错属于上一台车，切车先清掉
   trail.value = []
   mapError.value = ''
   // 点位也必须清：否则新车地图还没回来时，面板里显示的是上一台车的点位
@@ -255,6 +248,21 @@ function onDevice(v: string) {
   locOpen.value = false
   ptzPresetOpen.value = false
   pickOpen.value = false
+  const hit = devices.value.find((d) => String(d.id) === id)
+  if (showToast && hit) toast('已切换到 ' + hit.name, 'ok')
+  if (!id) {
+    // 当前场站没有设备：不拿 0 号设备去请求，面板留空，换回有设备的站再重新拉起
+    videoRows.value = []
+    envSensors.value = []
+    spark.value = []
+    caps.value = {}
+    runs.value = []
+    ptzPresets.value = []
+    startTimers()
+    return
+  }
+  void loadVideoRows(seq)
+  void loadMap()
   void loadPtzPresets()
   void loadEnv()
   void loadPtzFlag()
@@ -265,10 +273,14 @@ function onDevice(v: string) {
   void loadServerHealth()
   // 切设备/首次挂载共用同一套定时器；清掉旧的再建，避免多组轮询
   startTimers()
+}
 
-  // 切设备时把场站也对齐，否则下拉显示"全部"、后面地图/健康还停在旧设备
-  const d = devices.value.find((x) => String(x.id) === v)
-  if (d?.station && d.station !== site.value) site.value = d.station
+function onDevice(v: string) {
+  const id = Number(v)
+  if (!id) return
+  // 走同一条切设备流程：视频/地图/云台/能力/任务一起换
+  robot.setDevice(id)
+  reloadForDevice(true)
 }
 function goAlarms(status: 'unacked' | 'acked') {
   void router.push({ name: 'alarms', query: { status } })
@@ -558,8 +570,10 @@ async function chooseStream(name: string) {
 }
 
 async function loadVideoRows(seq: number) {
+  const id = Number(deviceId.value)
+  if (!id) { videoRows.value = []; return }
   try {
-    const rows = await api.videos(Number(deviceId.value))
+    const rows = await api.videos(id)
     if (seq !== videoSeq) return
     videoRows.value = rows as never
     await loadVideoHealth(seq)
@@ -713,7 +727,8 @@ const runEta = computed(() => {
 
 async function loadRuns() {
   try {
-    const res = await api.taskRuns({ limit: 50 })
+    // 首页任务统计也只算当前场站，别把别站的执行记录算进来
+    const res = await api.taskRuns({ limit: 50, site_id: siteStore.currentSiteId ?? undefined })
     const rows = ((res as unknown as { items?: RunRow[] }).items ?? [])
     const running = rows.find((x) => x.status === 'running')
     if (running?.step_count) {
@@ -732,6 +747,7 @@ const caps = ref<{ actions?: string[]; capabilities?: string[]; panels?: string[
 async function loadCaps() {
   try {
     const id = Number(deviceId.value)
+    if (!id) { caps.value = {}; return }
     caps.value = Number.isFinite(id) ? await api.robotCapabilities(id) : {}
   } catch {
     caps.value = {}
@@ -786,8 +802,8 @@ const poseYawDeg = computed(() => {
   const p = robot.pose as { theta_rad?: number } | null
   return p ? (Number(p.theta_rad ?? 0) * 57.3).toFixed(1) : '—'
 })
-const imageUrl = computed(() => (robot.currentMap
-  ? api.mapPng(Number(deviceId.value) || 1, robot.currentMap)
+const imageUrl = computed(() => (robot.currentMap && deviceId.value
+  ? api.mapPng(Number(deviceId.value), robot.currentMap)
   : ''))
 // 地图面板 2D/3D 切换：2D 负责点选，3D 负责看空间关系（GLM/豆包建议的共存方式）
 const viewMode = ref<'2d' | '3d'>('3d')
@@ -907,10 +923,11 @@ async function loadTrend() {
 }
 
 async function loadEnv() {
+  const id = Number(deviceId.value)
+  if (!id) { envSensors.value = []; spark.value = []; trendSensor.value = ''; return }
   try {
-    const id = Number(deviceId.value)
     // 按设备取：切换设备后这里拿到的就是那台设备自己的传感器
-    const rows = await api.sensors(Number.isFinite(id) ? id : undefined)
+    const rows = await api.sensors(id)
     envSensors.value = rows.map((s) => ({
       id: s.id,
       name: s.name,
@@ -949,12 +966,13 @@ async function loadSpark() {
 async function loadMap() {
   // 切车后旧请求可能才回来：点位/地图只认当前设备
   const dev = deviceId.value
+  if (!dev) { mapMeta.value = null; points.value = []; mapError.value = ''; return }
   try {
     await robot.loadMaps()
     if (dev !== deviceId.value) return
     const meta = robot.maps.find((m) => m.name === robot.currentMap) ?? robot.maps[0] ?? null
     mapMeta.value = meta
-    const pts = meta ? (await api.navPoints(Number(dev) || 1, meta.name, '')).points : []
+    const pts = meta ? (await api.navPoints(Number(dev), meta.name, '')).points : []
     if (dev !== deviceId.value) return
     points.value = pts
   } catch (e) {
@@ -1008,26 +1026,27 @@ function startTimers() {
     if (trail.value.length > 200) trail.value.shift()
   }, 1000))
 }
+// 顶栏切场站时（不经过本页下拉）也要整体重载；首次加载由 onMounted 负责
+let siteWatchReady = false
+let siteSeq = 0
+watch(() => siteStore.currentSiteId, async (id) => {
+  if (!siteWatchReady || id == null) return
+  const seq = ++siteSeq
+  try { await siteStore.loadDevices() } catch { /* 页面已空列表，用户仍可切回 */ }
+  if (seq !== siteSeq || id !== siteStore.currentSiteId) return
+  reloadForDevice(false)
+})
+
 onMounted(async () => {
+  try {
+    await siteStore.load()
+  } catch {
+    toast('场站列表读取失败：先按当前设备显示', 'warn', 5000)
+  }
   robot.start()
   // 从其它页面切回来时，下拉框要跟 store 里的当前设备一致，别显示 1 号却看的是别的车
-  deviceId.value = String(robot.deviceId || 1)
-  const seq = ++videoSeq
-  void loadVideoRows(seq)
-  void loadEnv()
-  void loadPtzFlag()
-  void loadTrend()
-  void loadCaps()
-  void loadRuns()
-  void loadFeed()
-  void loadServerHealth()
-  // 切设备/首次挂载共用同一套定时器；清掉旧的再建，避免多组轮询
-  startTimers()
-  void api.devices().then((rows) => {
-    devices.value = rows.map((d) => ({ id: d.id, name: d.name, station: d.station, adapter: d.adapter, version: d.version, mode: d.mode }))
-    site.value = rows[0]?.station ?? '未分场站'
-  }).catch(() => undefined)
-  await loadMap()
+  reloadForDevice(false)
+  siteWatchReady = true
   void refreshMsgUnread()
 })
 onBeforeUnmount(() => {
@@ -1069,8 +1088,8 @@ onBeforeUnmount(() => {
 
     <div class="subbar">
       <div class="sb-left">
-        <div class="field"><label>当前场站</label><DarkSelect :model-value="site" :options="sites" width="190px" @update:model-value="onSite" /></div>
-        <div class="field"><label>当前设备</label><DarkSelect :model-value="deviceId" :options="deviceOptions" width="170px" @update:model-value="onDevice" /></div>
+        <div class="field"><label>当前场站</label><DarkSelect :model-value="siteStore.currentSiteId ? String(siteStore.currentSiteId) : ''" :options="siteOptions" placeholder="未选场站" width="190px" @update:model-value="onSite" /></div>
+        <div class="field"><label>当前设备</label><DarkSelect :model-value="deviceId" :options="deviceOptions" placeholder="暂无设备" width="170px" @update:model-value="onDevice" /></div>
         <span v-if="isMockDevice" class="mock-badge" title="当前设备为模拟模式：在线状态、电量、位姿均为模拟数据，不代表真机">
           模拟数据
         </span>
@@ -1125,7 +1144,8 @@ onBeforeUnmount(() => {
                    @error="onLiveError(visibleVideo)" @load="onLiveLoad(visibleVideo)" />
               <span class="live-clock" title="平台时间（画面 OSD 为相机时间）">{{ clock.time }}</span>
             </div>
-            <div v-else class="embed-empty">
+            <div v-else class="embed-empty has-ph" :style="{ backgroundImage: `url(${PH_VISIBLE})` }">
+              <em class="ph-badge" title="示例素材，不是现场画面">示例画面 · 占位</em>
               <b>{{ videoEmptyTitle(visibleVideo) }}</b>
               <span v-if="visibleVideo">原因：{{ healthOf(visibleVideo).reason }}</span>
               <span v-else>真机联调后，在「设备管理 → 摄像头」勾选「首页显示」即自动呈现</span>
@@ -1146,7 +1166,8 @@ onBeforeUnmount(() => {
                    @error="onLiveError(thermalVideo)" @load="onLiveLoad(thermalVideo)" />
               <span class="live-clock" title="平台时间（画面 OSD 为相机时间）">{{ clock.time }}</span>
             </div>
-            <div v-else class="embed-empty">
+            <div v-else class="embed-empty has-ph" :style="{ backgroundImage: `url(${PH_THERMAL})` }">
+              <em class="ph-badge" title="示例素材，不是现场画面">热成像示例 · 占位</em>
               <b>{{ videoEmptyTitle(thermalVideo) }}</b>
               <span v-if="thermalVideo">原因：{{ healthOf(thermalVideo).reason }}</span>
               <span v-else>热像仪接上后，勾选「首页显示」即自动呈现</span>
@@ -1263,7 +1284,7 @@ onBeforeUnmount(() => {
               :map-meta="mapMeta" :image-url="imageUrl" :points="points"
               :pose="pose" :stale="robot.stale || !robot.online" :trail="trail"
             />
-            <Twin v-if="viewMode === '3d'" :key="`${deviceId}-${robot.currentMap}`" compact />
+            <Twin v-if="viewMode === '3d' && deviceId" :key="`${siteStore.currentSiteId}-${deviceId}-${robot.currentMap}`" compact />
             <div class="view-toggle">
               <button type="button" :class="{ on: viewMode === '2d' }" @click="viewMode = '2d'">2D</button>
               <button type="button" :class="{ on: viewMode === '3d' }" @click="viewMode = '3d'">3D</button>
@@ -1999,6 +2020,28 @@ onBeforeUnmount(() => {
 }
 .embed-empty b { color: #cfe9ff; font-size: 13px; }
 .embed-empty span { color: #7fa8cc; font-size: 11.5px; }
+/* 无流占位图：只是 UI 示意，角标必须始终可见，不能让人误以为是现场画面 */
+.embed-empty.has-ph {
+  position: relative; overflow: hidden;
+  background-size: cover; background-position: center; background-repeat: no-repeat;
+  justify-content: flex-end;
+  padding: 10px 8px 16px;
+}
+.embed-empty.has-ph::before {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(2, 14, 30, 0.22) 0%,
+              rgba(2, 14, 30, 0.6) 55%, rgba(2, 14, 30, 0.92) 100%);
+}
+.embed-empty.has-ph > *:not(.ph-badge) { position: relative; z-index: 1; }
+.embed-empty.has-ph b { text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9); }
+.ph-badge {
+  position: absolute; left: 8px; top: 8px; z-index: 2;
+  font-style: normal; font-size: 10.5px; letter-spacing: 0.04em;
+  color: #ffe08a; background: rgba(2, 14, 30, 0.8);
+  border: 1px solid rgba(255, 207, 63, 0.65);
+  padding: 2px 7px; border-radius: 3px; line-height: 1.5;
+  pointer-events: none;
+}
 .embed-expand {
   position: absolute; right: 8px; bottom: 8px;
   background: rgba(0, 40, 80, 0.78); color: #cfe9ff;

@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { api } from '@/api'
 import { ApiError } from '@/api/client'
 import DarkSelect from '@/components/DarkSelect.vue'
 import { toast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
+import { useSiteStore } from '@/stores/site'
 
 // 单页行数：不一次拉全量（执行记录只会越攒越多），翻页用 offset。
 // 页头必须显示「共 N 条，当前第 x–y 条」，否则 total 与可见行数对不上。
@@ -46,6 +47,7 @@ interface EventRow {
 }
 
 const auth = useAuthStore()
+const site = useSiteStore()
 const rows = ref<RunRow[]>([])
 const total = ref(0)
 const status = ref('')
@@ -100,7 +102,12 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const res = await api.taskRuns({ status: status.value, limit: PAGE_SIZE, offset: (page.value - 1) * PAGE_SIZE })
+    const res = await api.taskRuns({
+      status: status.value,
+      site_id: site.currentSiteId ?? undefined,
+      limit: PAGE_SIZE,
+      offset: (page.value - 1) * PAGE_SIZE,
+    })
     rows.value = res.items as unknown as RunRow[]
     total.value = res.total
     // 停在末页时把最后一页的任务取消/删掉了：页号会越界，回落到最后一页重拉，别显示空表
@@ -186,7 +193,7 @@ async function dispatch(r: RunRow) {
 async function cruise(r: RunRow) {
   try {
     const res = await api.startCruise(r.id)
-    toast(`巡航已启动（${res.steps} 个点位），到点自动进行下一个`, 'ok', 5000)
+    toast(`全量巡检已启动（${res.steps} 个点位），到点自动进行下一个`, 'ok', 5000)
     await load()
   } catch (e) {
     const msg = e instanceof ApiError ? e.message : '启动失败'
@@ -215,7 +222,7 @@ async function resume(r: RunRow) {
 }
 
 async function resumeFromFailed(r: RunRow) {
-  // 「接着跑」：从**最后完成点的下一个点**继续，不重复已完成的点；
+  // 「断点续跑」：从**最后完成点的下一个点**继续，不重复已完成的点；
   // 后端的 from_seq 是**闭区间**起点（server/app/services/cruise.py：`TaskRunStep.seq >= from_seq`），
   // 所以传 lastOk + 1。若产品要求"重跑最后一个完成点"，把 +1 去掉即可。
   resuming.value = r.id
@@ -232,7 +239,7 @@ async function resumeFromFailed(r: RunRow) {
     }
     const fromSeq = lastOk + 1
     const res = await api.startCruise(r.id, fromSeq)
-    toast(`从第 ${fromSeq} 点接着跑（前 ${lastOk} 点已完成，共 ${res.steps} 个点位）`, 'ok', 5000)
+    toast(`从第 ${fromSeq} 点断点续跑（前 ${lastOk} 点已完成，共 ${res.steps} 个点位）`, 'ok', 5000)
     await load()
   } catch (e) {
     toast(e instanceof ApiError ? e.message : '启动失败', 'danger')
@@ -273,10 +280,23 @@ function dur(a: string | null, b: string | null): string {
   return `${(s / 3600).toFixed(1)} 小时`
 }
 
-onMounted(async () => {
+async function loadTemplates() {
   try {
-    templates.value = (await api.taskTemplates()) as unknown as { id: number; name: string }[]
+    // 生成计划时的模板选择也只给当前场站的模板
+    templates.value = (await api.taskTemplates(site.currentSiteId ?? undefined)) as unknown as { id: number; name: string }[]
   } catch { /* 无模板也能看列表 */ }
+}
+
+onMounted(async () => {
+  try { await site.load() } catch { /* 场站读不到就按当前列表显示 */ }
+  await loadTemplates()
+  await load()
+})
+
+// 顶栏切场站：页号回到第一页，模板和任务都按新场站重拉
+watch(() => site.currentSiteId, async () => {
+  page.value = 1
+  await loadTemplates()
   await load()
 })
 </script>
@@ -342,14 +362,15 @@ onMounted(async () => {
               <button type="button" class="btn btn-xs" title="导出这趟巡检的 xlsx 报告"
                       @click="exportReport(r.id)">报告</button>
                 <button type="button" v-if="r.status === 'planned'" class="btn btn-xs"
-                        :disabled="!auth.canWrite" @click="dispatch(r)">单点下发</button>
+                        title="把当前这条计划下发给机器人"
+                        :disabled="!auth.canWrite" @click="dispatch(r)">下发本单</button>
                 <button type="button" v-if="['planned','failed','cancelled'].includes(r.status)" class="btn btn-xs primary"
-                        title="重新巡航：从第 1 点开始重跑全部点位（不跳过已完成的点）"
-                        :disabled="!auth.canWrite" @click="cruise(r)">巡航</button>
+                        title="按模板全部点位执行一次；当前不是循环"
+                        :disabled="!auth.canWrite" @click="cruise(r)">全量巡检</button>
                 <button type="button" v-if="['failed','cancelled'].includes(r.status)" class="btn btn-xs"
-                        :title="noResume.has(r.id) ? '没有可续跑的点位' : '从最后完成点的下一个点继续，不重复已完成的点'"
+                        :title="noResume.has(r.id) ? '没有可续跑的点位' : '从最后一个成功点继续'"
                         :disabled="!auth.canWrite || resuming === r.id || noResume.has(r.id)"
-                        @click="resumeFromFailed(r)">接着跑</button>
+                        @click="resumeFromFailed(r)">断点续跑</button>
                 <template v-if="r.status === 'running'">
                   <button type="button" v-if="!r.paused" class="btn btn-xs" :disabled="!auth.canWrite" @click="pause(r)">暂停</button>
                   <button type="button" v-else class="btn btn-xs ok" :disabled="!auth.canWrite" @click="resume(r)">继续</button>

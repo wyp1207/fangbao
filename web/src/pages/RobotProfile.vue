@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { api, type DeviceItem } from '@/api'
 import { ApiError } from '@/api/client'
 import DarkSelect from '@/components/DarkSelect.vue'
 import { toast } from '@/composables/useToast'
-import { usePlatformStore } from '@/stores/platform'
+import { useSiteStore } from '@/stores/site'
 
 interface AdapterMeta {
   label: string
@@ -14,7 +14,7 @@ interface AdapterMeta {
   note: string
 }
 
-const platform = usePlatformStore()
+const site = useSiteStore()
 const rows = ref<DeviceItem[]>([])
 const meta = ref<{ device_types: { value: string; label: string }[]; adapters: Record<string, AdapterMeta> }>({
   device_types: [],
@@ -49,7 +49,8 @@ const currentAdapter = computed<AdapterMeta | null>(() => meta.value.adapters[fo
 async function load() {
   loading.value = true
   try {
-    rows.value = await api.devices()
+    // 设备台账只显示当前场站的设备，避免在 A 站台账里改到 B 站的车
+    rows.value = await api.devices(site.currentSiteId ?? undefined)
   } catch (e) {
     toast(e instanceof ApiError ? e.message : '设备列表读取失败', 'danger')
   } finally {
@@ -59,7 +60,7 @@ async function load() {
 
 function openCreate() {
   form.value = {
-    name: '', device_type: 'jcrob_wheel', adapter: 'jcrob_http', station: platform.site,
+    name: '', device_type: 'jcrob_wheel', adapter: 'jcrob_http', station: site.currentSiteName,
     ip: '', port: 3546, ws_port: 3547, username: 'admin', password: '', mode: 'http', note: '',
     asset_no: '' as string, ex_marking: '' as string, ex_cert_no: '' as string,
     ex_cert_expiry: '' as string, ex_zone: '' as string, owner: '' as string,
@@ -88,7 +89,8 @@ async function submitCreate() {
     return
   }
   try {
-    await api.createDevice({ ...form.value })
+    // 新设备直接归到当前场站，否则建完在当前列表里看不见
+    await api.createDevice({ ...form.value, site_id: site.currentSiteId ?? null })
     toast(`已添加 ${form.value.name}`, 'ok')
     creating.value = false
     await load()
@@ -161,9 +163,17 @@ async function remove(d: DeviceItem) {
 }
 
 onMounted(async () => {
+  try { await site.load() } catch { /* 场站读不到就按空台账显示 */ }
   try {
     meta.value = await api.deviceMeta()
   } catch { /* 下拉拿不到也能看列表 */ }
+  await load()
+})
+
+// 顶栏切场站：关掉正在编辑的弹窗，台账只留新场站的设备
+watch(() => site.currentSiteId, async () => {
+  creating.value = false
+  editing.value = null
   await load()
 })
 </script>

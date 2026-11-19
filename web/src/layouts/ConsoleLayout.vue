@@ -4,14 +4,30 @@ import { useRoute, useRouter } from 'vue-router'
 import TopNav from '@/components/TopNav.vue'
 import Breadcrumb from '@/components/Breadcrumb.vue'
 import UserMenu from '@/components/UserMenu.vue'
+import DarkSelect from '@/components/DarkSelect.vue'
 import logoUrl from '@/assets/logo.png'
+import { toast } from '@/composables/useToast'
 import { useRobotStore } from '@/stores/robot'
 import { usePlatformStore } from '@/stores/platform'
+import { useSiteStore } from '@/stores/site'
 
 const robot = useRobotStore()
 const platform = usePlatformStore()
+const siteStore = useSiteStore()
 const route = useRoute()
 const router = useRouter()
+
+/** 顶栏场站下拉：设备/地图/模板/任务列表都跟着这个值走 */
+async function onSite(v: string) {
+  const id = Number(v)
+  if (!id || id === siteStore.currentSiteId) return
+  try {
+    await siteStore.setSite(id)
+    toast(`场站已切换到 ${siteStore.currentSiteName}`, 'ok', 2500)
+  } catch {
+    toast('场站切换失败：设备列表没读出来', 'danger', 5000)
+  }
+}
 
 
 const state = computed(() => {
@@ -42,6 +58,7 @@ function goBack() {
 onMounted(() => {
   robot.start()
   void platform.load()
+  void siteStore.load().catch(() => { /* 场站读不到不影响其它页面 */ })
   window.addEventListener('keydown', onKey)
 })
 onBeforeUnmount(() => {
@@ -75,6 +92,16 @@ function onKey(e: KeyboardEvent) {
       </div>
 
       <div class="right">
+        <div class="site-pick" title="切换场站：设备、地图、模板、任务都会按场站过滤">
+          <span class="site-label">场站</span>
+          <DarkSelect
+            :model-value="siteStore.currentSiteId ? String(siteStore.currentSiteId) : ''"
+            :options="siteStore.siteOptions"
+            placeholder="未选场站"
+            width="132px"
+            @update:model-value="onSite"
+          />
+        </div>
         <span class="state" :class="state.cls">
           <i class="dot" :class="robot.online ? 'on' : 'off'" />{{ state.text }}
         </span>
@@ -172,6 +199,8 @@ function onKey(e: KeyboardEvent) {
 }
 
 .right { display: flex; align-items: center; gap: 10px; justify-self: end; }
+.site-pick { display: flex; align-items: center; gap: 6px; }
+.site-label { font-size: 12.5px; color: #cfe8ff; white-space: nowrap; }
 .state {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 4px 11px; font-size: 12.5px;

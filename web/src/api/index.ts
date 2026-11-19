@@ -61,6 +61,15 @@ export interface VideoRow {
   go2rtc_url: string | null
 }
 
+export interface SiteItem {
+  id: number
+  name: string
+  code: string
+  address: string | null
+  status: number
+  created_at: string | null
+}
+
 export interface DeviceItem {
   id: number
   name: string
@@ -69,6 +78,8 @@ export interface DeviceItem {
   adapter_label: string
   supported: boolean
   station: string
+  /** 场站归属；历史数据可能为空 */
+  site_id: number | null
   ip: string
   port: number
   ws_port: number
@@ -157,6 +168,8 @@ export interface LibraryMap {
   name: string
   floor: string
   station: string
+  /** 场站归属；历史数据可能为空 */
+  site_id: number | null
   resolution: number
   origin: [number, number, number]
   width: number
@@ -271,8 +284,12 @@ export const api = {
 
   robots: () => request<RobotRow[]>('/robots'),
 
+  // 场站：多场站上下文，列表接口都支持 site_id 过滤
+  sites: () => request<SiteItem[]>('/sites'),
+
   // 设备台账（多设备）
-  devices: () => request<DeviceItem[]>('/devices'),
+  devices: (siteId?: number) =>
+    request<DeviceItem[]>(siteId ? `/devices?site_id=${siteId}` : '/devices'),
   deviceMeta: () => request<{ device_types: { value: string; label: string }[]; adapters: Record<string, { label: string; device_type: string; supported: boolean; needs: string[]; note: string }> }>('/devices/meta'),
   createDevice: (body: Record<string, unknown>) =>
     request<DeviceItem>('/devices', { method: 'POST', body }),
@@ -459,7 +476,7 @@ export const api = {
     request<Record<string, unknown>>(`/work-orders/${id}/transition`, { method: 'POST', body }),
   escalateWorkOrder: (id: number) =>
     request<Record<string, unknown>>(`/work-orders/${id}/escalate`, { method: 'POST' }),
-  taskRuns: (params: { status?: string; limit?: number; offset?: number } = {}) => {
+  taskRuns: (params: { status?: string; site_id?: number; limit?: number; offset?: number } = {}) => {
     const qs = Object.entries(params)
       .filter(([, v]) => v !== undefined && v !== null && v !== '' && v !== 0)
       .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
@@ -495,7 +512,8 @@ export const api = {
     request<Record<string, unknown>>(`/task-runs/${id}/resume`, { method: 'POST' }),
   cancelTaskRun: (id: number) =>
     request<Record<string, unknown>>(`/task-runs/${id}/cancel`, { method: 'POST' }),
-  taskTemplates: () => request<Record<string, unknown>[]>('/task-templates'),
+  taskTemplates: (siteId?: number) =>
+    request<Record<string, unknown>[]>(siteId ? `/task-templates?site_id=${siteId}` : '/task-templates'),
   taskTemplateMeta: () => request<{ actions: { value: string; label: string }[] }>('/task-templates/meta'),
   createTaskTemplate: (body: Record<string, unknown>) =>
     request<Record<string, unknown>>('/task-templates', { method: 'POST', body }),
@@ -552,7 +570,8 @@ export const api = {
   maps: (id = 1) => request<MapMeta[]>(`/robots/${id}/maps`),
 
   // 平台地图库（导入/标定/草稿点位）
-  libraryMaps: () => request<LibraryMap[]>('/maps/library'),
+  libraryMaps: (siteId?: number) =>
+    request<LibraryMap[]>(siteId ? `/maps/library?site_id=${siteId}` : '/maps/library'),
   libraryImageUrl: (id: number) => `/api/v1/maps/library/${id}/image`,
   importLibraryMap: (fd: FormData) => request<LibraryMap>('/maps/library', { method: 'POST', raw: fd }),
   libraryPoints: (id: number) => request<PointDraft[]>(`/maps/library/${id}/points`),

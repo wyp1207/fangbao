@@ -6,8 +6,10 @@ import { api, type LibraryMap, type MapMeta, type NavPoint, type PointDraft } fr
 import { ApiError } from '@/api/client'
 import { toast } from '@/composables/useToast'
 import { useRobotStore } from '@/stores/robot'
+import { useSiteStore } from '@/stores/site'
 
 const robot = useRobotStore()
+const site = useSiteStore()
 const route = useRoute()
 
 const robotMaps = ref<MapMeta[]>([])
@@ -64,6 +66,7 @@ const importing = ref(false)
 const impForm = ref({
   name: '', floor: '1F', station: '默认场站', resolution: 0.05,
   origin_x: 0, origin_y: 0, origin_theta: 0, robot_map_name: '', note: '',
+  site_id: 0,
 })
 const impFile = ref<File | null>(null)
 const impBusy = ref(false)
@@ -160,12 +163,24 @@ async function chooseLib(id: number) {
 }
 
 async function refreshLibrary() {
-  library.value = await api.libraryMaps()
+  // 地图库只列当前场站的地图，避免在 A 站给 B 站的图打点
+  library.value = await api.libraryMaps(site.currentSiteId ?? undefined)
+}
+
+async function refreshRobotMaps() {
+  // 机器人地图按当前设备取；当前场站没有设备时就是空
+  const dev = robot.deviceId
+  try {
+    robotMaps.value = dev ? await api.maps(dev) : []
+  } catch {
+    robotMaps.value = []
+  }
 }
 
 function openImport() {
-  impForm.value = { name: '', floor: '1F', station: '默认场站', resolution: 0.05,
-                    origin_x: 0, origin_y: 0, origin_theta: 0, robot_map_name: '', note: '' }
+  impForm.value = { name: '', floor: '1F', station: site.currentSiteName, resolution: 0.05,
+                    origin_x: 0, origin_y: 0, origin_theta: 0, robot_map_name: '', note: '',
+                    site_id: site.currentSiteId ?? 0 }
   impFile.value = null
   importing.value = true
 }
@@ -183,7 +198,11 @@ async function submitImport() {
   try {
     const fd = new FormData()
     fd.append('file', impFile.value)
-    for (const [k, v] of Object.entries(impForm.value)) fd.append(k, String(v))
+    for (const [k, v] of Object.entries(impForm.value)) {
+      // site_id=0 会让后端按“不存在的场站”拒绝导入；没有场站上下文时宁可不传
+      if (k === 'site_id' && !v) continue
+      fd.append(k, String(v))
+    }
     const m = await api.importLibraryMap(fd)
     toast(`已导入「${m.name}」（${m.width}×${m.height}）`, 'ok')
     importing.value = false
@@ -233,22 +252,45 @@ async function removeDraft(id: number) {
   await refreshLibrary()
 }
 
+// 首次加载由 onMounted 负责；之后换设备/换场站才走 watch
+let ready = false
+
 watch(() => robot.deviceId, async () => {
+  if (!ready) return
   // 换设备后地图必须是这台车的地图，否则点位会画到别的车上
-  robotMaps.value = await api.maps()
-  if (robotMaps.value.length) await chooseRobot(robotMaps.value[0].name)
+  await refreshRobotMaps()
+  if (!robotMaps.value.length) {
+    selectedName.value = ''
+    points.value = []
+    return
+  }
+  await chooseRobot(robotMaps.value[0].name)
+})
+
+watch(() => site.currentSiteId, async () => {
+  if (!ready) return
+  // 切场站：平台地图库换成新站；当前查看的图不属于新站就退回第一张
+  await refreshLibrary()
+  if (libId.value && !library.value.some((m) => m.id === libId.value)) {
+    libId.value = 0
+    drafts.value = []
+    selectedIds.value = []
+  }
+  if (!libId.value && library.value.length) await chooseLib(library.value[0].id)
 })
 
 onMounted(async () => {
   robot.start()
-  robotMaps.value = await api.maps()
+  try { await site.load() } catch { /* 场站读不到就展示空地图库 */ }
+  await refreshRobotMaps()
   await refreshLibrary()
   const wantMap = route.query.map
   const wantLib = Number(route.query.lib ?? 0)
-  if (wantLib) await chooseLib(wantLib)
+  if (wantLib && library.value.some((m) => m.id === wantLib)) await chooseLib(wantLib)
   else if (typeof wantMap === 'string' && wantMap) await chooseRobot(wantMap)
   else if (robotMaps.value.length) await chooseRobot(robotMaps.value[0].name)
   else if (library.value.length) await chooseLib(library.value[0].id)
+  ready = true
 })
 </script>
 

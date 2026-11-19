@@ -18,11 +18,13 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { api } from '@/api'
 import { useRobotStore } from '@/stores/robot'
+import { useSiteStore } from '@/stores/site'
 import { toast } from '@/composables/useToast'
 
 const props = defineProps<{ compact?: boolean }>()
 const route = useRoute()
 const robot = useRobotStore()
+const site = useSiteStore()
 const box = ref<HTMLDivElement | null>(null)
 const fps = ref(0)
 const wallsOn = ref(true)
@@ -100,9 +102,11 @@ async function build() {
   if (!box.value) return
   try {
     loading.value = true
-    const deviceId = Number(robot.deviceId) || 1
+    // 不回落 1 号设备：那可能是别的场站的车，3D 会画出别人的地图
+    const deviceId = Number(robot.deviceId) || 0
     // ?map=<平台地图库 id>：直接预览某张平台地图（不动机器人当前地图，用于验收/演示）
     const previewMapId = Number(route.query.map || 0)
+    if (!deviceId && !previewMapId) throw new Error('当前场站还没有设备，3D 场景没有地图可加载')
     // 和 2D 地图用同一张图：机器人当前地图优先，平台地图库只作回退。
     // 之前 3D 只读地图库 active（可能是纯白占位图），导致 3D 没墙、点位也对不上。
     let mapName = robot.currentMap || ''
@@ -126,7 +130,8 @@ async function build() {
       pointRows = (nav as any).points ?? []
     } else {
       // 回退：平台地图库（没有机器人地图时）；带 ?map= 时按 id 选
-      const maps = await api.libraryMaps()
+      // 只取当前场站的地图，别把别站的图拿来当 3D 底图
+      const maps = await api.libraryMaps(site.currentSiteId ?? undefined)
       const rows = (maps as unknown as { items?: any[] }).items ?? (maps as unknown as any[])
       m = previewMapId
         ? rows.find((x: any) => Number(x.id) === previewMapId)
@@ -750,13 +755,15 @@ function showTarget(x: number, y: number, pose: { x?: number; y?: number } | nul
 
 async function loadPlan() {
   try {
-    const runs = await api.taskRuns({ status: 'running', limit: 1 })
+    const runs = await api.taskRuns({
+      status: 'running', limit: 1, site_id: site.currentSiteId ?? undefined,
+    })
     const rows = (runs as unknown as { items?: any[] }).items ?? (runs as unknown as any[])
     const run = rows[0]
     if (!run) return
     const detail = await api.taskRun(run.id)
     const steps = (detail as unknown as { steps?: any[] }).steps ?? []
-    const maps = await api.libraryMaps()
+    const maps = await api.libraryMaps(site.currentSiteId ?? undefined)
     const mapRows = (maps as unknown as { items?: any[] }).items ?? (maps as unknown as any[])
     const mid = mapRows.find((m: any) => m.is_active)?.id ?? mapRows[0]?.id
     if (!mid) return
@@ -871,6 +878,8 @@ function onResize() {
 }
 
 onMounted(async () => {
+  // 3D 的回退底图和运行中任务都按场站取，先把场站上下文准备好
+  try { await site.load() } catch { /* 场站读不到就按当前设备渲染 */ }
   robot.startWs()
   if (!props.compact) void loadPlayback()
   void loadPlan()

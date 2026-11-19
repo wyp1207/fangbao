@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { api, type LibraryMap, type PointDraft } from '@/api'
 import { ApiError } from '@/api/client'
 import DarkSelect from '@/components/DarkSelect.vue'
 import { toast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
+import { useSiteStore } from '@/stores/site'
 
 interface TemplateRow {
   id: number
@@ -19,6 +20,7 @@ interface TemplateRow {
 }
 
 const auth = useAuthStore()
+const site = useSiteStore()
 const rows = ref<TemplateRow[]>([])
 const maps = ref<LibraryMap[]>([])
 const points = ref<PointDraft[]>([])
@@ -40,9 +42,18 @@ const pickedCount = computed(() => Object.keys(picked.value).length)
 async function load() {
   loading.value = true
   try {
-    rows.value = (await api.taskTemplates()) as unknown as TemplateRow[]
+    // 模板列表只显示当前场站；新建模板的地图候选也来自同一个场站
+    rows.value = (await api.taskTemplates(site.currentSiteId ?? undefined)) as unknown as TemplateRow[]
   } finally {
     loading.value = false
+  }
+}
+
+async function loadMaps() {
+  try {
+    maps.value = await api.libraryMaps(site.currentSiteId ?? undefined)
+  } catch {
+    maps.value = []   // 没有地图也能看列表（只是不能新建）
   }
 }
 
@@ -88,6 +99,7 @@ function payload() {
   return {
     name: form.value.name.trim(),
     map_id: form.value.mapId ? Number(form.value.mapId) : null,
+    site_id: site.currentSiteId ?? null,
     loop: form.value.loop,
     note: form.value.note || null,
     actions: Object.entries(picked.value).map(([pid, action]) => ({
@@ -137,14 +149,22 @@ function dispatchTip(t: TemplateRow) {
 }
 
 onMounted(async () => {
-  try {
-    maps.value = await api.libraryMaps()
-  } catch { /* 没有地图也能看列表 */ }
+  try { await site.load() } catch { /* 场站读不到就按空列表显示 */ }
+  await loadMaps()
   try {
     actionTypes.value = (await api.taskTemplateMeta()).actions
   } catch {
     actionTypes.value = [{ value: 'photo', label: '拍照' }]
   }
+  await load()
+})
+
+// 顶栏切场站：关掉正在编辑的弹窗，列表和地图候选都换成新场站
+watch(() => site.currentSiteId, async () => {
+  creating.value = false
+  editing.value = null
+  picked.value = {}
+  await loadMaps()
   await load()
 })
 </script>
