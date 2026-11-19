@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -192,6 +193,75 @@ def result_by_alarm(
     if r is None:
         raise NotFound("这条告警没有关联的 AI 检测结果")
     return _out(r)
+
+
+MAX_BATCH_ALARMS = 100
+
+
+def _parse_alarm_ids(raw: str) -> list[int]:
+    """`1,2,3` → 去重后的正整数列表；脏参数跳过，最多 100 个。
+
+    列表页一次要几十条，参数错了不该整页红，所以非法段直接忽略；
+    超量截断而不是 400，页面永远能拿到前 100 条的证据。
+    """
+    out: list[int] = []
+    seen: set[int] = set()
+    for part in re.split(r"[,\s]+", (raw or "").strip()):
+        if not part:
+            continue
+        try:
+            aid = int(part)
+        except ValueError:
+            continue
+        if aid <= 0 or aid in seen:
+            continue
+        seen.add(aid)
+        out.append(aid)
+        if len(out) >= MAX_BATCH_ALARMS:
+            break
+    return out
+
+
+@router.get("/results/by-alarms")
+def results_by_alarms(
+    alarm_ids: str = "",
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> dict:
+    """告警列表批量取证据：一次请求换回整页 AI 告警的最新结果。
+
+    缩略图逐行调单条接口会把首屏打成 N 个请求，所以这里按 alarm_id 分组、
+    每组只取 id 最大（最新）的一条。不存在的 id 不出现在 items 里，前端据此
+    回退成「图」字按钮。
+    """
+    ids = _parse_alarm_ids(alarm_ids)
+    if not ids:
+        return {"items": {}}
+
+    newest = (
+        db.query(AiResult.alarm_id, func.max(AiResult.id).label("rid"))
+        .filter(AiResult.alarm_id.in_(ids))
+        .group_by(AiResult.alarm_id)
+        .subquery()
+    )
+    rows = (
+        db.query(AiResult)
+        .join(newest, AiResult.id == newest.c.rid)
+        .order_by(AiResult.id.desc())
+        .all()
+    )
+    names = {a.code: a.name for a in db.query(AiAlgorithm).all()}
+    levels = dict(
+        db.query(AlarmRecord.id, AlarmRecord.level)
+        .filter(AlarmRecord.id.in_([r.alarm_id for r in rows if r.alarm_id is not None]))
+        .all()
+    ) if rows else {}
+    return {
+        "items": {
+            str(r.alarm_id): _out(r, names.get(r.algorithm), levels.get(r.alarm_id))
+            for r in rows
+        }
+    }
 
 
 @router.get("/results")

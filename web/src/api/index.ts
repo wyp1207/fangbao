@@ -399,6 +399,10 @@ export const api = {
   aiResultStats: () => request<AiResultStats>('/ai/results/stats'),
   aiResultByAlarm: (alarmId: number) =>
     request<AiResultItem>(`/ai/results/by-alarm/${alarmId}`),
+  /** 告警列表批量缩略图：一次请求拿整页 AI 告警的最新结果（按 alarm_id 分组） */
+  aiResultsByAlarms: (alarmIds: number[]) =>
+    request<{ items: Record<string, AiResultItem> }>(
+      `/ai/results/by-alarms?alarm_ids=${alarmIds.join(',')}`),
   apiClients: () => request<Record<string, unknown>[]>('/api-clients'),
   createApiClient: (body: { name: string; scopes: string[] }) =>
     request<Record<string, unknown>>('/api-clients', { method: 'POST', body }),

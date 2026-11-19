@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api, type AlarmItem, type AiResultItem } from '@/api'
 import { useRobotStore } from '@/stores/robot'
@@ -67,6 +67,8 @@ async function reload() {
   })
   rows.value = res.items
   total.value = res.total
+  // 整页 AI 告警的缩略图：reload 后只打一次批量接口
+  void loadAiThumbs()
 }
 
 // 服务端已按 limit/offset 分页，这里不能再切一次（否则第 2 页起永远是空的）
@@ -126,35 +128,120 @@ function goPlayback(a: AlarmItem) {
   })
 }
 
-// ---- AI 告警：检测框图片 ----
-const aiShot = ref<AiResultItem | null>(null)
-const aiShotLoading = ref(false)
-const aiShotError = ref('')
-const shotW = ref(0)
-const shotH = ref(0)
+// ---- AI 告警：批量缩略图 + 证据面板 ----
+// 每行 AI 告警都要一张 60×44 缩略图。逐行调单条接口会把首屏打成 N 个请求，
+// 所以 reload 后统一打一次 /ai/results/by-alarms，点开面板直接用批量结果里的
+// 完整数据（图 + 框 + 元数据），只有缓存里没有时才回退单条接口。
+const aiCache = ref<Record<number, AiResultItem>>({})
 
 function isAiAlarm(a: AlarmItem): boolean {
   return (a.metric ?? '').startsWith('ai_')
 }
 
-async function openAiShot(a: AlarmItem) {
-  aiShotError.value = ''
-  aiShotLoading.value = true
-  shotW.value = 0
-  shotH.value = 0
+async function loadAiThumbs() {
+  const ids = rows.value.filter(isAiAlarm).map((a) => a.id)
+  if (!ids.length) {
+    aiCache.value = {}
+    return
+  }
   try {
-    aiShot.value = await api.aiResultByAlarm(a.id)
-  } catch (e) {
-    aiShot.value = null
-    aiShotError.value = e instanceof ApiError ? e.message : '没有关联的检测结果'
-  } finally {
-    aiShotLoading.value = false
+    const res = await api.aiResultsByAlarms(ids)
+    const map: Record<number, AiResultItem> = {}
+    for (const [k, v] of Object.entries(res.items)) map[Number(k)] = v
+    aiCache.value = map
+  } catch {
+    // 缩略图拿不到不能挡住告警列表本身，缺图的行走「图」字回退
+    aiCache.value = {}
   }
 }
 
-function closeAiShot() {
-  aiShot.value = null
-  aiShotError.value = ''
+function aiThumb(a: AlarmItem): string {
+  return aiCache.value[a.id]?.image || ''
+}
+
+// ---- 证据面板（大图 + 检测框 + 元数据）----
+const evidence = ref<AlarmItem | null>(null)
+const evidenceShot = ref<AiResultItem | null>(null)
+const evidenceLoading = ref(false)
+const evidenceError = ref('')
+const shotW = ref(0)
+const shotH = ref(0)
+
+// 上一张/下一张只在当前页的 AI 告警之间切换，不跨页拉新数据
+const aiRows = computed(() => paged.value.filter(isAiAlarm))
+const evidenceIndex = computed(() => {
+  if (!evidence.value) return -1
+  const id = evidence.value.id
+  return aiRows.value.findIndex((a) => a.id === id)
+})
+const canPrev = computed(() => evidenceIndex.value > 0)
+const canNext = computed(() => evidenceIndex.value >= 0 && evidenceIndex.value < aiRows.value.length - 1)
+
+const levelBoxColor: Record<string, string> = { critical: '#ff4d4f', warn: '#ffd23f' }
+const boxColor = computed(() => levelBoxColor[evidence.value?.level ?? ''] ?? '#ffd23f')
+const boxLabelTone = computed(() => (evidence.value?.level === 'critical' ? '#ffffff' : '#08243f'))
+
+const metaCamera = computed(() => {
+  const s = evidenceShot.value
+  return s?.camera_name || (s?.external_camera_id != null ? `#${s.external_camera_id}` : '—')
+})
+const metaAlgorithm = computed(
+  () => evidenceShot.value?.algorithm_name || evidenceShot.value?.algorithm || '—',
+)
+const metaConfidence = computed(() => `${Math.round((evidenceShot.value?.confidence ?? 0) * 100)}%`)
+const metaTime = computed(() => {
+  const raw = evidenceShot.value?.ts || evidence.value?.started_at || ''
+  return raw.replace('T', ' ').slice(0, 19) || '—'
+})
+const metaLevel = computed(() => levelText[evidence.value?.level ?? ''] ?? evidence.value?.level ?? '—')
+const metaBoxes = computed(() => evidenceShot.value?.boxes.length ?? 0)
+const downloadName = computed(
+  () => `ai_alarm_${evidence.value?.id ?? 0}_result_${evidenceShot.value?.id ?? 0}.jpg`,
+)
+
+async function openEvidence(a: AlarmItem) {
+  evidence.value = a
+  evidenceError.value = ''
+  shotW.value = 0
+  shotH.value = 0
+  const cached = aiCache.value[a.id]
+  if (cached) {
+    evidenceShot.value = cached
+    evidenceLoading.value = false
+    return
+  }
+  evidenceShot.value = null
+  evidenceLoading.value = true
+  try {
+    evidenceShot.value = await api.aiResultByAlarm(a.id)
+  } catch (e) {
+    evidenceError.value = e instanceof ApiError ? e.message : '没有关联的检测结果'
+  } finally {
+    evidenceLoading.value = false
+  }
+}
+
+function closeEvidence() {
+  evidence.value = null
+  evidenceShot.value = null
+  evidenceError.value = ''
+}
+
+function stepEvidence(delta: number) {
+  const target = aiRows.value[evidenceIndex.value + delta]
+  if (target) void openEvidence(target)
+}
+
+function onEvidenceKey(e: KeyboardEvent) {
+  if (!evidence.value) return
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    closeEvidence()
+  } else if (e.key === 'ArrowLeft') {
+    stepEvidence(-1)
+  } else if (e.key === 'ArrowRight') {
+    stepEvidence(1)
+  }
 }
 
 function boxStyle(b: Record<string, unknown>): Record<string, string> {
@@ -172,6 +259,7 @@ function boxStyle(b: Record<string, unknown>): Record<string, string> {
   }
 }
 
+// 框上标签按框自己的置信度（score）显示，不取整条结果的置信度
 function boxLabel(b: Record<string, unknown>): string {
   const s = Number(b.score ?? 0)
   return Number.isFinite(s) ? `${Math.round(s * 100)}%` : ''
@@ -312,6 +400,7 @@ function exportCsv() {
 }
 
 onMounted(async () => {
+  window.addEventListener('keydown', onEvidenceKey)
   const f = Number(route.query.focus ?? 0)
   if (f) {
     focusRow.value = f
@@ -327,6 +416,8 @@ onMounted(async () => {
 })
 watch(() => route.fullPath, async () => { if (route.name === 'alarms') { applyQuery(); page.value = 1; await reload() } })
 watch([levelFilter, ackFilter], async () => { page.value = 1; await reload() })
+
+onUnmounted(() => window.removeEventListener('keydown', onEvidenceKey))
 </script>
 
 <template>
@@ -383,8 +474,12 @@ watch([levelFilter, ackFilter], async () => { page.value = 1; await reload() })
                 <button type="button" class="act" title="处置（写清做了什么）" :disabled="!auth.canWrite || !!a.closed_at" @click="openAct(a, 'handle')">✎</button>
                 <button type="button" v-if="a.camera_id" class="act" title="看当时的录像"
                         @click="goPlayback(a)">▶</button>
-                <button type="button" v-if="isAiAlarm(a)" class="act" title="查看 AI 检测框图片"
-                        @click="openAiShot(a)">图</button>
+                <button type="button" v-if="isAiAlarm(a) && aiThumb(a)" class="ai-thumb-btn"
+                        title="查看 AI 告警证据" @click="openEvidence(a)">
+                  <img class="ai-thumb" :src="aiThumb(a)" alt="AI 检测缩略图" />
+                </button>
+                <button type="button" v-else-if="isAiAlarm(a)" class="act" title="查看 AI 检测框图片"
+                        @click="openEvidence(a)">图</button>
                 <button type="button" v-if="!a.work_order_id" class="act" title="转工单（派单闭环）"
                         :disabled="!auth.canWrite || !!a.closed_at" @click="asWorkOrder(a)">→</button>
                 <button type="button" v-else class="act ok" :title="`已生成工单 #${a.work_order_id}，点击查看`"
@@ -464,26 +559,50 @@ watch([levelFilter, ackFilter], async () => { page.value = 1; await reload() })
     </div>
   </div>
 
-    <div v-if="aiShot || aiShotLoading || aiShotError" class="ai-mask" @click.self="closeAiShot">
-      <div class="ai-dlg">
-        <div class="ai-head">
-          <b>AI 检测结果</b>
-          <span v-if="aiShot" class="dim small">
-            {{ aiShot.algorithm_name }} · {{ aiShot.camera_name || '—' }} ·
-            {{ Math.round((aiShot.confidence ?? 0) * 100) }}%
-          </span>
+    <!-- AI 告警证据面板：左大图 + 框，右元数据，底部下载/切换/关闭 -->
+    <div v-if="evidence" class="ev-mask" @click.self="closeEvidence">
+      <div class="ev-dlg" role="dialog" aria-label="AI 告警证据">
+        <div class="ev-head">
+          <b>AI 告警证据</b>
+          <span class="tag" :class="evidence.level === 'critical' ? 'danger' : 'warn'">{{ metaLevel }}</span>
+          <span class="dim small">告警 #{{ evidence.id }}</span>
           <span class="grow" />
-          <button type="button" class="act" title="关闭" @click="closeAiShot">✕</button>
+          <button type="button" class="act" title="关闭（ESC）" @click="closeEvidence">✕</button>
         </div>
-        <p v-if="aiShotLoading" class="dim">读取检测结果…</p>
-        <p v-if="aiShotError" class="danger small">{{ aiShotError }}</p>
-        <div v-if="aiShot && aiShot.image" class="ai-frame">
-          <img :src="aiShot.image" alt="AI 检测图" @load="onShotLoad" />
-          <span v-for="(b, i) in aiShot.boxes" :key="i" class="ai-box" :style="boxStyle(b)">
-            <em>{{ boxLabel(b) }}</em>
-          </span>
+
+        <div class="ev-body">
+          <div class="ev-left">
+            <p v-if="evidenceLoading" class="dim">读取检测结果…</p>
+            <p v-else-if="evidenceError" class="danger small">{{ evidenceError }}</p>
+            <div v-else-if="evidenceShot && evidenceShot.image" class="ev-frame">
+              <img :key="evidenceShot.id" :src="evidenceShot.image" alt="AI 检测大图" @load="onShotLoad" />
+              <span v-for="(b, i) in evidenceShot.boxes" :key="i" class="ev-box"
+                    :style="{ ...boxStyle(b), borderColor: boxColor }">
+                <em :style="{ background: boxColor, color: boxLabelTone }">{{ boxLabel(b) }}</em>
+              </span>
+            </div>
+            <p v-else class="dim small">这条告警没有保存检测图。</p>
+          </div>
+
+          <aside class="ev-meta">
+            <div class="ev-row"><span>相机</span><b>{{ metaCamera }}</b></div>
+            <div class="ev-row"><span>算法</span><b>{{ metaAlgorithm }}</b></div>
+            <div class="ev-row"><span>置信度</span><b>{{ metaConfidence }}</b></div>
+            <div class="ev-row"><span>时间</span><b>{{ metaTime }}</b></div>
+            <div class="ev-row"><span>告警级别</span><b>{{ metaLevel }}</b></div>
+            <div class="ev-row"><span>告警 ID</span><b>{{ evidence.id }}</b></div>
+            <div class="ev-row"><span>框数</span><b>{{ metaBoxes }}</b></div>
+          </aside>
         </div>
-        <p v-else-if="aiShot" class="dim small">这条告警没有保存检测图。</p>
+
+        <div class="ev-actions">
+          <a v-if="evidenceShot?.image" class="btn btn-sm primary" :href="evidenceShot.image"
+             :download="downloadName">下载原图</a>
+          <span class="grow" />
+          <button type="button" class="btn btn-sm" :disabled="!canPrev" @click="stepEvidence(-1)">上一张</button>
+          <button type="button" class="btn btn-sm" :disabled="!canNext" @click="stepEvidence(1)">下一张</button>
+          <button type="button" class="btn btn-sm" @click="closeEvidence">关闭</button>
+        </div>
       </div>
     </div>
 
@@ -518,17 +637,33 @@ watch([levelFilter, ackFilter], async () => { page.value = 1; await reload() })
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .small { font-size: 11.5px; }
 
-/* AI 检测框图 */
-.ai-mask { position: fixed; inset: 0; z-index: 220; display: grid; place-items: center; background: rgba(2, 10, 22, .82); }
-.ai-dlg { width: min(920px, 92vw); max-height: 90vh; overflow: auto; padding: 12px 14px 14px;
+/* AI 告警缩略图：60×44，替代「图」字按钮；hover 高亮边框 */
+.ai-thumb-btn { padding: 0; border: 2px solid rgba(111, 227, 255, .3); background: #001a33;
+  line-height: 0; cursor: pointer; }
+.ai-thumb-btn:hover, .ai-thumb-btn:focus-visible {
+  border-color: #6fe3ff; box-shadow: 0 0 6px rgba(111, 227, 255, .65); outline: none;
+}
+.ai-thumb { width: 60px; height: 44px; object-fit: cover; display: block; }
+
+/* AI 告警证据面板：宽 960，左大图 + 右元数据 */
+.ev-mask { position: fixed; inset: 0; z-index: 260; display: grid; place-items: center;
+  background: rgba(2, 10, 22, .85); }
+.ev-dlg { width: min(960px, 94vw); max-height: 92vh; overflow: auto; padding: 12px 14px 14px;
   background: linear-gradient(180deg, rgba(6, 46, 92, .98), rgba(4, 24, 48, .99));
   border: 1px solid rgba(111, 227, 255, .55); }
-.ai-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-.ai-frame { position: relative; line-height: 0; border: 1px solid rgba(111, 227, 255, .35); }
-.ai-frame img { width: 100%; height: auto; display: block; }
-.ai-box { position: absolute; border: 2px solid #ffd23f; box-shadow: 0 0 0 1px rgba(0,0,0,.45) inset; }
-.ai-box em { position: absolute; left: -2px; top: -18px; padding: 0 5px; font-style: normal;
-  font-size: 11px; line-height: 18px; color: #08243f; background: #ffd23f; white-space: nowrap; }
+.ev-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.ev-body { display: grid; grid-template-columns: minmax(0, 1fr) 224px; gap: 14px; align-items: start; }
+.ev-frame { position: relative; line-height: 0; border: 1px solid rgba(111, 227, 255, .35); }
+.ev-frame img { width: 100%; height: auto; display: block; }
+.ev-box { position: absolute; border: 2px solid #ffd23f; box-shadow: 0 0 0 1px rgba(0, 0, 0, .45) inset; }
+.ev-box em { position: absolute; left: -2px; top: -19px; padding: 0 5px; font-style: normal;
+  font-size: 11px; line-height: 19px; white-space: nowrap; font-weight: 600; }
+.ev-meta { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px;
+  background: rgba(0, 20, 40, .55); border: 1px solid rgba(111, 227, 255, .25); }
+.ev-row { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; }
+.ev-row span { color: #9fd2ff; }
+.ev-row b { color: #e8f6ff; font-weight: 500; text-align: right; word-break: break-all; }
+.ev-actions { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
 
 .page { display: flex; flex-direction: column; gap: 12px; min-height: 100%; }
 .page > .panel:first-of-type { flex: 1; min-height: 0; overflow: auto; }
