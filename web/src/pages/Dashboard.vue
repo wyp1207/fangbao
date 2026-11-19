@@ -183,13 +183,14 @@ async function ptzCenter() {
 // 首页内嵌视频：取第一路可用视频源（可见光/热红外分开挑）
 const videoRows = ref<{
   id: number; name: string; group_name: string; stream_name: string
-  go2rtc_url: string | null; show_on_dashboard?: boolean
+  go2rtc_url: string | null; show_on_dashboard?: boolean; enabled?: boolean
 }[]>([])
 
-/** 只有显式勾了「首页显示」的摄像头才上大屏——测试流不该自己冒出来 */
-const dashVideos = computed(() => videoRows.value.filter((v) => v.show_on_dashboard && v.go2rtc_url))
+/** 只有显式勾了「首页显示」的摄像头才上大屏；MJPEG 直连不依赖 go2rtc 中继 */
+const dashVideos = computed(() => videoRows.value.filter((v) => v.show_on_dashboard && v.enabled !== false))
 const visibleVideo = computed(() => {
-  const pool = dashVideos.value
+  // 热红外只进热红外面板：否则可见光区会拿到热成像画面，两栏同一路
+  const pool = dashVideos.value.filter((x) => !/热|红外|thermal/i.test(x.name + x.group_name + x.stream_name))
   // 优先云台/球机：机载广角画面畸变，不能当大屏主画面
   return pool.find((x) => /云台|PTZ|球机/i.test(x.name)) ??
     pool.find((x) => !/机载|广角|鱼眼/.test(x.name)) ??
