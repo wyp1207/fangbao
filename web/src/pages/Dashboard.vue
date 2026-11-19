@@ -1714,7 +1714,7 @@ onBeforeUnmount(() => {
   font-size: 12px;
   position: relative; z-index: 35;   /* 让场站/设备下拉能盖在主体之上 */
 }
-.sb-left { display: flex; align-items: center; gap: 12px; justify-self: start; min-width: 0; }
+.sb-left { display: flex; align-items: center; gap: 8px; justify-self: start; min-width: 0; }
 .mock-badge {
   padding: 1px 7px; border-radius: 2px; font-size: 11px; font-weight: 700;
   color: #1b2a00; background: #ffd23f; border: 1px solid #ffe58a;
@@ -1747,7 +1747,7 @@ onBeforeUnmount(() => {
 }
 
 .field { display: flex; align-items: center; gap: 6px; }
-.field label { color: #8fc4f0; }
+.field label { color: #8fc4f0; font-size: 11.5px; white-space: nowrap; flex: none; }
 .select {
   padding: 3px 10px; color: #eaf7ff;
   background: rgba(0, 110, 200, 0.75);
