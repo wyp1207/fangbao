@@ -1109,28 +1109,27 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <!-- 主体：左视频 / 中地图 / 右统计 -->
+    <!-- 主体：左地图 / 中视频 / 右统计 -->
     <div class="body">
       <aside class="col left">
-        <ScadaPanel title="可见光视频" tone="cyan" class="grow" body-class="no-pad">
-          <div class="embed">
-            <div v-if="visibleVideo && healthOf(visibleVideo).ok" class="live-box">
-              <img class="live-img" :src="liveSrc(visibleVideo)" alt="可见光实时画面"
-                   @error="onLiveError(visibleVideo)" @load="onLiveLoad(visibleVideo)" />
-              <span class="live-clock" title="平台时间（画面 OSD 为相机时间）">{{ clock.time }}</span>
+        <ScadaPanel
+          title="实时地图"
+          :right="`${points.length} 个点位 · ${mapMeta?.resolution?.toFixed(3) ?? '—'} m/px`"
+          class="grow map-panel"
+        >
+          <div class="map-frame">
+            <MapCanvas
+              v-show="viewMode === '2d'"
+              :map-meta="mapMeta" :image-url="imageUrl" :points="points"
+              :pose="pose" :stale="robot.stale || !robot.online" :trail="trail"
+            />
+            <Twin v-if="viewMode === '3d'" :key="`${deviceId}-${robot.currentMap}`" compact />
+            <div class="view-toggle">
+              <button type="button" :class="{ on: viewMode === '2d' }" @click="viewMode = '2d'">2D</button>
+              <button type="button" :class="{ on: viewMode === '3d' }" @click="viewMode = '3d'">3D</button>
             </div>
-            <div v-else class="embed-empty">
-              <b>{{ videoEmptyTitle(visibleVideo) }}</b>
-              <span v-if="visibleVideo">原因：{{ healthOf(visibleVideo).reason }}</span>
-              <span v-else>真机联调后，在「设备管理 → 摄像头」勾选「首页显示」即自动呈现</span>
-              <div class="embed-acts">
-                <button type="button" v-if="visibleVideo" class="btn btn-sm" @click="loadVideoHealth()">重新探测</button>
-                <button type="button" class="btn btn-sm" @click="openUrl(visibleVideo)">更换地址</button>
-              </div>
-            </div>
-            <button type="button" class="embed-pick" title="从视频流里选一路" @click="openPick(visibleVideo)">换流</button>
-            <button type="button" class="embed-expand" title="打开视频监控" @click="goVideo(visibleVideo)">打开全屏页 ↗</button>
           </div>
+          <p v-if="mapError" class="red small">{{ mapError }}</p>
         </ScadaPanel>
 
         <ScadaPanel title="热红外视频" tone="gold" class="grow" body-class="no-pad">
@@ -1246,24 +1245,25 @@ onBeforeUnmount(() => {
       </aside>
 
       <main class="col center">
-        <ScadaPanel
-          title="实时地图"
-          :right="`${points.length} 个点位 · ${mapMeta?.resolution?.toFixed(3) ?? '—'} m/px`"
-          class="grow map-panel"
-        >
-          <div class="map-frame">
-            <MapCanvas
-              v-show="viewMode === '2d'"
-              :map-meta="mapMeta" :image-url="imageUrl" :points="points"
-              :pose="pose" :stale="robot.stale || !robot.online" :trail="trail"
-            />
-            <Twin v-if="viewMode === '3d'" :key="`${deviceId}-${robot.currentMap}`" compact />
-            <div class="view-toggle">
-              <button type="button" :class="{ on: viewMode === '2d' }" @click="viewMode = '2d'">2D</button>
-              <button type="button" :class="{ on: viewMode === '3d' }" @click="viewMode = '3d'">3D</button>
+        <ScadaPanel title="可见光视频" tone="cyan" class="grow" body-class="no-pad">
+          <div class="embed">
+            <div v-if="visibleVideo && healthOf(visibleVideo).ok" class="live-box">
+              <img class="live-img" :src="liveSrc(visibleVideo)" alt="可见光实时画面"
+                   @error="onLiveError(visibleVideo)" @load="onLiveLoad(visibleVideo)" />
+              <span class="live-clock" title="平台时间（画面 OSD 为相机时间）">{{ clock.time }}</span>
             </div>
+            <div v-else class="embed-empty">
+              <b>{{ videoEmptyTitle(visibleVideo) }}</b>
+              <span v-if="visibleVideo">原因：{{ healthOf(visibleVideo).reason }}</span>
+              <span v-else>真机联调后，在「设备管理 → 摄像头」勾选「首页显示」即自动呈现</span>
+              <div class="embed-acts">
+                <button type="button" v-if="visibleVideo" class="btn btn-sm" @click="loadVideoHealth()">重新探测</button>
+                <button type="button" class="btn btn-sm" @click="openUrl(visibleVideo)">更换地址</button>
+              </div>
+            </div>
+            <button type="button" class="embed-pick" title="从视频流里选一路" @click="openPick(visibleVideo)">换流</button>
+            <button type="button" class="embed-expand" title="打开视频监控" @click="goVideo(visibleVideo)">打开全屏页 ↗</button>
           </div>
-          <p v-if="mapError" class="red small">{{ mapError }}</p>
         </ScadaPanel>
 
         <section class="rt">
@@ -1749,8 +1749,12 @@ onBeforeUnmount(() => {
 .body { min-height: 0; }
 .col { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
 .grow { flex: 1; min-height: 0; }
-.left .panel.grow { flex: 1 1 0; }   /* 可见光/热红外等高 */
+.left .panel.grow { flex: 1 1 0; }   /* 地图/热红外等高 */
 .col.center { display: grid; grid-template-rows: minmax(0, 1fr) auto; }
+/* 首页改版：地图进左列、可见光视频进中栏。
+   左列地图保底高度（矮屏也不被热红外+控制面板压扁），中栏视频吃满剩余高度 */
+.col.left > .map-panel { min-height: clamp(200px, 30vh, 340px); }
+.col.center > .t-panel { min-height: 0; }
 .h-ctrl { height: 200px; flex: none; }
 .h-donut { height: 208px; flex: none; }
 .h-points { flex: 0 0 auto; height: auto; min-height: 0; padding-bottom: 6px; }
