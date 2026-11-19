@@ -806,7 +806,7 @@ const imageUrl = computed(() => (robot.currentMap && deviceId.value
   ? api.mapPng(Number(deviceId.value), robot.currentMap)
   : ''))
 // 地图面板 2D/3D 切换：2D 负责点选，3D 负责看空间关系（GLM/豆包建议的共存方式）
-const viewMode = ref<'2d' | '3d'>('3d')
+const viewMode = ref<'2d' | '3d'>('2d')
 
 const clock = computed(() => {
   const d = now.value
@@ -1282,7 +1282,7 @@ onBeforeUnmount(() => {
             <MapCanvas
               v-show="viewMode === '2d'"
               :map-meta="mapMeta" :image-url="imageUrl" :points="points"
-              :pose="pose" :stale="robot.stale || !robot.online" :trail="trail"
+              :pose="pose" :stale="robot.stale || !robot.online" :trail="trail" dark
             />
             <Twin v-if="viewMode === '3d' && deviceId" :key="`${siteStore.currentSiteId}-${deviceId}-${robot.currentMap}`" compact />
             <div class="view-toggle">

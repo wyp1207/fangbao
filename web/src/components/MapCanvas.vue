@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { MapMeta, NavPoint } from '@/api'
 
@@ -16,6 +16,10 @@ const props = defineProps<{
 const canvas = ref<HTMLCanvasElement | null>(null)
 const wrap = ref<HTMLDivElement | null>(null)
 const hover = ref<{ x: number; y: number } | null>(null)
+const showPoints = ref(true)
+const showLabels = ref(false)
+const showTrail = ref(true)
+const hoverPoint = ref<number | null>(null)
 let img: HTMLImageElement | null = null
 let ready = false
 let scale = 1
@@ -57,6 +61,17 @@ function screenToWorld(sx: number, sy: number): { x: number; y: number } | null 
   const ox = meta.origin?.[0] ?? 0
   const oy = meta.origin?.[1] ?? 0
   return { x: ox + px * res.value, y: oy + (img.height - py) * res.value }
+}
+
+function hitPoint(sx: number, sy: number): number | null {
+  if (!showPoints.value) return null
+  for (let i = props.points.length - 1; i >= 0; i--) {
+    const [px, py] = worldToPixel(props.points[i].x, props.points[i].y)
+    const dx = offsetX + px * scale - sx
+    const dy = offsetY + py * scale - sy
+    if (dx * dx + dy * dy <= 144) return i
+  }
+  return null
 }
 
 function fit() {
@@ -105,7 +120,7 @@ function draw() {
   ctx.restore()
 
   // 轨迹
-  if (props.trail?.length) {
+  if (showTrail.value && props.trail?.length) {
     ctx.beginPath()
     props.trail.forEach((t, i) => {
       const [px, py] = worldToPixel(t.x, t.y)
@@ -122,29 +137,48 @@ function draw() {
     ctx.setLineDash([])
   }
 
-  // 点位
-  for (const p of props.points) {
-    const [px, py] = worldToPixel(p.x, p.y)
-    const sx = offsetX + px * scale
-    const sy = offsetY + py * scale
-    ctx.beginPath()
-    ctx.arc(sx, sy, 7, 0, Math.PI * 2)
-    ctx.fillStyle = props.dark ? 'rgba(59, 130, 246, 0.22)' : 'rgba(22, 119, 255, 0.14)'
-    ctx.fill()
-    ctx.beginPath()
-    ctx.arc(sx, sy, 3.2, 0, Math.PI * 2)
-    ctx.fillStyle = props.dark ? '#3b82f6' : '#1677ff'
-    if (props.dark) { ctx.shadowColor = 'rgba(59,130,246,.9)'; ctx.shadowBlur = 10 }
-    ctx.fill()
-    ctx.shadowBlur = 0
-    if (p.name) {
-      ctx.font = '11px "PingFang SC", "Microsoft YaHei", sans-serif'
-      const tw = ctx.measureText(p.name).width
-      ctx.fillStyle = props.dark ? 'rgba(6, 14, 26, 0.8)' : 'rgba(255, 255, 255, 0.9)'
-      ctx.fillRect(sx + 9, sy - 17, tw + 8, 15)
-      ctx.fillStyle = props.dark ? '#a9bbd6' : '#6b7a8c'
-      ctx.fillText(p.name, sx + 13, sy - 6)
-    }
+  // 点位：编号 + 状态色；标签默认收起，悬停才显示，避免满屏文字
+  if (showPoints.value) {
+    props.points.forEach((p, i) => {
+      const [px, py] = worldToPixel(p.x, p.y)
+      const sx = offsetX + px * scale
+      const sy = offsetY + py * scale
+      const hot = hoverPoint.value === i
+      const r = hot ? 9 : 7
+      ctx.beginPath()
+      ctx.arc(sx, sy, r, 0, Math.PI * 2)
+      ctx.fillStyle = hot ? 'rgba(41, 212, 255, 0.35)' : props.dark ? 'rgba(41, 212, 255, 0.18)' : 'rgba(22, 119, 255, 0.14)'
+      ctx.fill()
+      ctx.beginPath()
+      ctx.arc(sx, sy, hot ? 9.5 : 7.5, 0, Math.PI * 2)
+      ctx.strokeStyle = hot ? '#29d4ff' : props.dark ? 'rgba(41,212,255,.55)' : 'rgba(22,119,255,.45)'
+      ctx.lineWidth = 1
+      ctx.stroke()
+      ctx.beginPath()
+      ctx.arc(sx, sy, 5, 0, Math.PI * 2)
+      ctx.fillStyle = props.dark ? '#0a2036' : '#ffffff'
+      ctx.fill()
+      ctx.fillStyle = props.dark ? '#8fe7ff' : '#1677ff'
+      ctx.font = 'bold 8px "PingFang SC", "Microsoft YaHei", sans-serif'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(String(i + 1), sx, sy + 0.5)
+      ctx.textAlign = 'start'
+      ctx.textBaseline = 'alphabetic'
+
+      if (showLabels.value || hot) {
+        // 真机点位可能没有 name：回退成编号名，和右侧「巡检点位」列表保持一致
+        const label = p.name || `点位 ${String(i + 1).padStart(2, '0')}`
+        ctx.font = '11px "PingFang SC", "Microsoft YaHei", sans-serif'
+        const tw = ctx.measureText(label).width
+        ctx.fillStyle = props.dark ? 'rgba(6, 14, 26, 0.92)' : 'rgba(255, 255, 255, 0.94)'
+        ctx.fillRect(sx + 11, sy - 18, tw + 10, 17)
+        ctx.strokeStyle = props.dark ? 'rgba(41,212,255,.35)' : 'rgba(22,119,255,.25)'
+        ctx.strokeRect(sx + 11, sy - 18, tw + 10, 17)
+        ctx.fillStyle = props.dark ? '#d9f4ff' : '#334155'
+        ctx.fillText(label, sx + 16, sy - 6)
+      }
+    })
   }
 
   // 机器人
@@ -165,6 +199,16 @@ function draw() {
     ctx.save()
     ctx.translate(sx, sy)
     ctx.rotate(-(pose.theta_rad ?? 0))
+    // 朝向扇形：一眼看出车头朝哪，而不是只有一个三角
+    const beam = ctx.createLinearGradient(0, 0, 46, 0)
+    beam.addColorStop(0, props.dark ? 'rgba(41,212,255,.28)' : 'rgba(22,119,255,.20)')
+    beam.addColorStop(1, 'rgba(41,212,255,0)')
+    ctx.beginPath()
+    ctx.moveTo(0, 0)
+    ctx.arc(0, 0, 46, -0.42, 0.42)
+    ctx.closePath()
+    ctx.fillStyle = beam
+    ctx.fill()
     ctx.beginPath()
     ctx.moveTo(10, 0)
     ctx.lineTo(-6.5, 6)
@@ -222,7 +266,15 @@ function onMove(e: MouseEvent) {
   const el = canvas.value
   if (el) {
     const rect = el.getBoundingClientRect()
-    hover.value = screenToWorld(e.clientX - rect.left, e.clientY - rect.top)
+    const mx = e.clientX - rect.left
+    const my = e.clientY - rect.top
+    hover.value = screenToWorld(mx, my)
+    // 只在悬停点位变化时重绘，避免鼠标一动就整幅重画
+    const nextHot = hitPoint(mx, my)
+    if (nextHot !== hoverPoint.value) {
+      hoverPoint.value = nextHot
+      draw()
+    }
   }
   if (!dragging) return
   offsetX += e.clientX - lastX
@@ -244,7 +296,7 @@ function onUp(e: MouseEvent) {
     }
   }
 }
-function onLeave() { dragging = false; hover.value = null }
+function onLeave() { dragging = false; hover.value = null; hoverPoint.value = null; draw() }
 
 watch(() => props.imageUrl, (url) => loadImage(url), { immediate: true })
 watch(() => [props.points, props.pose, props.stale, props.mapMeta], () => draw(), { deep: true })
@@ -269,6 +321,12 @@ onBeforeUnmount(() => ro?.disconnect())
       @mouseup="onUp"
       @mouseleave="onLeave"
     />
+
+    <div class="hud layers">
+      <label><input v-model="showPoints" type="checkbox" @change="draw" />点位</label>
+      <label><input v-model="showLabels" type="checkbox" @change="draw" />标签</label>
+      <label><input v-model="showTrail" type="checkbox" @change="draw" />轨迹</label>
+    </div>
 
     <div class="hud legend">
       <span><i class="k point" />点位 {{ points.length }}</span>
@@ -328,7 +386,12 @@ canvas { width: 100%; height: 100%; display: block; cursor: crosshair; }
   box-shadow: 0 1px 4px rgba(15, 35, 60, 0.06);
   pointer-events: none;
 }
-.legend { top: 12px; left: 12px; }
+.legend { top: 52px; left: 12px; }
+/* .hud 默认 pointer-events:none（不挡画布拖拽），图层面板必须收回点击能力 */
+.layers { top: 12px; left: 12px; gap: 10px; pointer-events: auto; }
+.layers label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; user-select: none; }
+.layers label:hover { color: #29d4ff; }
+.layers input { accent-color: #29d4ff; margin: 0; cursor: pointer; }
 .legend span { display: inline-flex; align-items: center; gap: 5px; }
 .k { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
 .k.point { background: #1677ff; box-shadow: 0 0 0 3px rgba(22, 119, 255, 0.16); }
