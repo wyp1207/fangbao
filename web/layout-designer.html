@@ -1,0 +1,1367 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>首页布局设计器 · 1440×900</title>
+<!--
+  首页可拖拽布局设计器（单文件 / 无外部依赖 / 双击即可打开）
+  ---------------------------------------------------------------
+  初始坐标 = 2026-11-19 在 http://127.0.0.1:5173 首页 1440×900 实测
+  getBoundingClientRect()（相对视口），详见 _layout_measure.json。
+  画布固定 1440×900，按窗口等比缩放；模块绝对定位，4px 网格吸附。
+  调试接口：window.layoutDesigner（getState / getScale / css / reset / save / exportJSON）
+-->
+<style>
+  :root {
+    --ink: #dff0ff;
+    --dim: #9fd6ff;
+    --line: rgba(64, 196, 255, .55);
+    --cyan: #6fe3ff;
+    --gold: #ffcf3f;
+    --green: #38e07b;
+    --panel-top: rgba(0, 112, 200, .62);
+    --panel-bottom: rgba(0, 60, 118, .88);
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: #04121e;
+    color: var(--ink);
+    font: 13px/1.4 "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ---------------- 顶部工具栏 ---------------- */
+  .tb {
+    flex: none;
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 8px 10px;
+    padding: 9px 14px;
+    overflow-x: auto;   /* 窄窗口时可横向滚动，按钮不会被裁掉 */
+    overflow-y: hidden;
+    background: linear-gradient(180deg, #082a44, #05192c);
+    border-bottom: 1px solid rgba(64, 196, 255, .35);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
+    position: relative;
+    z-index: 20;
+  }
+  .brand { display: flex; align-items: center; gap: 9px; padding-right: 6px; }
+  .brand i {
+    width: 26px; height: 26px; display: block; flex: none;
+    background: linear-gradient(180deg, #3ff0e0, #0d6ec9);
+    clip-path: polygon(0 0, 100% 0, 78% 100%, 0 100%);
+    box-shadow: 0 0 12px rgba(63, 240, 224, .55);
+  }
+  .brand b { font-size: 15px; letter-spacing: .05em; color: #fff; white-space: nowrap; }
+  .brand em { font-style: normal; font-size: 11px; color: #7fb6d8; white-space: nowrap; }
+
+  .chips { display: flex; gap: 6px; flex-wrap: nowrap; }
+  .chip {
+    flex: none;
+    font-size: 12px; color: #9fd6ff;
+    border: 1px solid rgba(64, 196, 255, .28);
+    background: rgba(8, 44, 72, .6);
+    padding: 3px 8px;
+    white-space: nowrap;
+  }
+  .chip b { color: #fff; font-weight: 700; font-variant-numeric: tabular-nums; }
+  /* 固定宽度：脏标记/选中信息变化不会挤压工具栏，避免画布缩放抖动 */
+  .chip.sel {
+    display: inline-block;
+    width: 200px;
+    color: #bff3ff;
+    border-color: rgba(111, 227, 255, .5);
+    overflow: hidden; text-overflow: ellipsis;
+    text-align: left;
+  }
+  .chip.sel.dirty { color: #ffd76a; border-color: rgba(255, 207, 63, .55); }
+  .chip.sel.idle { color: #7fa8c2; border-color: rgba(64, 196, 255, .22); }
+
+  .spacer { flex: 1 1 auto; min-width: 4px; }
+
+  .btn {
+    flex: none;
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 30px; padding: 0 11px;
+    font: inherit; font-size: 12px; color: #cfeeff;
+    background: linear-gradient(180deg, rgba(16, 74, 116, .95), rgba(7, 38, 62, .95));
+    border: 1px solid rgba(64, 196, 255, .42);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: border-color .15s, box-shadow .15s, color .15s, background .15s;
+  }
+  .btn:hover { color: #fff; border-color: #7fe9ff; box-shadow: 0 0 12px rgba(80, 210, 255, .35), inset 0 0 10px rgba(80, 210, 255, .12); }
+  .btn:active { transform: translateY(1px); }
+  .btn:focus-visible { outline: 2px solid #7fe9ff; outline-offset: 2px; }
+  .btn.primary { border-color: rgba(111, 227, 255, .8); color: #eaffff; background: linear-gradient(180deg, rgba(20, 132, 196, .95), rgba(8, 56, 94, .95)); }
+  .btn[aria-pressed="true"] { color: #04202f; background: linear-gradient(180deg, #8ff0ff, #35b6d8); border-color: #c8f8ff; box-shadow: 0 0 10px rgba(111, 227, 255, .55); }
+  .btn .ico { font-size: 13px; line-height: 1; }
+  .tb-sep { width: 1px; height: 20px; background: rgba(64, 196, 255, .25); margin: 0 2px; }
+  .kbhint { font-size: 11px; color: #6f9dbb; }
+
+  /* ---------------- 画布视口 ---------------- */
+  .viewport {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 16px;
+    overflow: hidden;
+    background:
+      radial-gradient(900px 420px at 50% 0%, rgba(0, 90, 150, .28), transparent 70%),
+      #030f1a;
+  }
+  .holder { position: relative; flex: none; }
+  .stage {
+    position: absolute; left: 0; top: 0;
+    width: 1440px; height: 900px;
+    transform-origin: 0 0;
+    background:
+      radial-gradient(1100px 520px at 18% -6%, rgba(46, 176, 255, .45), transparent 62%),
+      radial-gradient(900px 480px at 88% 4%, rgba(0, 226, 255, .22), transparent 60%),
+      linear-gradient(160deg, #0b6fc4 0%, #005da4 45%, #004274 100%);
+    box-shadow: 0 0 0 1px rgba(111, 227, 255, .5), 0 18px 60px rgba(0, 0, 0, .55), 0 0 60px rgba(0, 120, 200, .35);
+    user-select: none;
+    overflow: hidden;
+  }
+  /* 画布底纹（模拟平台的回字纹/网纹） */
+  .stage::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background-image:
+      repeating-linear-gradient(135deg, rgba(120, 220, 255, .05) 0 2px, transparent 2px 90px),
+      linear-gradient(rgba(120, 200, 255, .05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(120, 200, 255, .05) 1px, transparent 1px);
+    background-size: auto, 58px 58px, 58px 58px;
+    mask-image: radial-gradient(circle at 50% 30%, #000 40%, transparent 92%);
+  }
+  .grid-layer {
+    position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .15s;
+    background-image:
+      linear-gradient(rgba(140, 235, 255, .16) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(140, 235, 255, .16) 1px, transparent 1px),
+      linear-gradient(rgba(140, 235, 255, .07) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(140, 235, 255, .07) 1px, transparent 1px);
+    background-size: 100px 100px, 100px 100px, 20px 20px, 20px 20px;
+  }
+  .grid-layer.on { opacity: 1; }
+
+  /* ---------------- 模块通用外壳（贴近 ScadaPanel） ---------------- */
+  .mod {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: linear-gradient(180deg, var(--panel-top), var(--panel-bottom));
+    border: 1px solid var(--line);
+    box-shadow: inset 0 0 24px rgba(64, 196, 255, .1), 0 0 12px rgba(0, 80, 180, .35);
+    transition: border-color .12s, box-shadow .12s;
+    touch-action: none;
+  }
+  .mod:hover { border-color: rgba(140, 236, 255, .85); }
+  .mod.sel {
+    border-color: #b8f4ff;
+    box-shadow: 0 0 0 1px #b8f4ff, 0 0 22px rgba(120, 230, 255, .5), inset 0 0 24px rgba(64, 196, 255, .16);
+    z-index: 8;
+  }
+  .mod.dragging {
+    z-index: 40;
+    box-shadow: 0 16px 44px rgba(0, 8, 20, .65), 0 0 0 1px #b8f4ff, 0 0 26px rgba(120, 230, 255, .45);
+  }
+  .mod .c { position: absolute; width: 11px; height: 11px; border: 0 solid #6fe3ff; opacity: .85; pointer-events: none; }
+  .mod .c.tl { top: 0; left: 0; border-top-width: 2px; border-left-width: 2px; }
+  .mod .c.tr { top: 0; right: 0; border-top-width: 2px; border-right-width: 2px; }
+  .mod .c.bl { bottom: 0; left: 0; border-bottom-width: 2px; border-left-width: 2px; }
+  .mod .c.br { bottom: 0; right: 0; border-bottom-width: 2px; border-right-width: 2px; }
+
+  .mod-head {
+    flex: none; height: 30px;
+    display: flex; align-items: center; gap: 8px;
+    padding: 0 8px 0 0;
+    background: linear-gradient(90deg, rgba(20, 140, 230, .55), rgba(0, 60, 130, .15) 70%, transparent);
+    border-bottom: 1px solid rgba(64, 196, 255, .35);
+    cursor: move;
+    position: relative;
+    z-index: 3;
+    overflow: hidden;
+  }
+  .tag {
+    flex: none; max-width: 68%;
+    padding: 3px 19px 3px 9px;
+    font-size: 13px; font-weight: 700; color: #fff;
+    letter-spacing: .06em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    clip-path: polygon(0 0, 100% 0, calc(100% - 11px) 100%, 0 100%);
+    text-shadow: 0 1px 2px rgba(0, 30, 70, .6);
+  }
+  .tag.blue { background: linear-gradient(180deg, #2fa9ff, #0d6ec9); box-shadow: 0 0 10px rgba(43, 155, 255, .6); }
+  .tag.cyan { background: linear-gradient(180deg, #3ff0e0, #0c8f9e); box-shadow: 0 0 10px rgba(63, 240, 224, .55); }
+  .tag.gold { background: linear-gradient(180deg, #ffd76a, #c8860d); color: #3d2500; box-shadow: 0 0 10px rgba(255, 207, 63, .55); }
+  .tag.violet { background: linear-gradient(180deg, #a98bff, #5b3fd0); box-shadow: 0 0 10px rgba(150, 120, 255, .55); }
+  .dash {
+    flex: 1 1 auto; height: 6px; min-width: 8px;
+    background: repeating-linear-gradient(90deg, rgba(111, 227, 255, .75) 0 6px, transparent 6px 12px);
+    opacity: .45;
+  }
+  .mod-wh {
+    flex: none;
+    font-size: 11px; color: #b6e6ff;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: .02em;
+    white-space: nowrap;
+    text-shadow: 0 1px 2px rgba(0, 20, 40, .8);
+  }
+
+  .mod-body {
+    flex: 1 1 auto; min-height: 0;
+    display: flex;
+    padding: 8px 10px;
+    overflow: hidden;
+    position: relative;
+    pointer-events: none;   /* 内容只是占位，不抢拖拽/选中 */
+  }
+
+  /* 右下角缩放手柄 */
+  .rs {
+    position: absolute; right: 0; bottom: 0;
+    width: 18px; height: 18px;
+    cursor: nwse-resize; z-index: 9;
+    touch-action: none;
+  }
+  .rs::before {
+    content: ""; position: absolute; right: 3px; bottom: 3px;
+    width: 9px; height: 9px;
+    border-right: 2px solid #9ff3ff; border-bottom: 2px solid #9ff3ff;
+    opacity: .8;
+  }
+  .rs::after {
+    content: ""; position: absolute; right: 0; bottom: 0;
+    width: 16px; height: 16px;
+    background: repeating-linear-gradient(135deg, rgba(159, 243, 255, .5) 0 1.5px, transparent 1.5px 5px);
+    clip-path: polygon(100% 0, 100% 100%, 0 100%);
+    opacity: .55;
+  }
+  .rs:hover::before { opacity: 1; box-shadow: 0 0 8px rgba(159, 243, 255, .8); }
+  .stage.locked .mod-head { cursor: default; }
+  .stage.locked .rs { display: none; }
+
+  /* ---------------- 顶栏 / 底栏 模块 ---------------- */
+  .mod.bar .mod-head {
+    height: 100%;
+    padding: 0 10px;
+    gap: 10px;
+    border-bottom: none;
+    background: linear-gradient(180deg, rgba(10, 80, 150, .55), rgba(4, 40, 80, .55));
+  }
+  .mod.bar .tag { font-size: 11px; padding: 2px 15px 2px 7px; letter-spacing: .04em; }
+  .mod.bar .dash { display: none; }
+  .bar-inner {
+    display: flex; align-items: center; gap: 12px;
+    flex: 1 1 auto; min-width: 0;
+    font-size: 12px; color: #cfeaff;
+    overflow: hidden;
+  }
+  .bar-logo {
+    width: 22px; height: 22px; flex: none;
+    display: grid; place-items: center;
+    font-weight: 900; font-size: 12px; color: #032235;
+    background: linear-gradient(180deg, #7ff0ff, #2ba7d8);
+    clip-path: polygon(0 0, 100% 0, 78% 100%, 0 100%);
+  }
+  .b-name { font-weight: 700; color: #fff; letter-spacing: .05em; white-space: nowrap; }
+  .b-nav {
+    padding: 2px 9px; font-size: 11.5px; color: #d7ecff; white-space: nowrap;
+    border: 1px solid rgba(111, 227, 255, .22);
+    background: rgba(8, 54, 96, .45);
+  }
+  .b-nav.on { color: #04222f; background: linear-gradient(180deg, #a8f6ff, #3fc3e0); border-color: #c8f8ff; font-weight: 700; }
+  .b-title {
+    flex: 1 1 auto; text-align: center; white-space: nowrap; overflow: hidden;
+    font-size: 15px; letter-spacing: .12em; color: #fff;
+    text-shadow: 0 0 14px rgba(120, 230, 255, .75);
+  }
+  .b-right { display: flex; align-items: center; gap: 8px; flex: none; }
+  .b-bell {
+    position: relative; width: 24px; height: 24px; display: grid; place-items: center;
+    border: 1px solid rgba(111, 227, 255, .4); color: #ffe27a; font-size: 12px;
+  }
+  .b-bell em {
+    position: absolute; top: -6px; right: -7px;
+    font-style: normal; font-size: 9px; line-height: 1;
+    padding: 2px 4px; background: #ff5b5b; color: #fff;
+  }
+  .b-avatar {
+    width: 24px; height: 24px; border-radius: 50%;
+    display: grid; place-items: center;
+    font-size: 11px; font-weight: 700; color: #04222f;
+    background: linear-gradient(180deg, #d8f6ff, #5fc7e6);
+  }
+  .foot-inner { font-size: 10.5px; color: #a9d8ff; gap: 16px; }
+  .foot-inner .spacer { flex: 1 1 auto; }
+  .foot-inner .lk { color: #9fe8ff; }
+  .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px; vertical-align: 1px; }
+  .dot.green { background: var(--green); box-shadow: 0 0 6px rgba(56, 224, 123, .9); }
+  .dot.gold { background: var(--gold); box-shadow: 0 0 6px rgba(255, 207, 63, .8); }
+  .dot.red { background: #ff6b6b; box-shadow: 0 0 6px rgba(255, 107, 107, .8); }
+
+  /* ---------------- 占位内容：视频 ---------------- */
+  .ph { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; gap: 8px; }
+  .vid-box {
+    position: relative; flex: 1 1 auto; min-height: 0;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid rgba(80, 200, 255, .3);
+    background:
+      radial-gradient(120% 120% at 50% 0%, rgba(24, 92, 148, .5), rgba(2, 16, 32, .92) 70%),
+      #04121f;
+    overflow: hidden;
+  }
+  .vid-box::before {
+    content: ""; position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(90, 200, 255, .07) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(90, 200, 255, .07) 1px, transparent 1px);
+    background-size: 26px 26px;
+    opacity: .8;
+  }
+  .vid-box.thermal {
+    background:
+      radial-gradient(55% 55% at 52% 58%, rgba(255, 176, 64, .5), rgba(214, 66, 66, .3) 46%, rgba(44, 16, 60, .92) 78%),
+      #0d0a1c;
+  }
+  .vid-box.thermal::before { opacity: .35; }
+  .vid-center { position: relative; text-align: center; padding: 0 10px; }
+  .vid-center b { display: block; font-size: 13px; color: #eaf9ff; font-weight: 700; letter-spacing: .04em; }
+  .vid-center span { display: block; margin-top: 5px; font-size: 11px; color: #94c4e2; }
+  .vid-live {
+    position: absolute; left: 8px; top: 8px;
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 10px; font-weight: 700; letter-spacing: .1em; color: #fff;
+    padding: 2px 7px; background: rgba(214, 40, 40, .82);
+    box-shadow: 0 0 10px rgba(255, 80, 80, .45);
+  }
+  .vid-live i { width: 5px; height: 5px; border-radius: 50%; background: #fff; }
+  .vid-hud {
+    position: absolute; left: 8px; bottom: 7px;
+    font-size: 10px; color: #8fd3ee; font-variant-numeric: tabular-nums;
+  }
+  .heat-bar {
+    position: absolute; right: 8px; bottom: 8px;
+    width: 68px; height: 6px;
+    background: linear-gradient(90deg, #2a1a6b, #3d4bd8, #21b7d6, #45d96b, #f2e34b, #f39b2d, #d63a2f);
+    box-shadow: 0 0 8px rgba(255, 140, 60, .35);
+  }
+  .heat-bar::after {
+    content: "IR"; position: absolute; right: 0; top: -13px;
+    font-size: 9px; color: #ffd9a8; letter-spacing: .1em;
+  }
+
+  /* ---------------- 占位内容：实时控制 ---------------- */
+  .ph.ctrl { flex-direction: column; gap: 6px; }
+  .ctrl-tabs { display: flex; gap: 6px; flex: none; }
+  .ctrl-tabs span {
+    flex: 1 1 0; text-align: center; font-size: 11px; padding: 3px 0;
+    color: #bfe6ff; background: rgba(8, 52, 90, .75);
+    border: 1px solid rgba(64, 196, 255, .32);
+  }
+  .ctrl-tabs span.on { color: #04222f; background: linear-gradient(180deg, #9ff3ff, #40b9da); border-color: #c8f8ff; font-weight: 700; }
+  .ctrl-main { flex: 1 1 auto; min-height: 0; display: flex; gap: 10px; align-items: center; }
+  .pad { display: grid; grid-template-columns: repeat(3, 30px); grid-template-rows: repeat(3, 26px); gap: 4px; flex: none; }
+  .pb {
+    display: grid; place-items: center;
+    font-size: 12px; color: #d9f4ff;
+    background: linear-gradient(180deg, rgba(22, 96, 150, .95), rgba(6, 40, 70, .95));
+    border: 1px solid rgba(90, 208, 255, .45);
+    font-family: inherit;
+  }
+  .pb.up { grid-area: 1 / 2; }
+  .pb.left { grid-area: 2 / 1; }
+  .pb.stop { grid-area: 2 / 2; font-size: 11px; color: #ffd76a; border-color: rgba(255, 207, 63, .55); }
+  .pb.right { grid-area: 2 / 3; }
+  .pb.down { grid-area: 3 / 2; }
+  .pb.zi { grid-area: 1 / 3; }
+  .pb.zo { grid-area: 3 / 3; }
+  .ctrl-side { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+  .ctrl-side b { font-size: 11px; color: #9fd6ff; font-weight: 600; }
+  .preset-row { display: flex; gap: 4px; flex-wrap: wrap; }
+  .preset-row span {
+    font-size: 10px; padding: 2px 6px; color: #cfeaff;
+    border: 1px solid rgba(64, 196, 255, .3); background: rgba(8, 48, 82, .6);
+  }
+
+  /* ---------------- 占位内容：地图 ---------------- */
+  .ph.map { padding: 0; }
+  .map-ph {
+    position: relative; flex: 1 1 auto; min-height: 0;
+    border: 1px solid rgba(80, 200, 255, .28);
+    background:
+      radial-gradient(75% 75% at 50% 46%, rgba(12, 62, 104, .9), rgba(2, 10, 20, .97) 72%),
+      #030e18;
+    overflow: hidden;
+  }
+  .map-ph::before {
+    content: ""; position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(90, 200, 255, .08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(90, 200, 255, .08) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+  .map-ph::after {
+    content: ""; position: absolute;
+    left: 50%; top: 50%; width: 132px; height: 132px;
+    transform: translate(-50%, -50%);
+    border: 1px solid rgba(111, 227, 255, .35);
+    border-radius: 50%;
+    box-shadow: 0 0 0 18px rgba(111, 227, 255, .05), inset 0 0 24px rgba(111, 227, 255, .12);
+  }
+  .map-x, .map-y { position: absolute; background: rgba(111, 227, 255, .35); }
+  .map-x { left: 12%; right: 12%; top: 50%; height: 1px; }
+  .map-y { top: 12%; bottom: 12%; left: 50%; width: 1px; }
+  .map-center {
+    position: absolute; left: 50%; top: 50%; width: 0; height: 0;
+    border-left: 6px solid transparent; border-right: 6px solid transparent;
+    border-bottom: 12px solid #ffcf3f; transform: translate(-50%, -50%);
+    filter: drop-shadow(0 0 6px rgba(255, 207, 63, .9));
+  }
+  .map-badge {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, 26px);
+    font-size: 12px; color: #cfeeff; letter-spacing: .06em; white-space: nowrap;
+    text-shadow: 0 1px 4px rgba(0, 10, 20, .9);
+  }
+  .map-meta {
+    position: absolute; left: 10px; bottom: 8px;
+    font-size: 10.5px; color: #8fc6e4; font-variant-numeric: tabular-nums;
+    padding: 2px 7px; background: rgba(2, 18, 32, .72);
+    border: 1px solid rgba(64, 196, 255, .25);
+  }
+  .map-toggle {
+    position: absolute; right: 10px; top: 9px; display: flex;
+    border: 1px solid rgba(64, 196, 255, .4);
+  }
+  .map-toggle span { font-size: 11px; padding: 2px 10px; color: #bfe6ff; background: rgba(4, 26, 44, .8); }
+  .map-toggle span.on { color: #04222f; background: linear-gradient(180deg, #9ff3ff, #40b9da); font-weight: 700; }
+  .map-hint {
+    position: absolute; right: 10px; bottom: 8px;
+    font-size: 10px; color: #6f9dbb;
+  }
+
+  /* ---------------- 占位内容：实时消息 ---------------- */
+  .ph.msg { flex-direction: column; gap: 0; }
+  .msg-tabs { flex: none; display: flex; gap: 5px; padding-bottom: 6px; border-bottom: 1px solid rgba(64, 196, 255, .22); }
+  .msg-tabs span {
+    font-size: 11px; padding: 3px 9px; color: #bfe6ff;
+    border: 1px solid rgba(64, 196, 255, .3); background: rgba(8, 48, 82, .55);
+  }
+  .msg-tabs span.on { color: #04222f; background: linear-gradient(180deg, #9ff3ff, #40b9da); border-color: #c8f8ff; font-weight: 700; }
+  .msg-tabs .today {
+    margin-left: auto; color: #04222f; font-weight: 700;
+    background: linear-gradient(180deg, #a8f6ff, #3fc3e0); border-color: #c8f8ff;
+  }
+  .msg-tbl { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 11px; }
+  .msg-tbl th {
+    text-align: left; font-weight: 600; color: #9fd6ff;
+    padding: 5px 6px; background: rgba(6, 40, 68, .85);
+    border-bottom: 1px solid rgba(64, 196, 255, .28);
+  }
+  .msg-tbl td { padding: 5px 6px; border-bottom: 1px dashed rgba(64, 196, 255, .16); color: #d5ecff; }
+  .msg-tbl th:first-child, .msg-tbl td:first-child { width: 72px; }
+  .msg-tbl th:last-child, .msg-tbl td:last-child { width: 66px; text-align: right; }
+  .msg-tbl .bar { display: inline-block; width: 3px; height: 11px; margin-right: 5px; vertical-align: -1px; background: #ffcf3f; }
+  .msg-tbl .bar.crit { background: #ff6b6b; }
+  .msg-tbl .bar.ok { background: #38e07b; }
+  .pill {
+    display: inline-block; font-style: normal; font-size: 10px; padding: 1px 6px;
+    border: 1px solid rgba(255, 107, 107, .55); color: #ffb3b3; background: rgba(120, 20, 30, .4);
+  }
+  .pill.ok { border-color: rgba(56, 224, 123, .5); color: #a8f3c8; background: rgba(10, 70, 46, .4); }
+  .pill.warn { border-color: rgba(255, 207, 63, .5); color: #ffe7a3; background: rgba(90, 66, 10, .4); }
+
+  /* ---------------- 占位内容：告警统计 ---------------- */
+  .ph.alarm { flex-direction: column; gap: 8px; align-items: stretch; }
+  .alarm-top { display: flex; align-items: center; gap: 12px; flex: none; }
+  .donut {
+    position: relative; flex: none; width: 92px; height: 92px; border-radius: 50%;
+    background: conic-gradient(#38e07b 0 17deg, #ffcf3f 17deg 360deg);
+    box-shadow: 0 0 16px rgba(255, 207, 63, .28);
+  }
+  .donut::after {
+    content: "42"; position: absolute; inset: 13px; border-radius: 50%;
+    display: grid; place-items: center;
+    background: #06233c; color: #fff; font-size: 21px; font-weight: 700;
+    box-shadow: inset 0 0 12px rgba(0, 120, 200, .5);
+  }
+  .legend { display: flex; flex-direction: column; gap: 7px; font-size: 11px; color: #cfe9ff; min-width: 0; }
+  .legend b { color: #fff; margin-left: 4px; }
+  .legend i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; }
+  .legend i.gold { background: var(--gold); }
+  .legend i.green { background: var(--green); }
+  .trend { flex: 1 1 auto; min-height: 34px; display: flex; align-items: flex-end; gap: 7px; padding-top: 2px; }
+  .trend .col { flex: 1 1 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 3px; height: 100%; min-height: 0; }
+  .trend .col i { display: block; width: 100%; background: linear-gradient(180deg, #ff8b6b, #c8342f); }
+  .trend .col em { display: block; width: 100%; background: linear-gradient(180deg, #ffe071, #c8960d); }
+  .trend .col span { font-size: 9px; color: #8fbcd6; text-align: center; font-style: normal; }
+  .trend-x { font-size: 9px; color: #8fbcd6; text-align: center; }
+
+  /* ---------------- 占位内容：环境数据 ---------------- */
+  .ph.env { flex-direction: column; gap: 8px; }
+  .env-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; flex: none; }
+  .env-cell {
+    position: relative; padding: 6px 8px;
+    border: 1px solid rgba(64, 196, 255, .28);
+    background: linear-gradient(180deg, rgba(10, 60, 100, .7), rgba(4, 28, 48, .7));
+  }
+  .env-cell span { display: block; font-size: 10.5px; color: #9fd6ff; }
+  .env-cell b { display: block; margin-top: 2px; font-size: 17px; color: #eaf9ff; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .env-cell b small { font-size: 10px; color: #8fbcd6; font-weight: 400; margin-left: 3px; }
+  .env-cell em.off {
+    position: absolute; right: 6px; top: 6px;
+    font-style: normal; font-size: 9px; padding: 1px 4px;
+    color: #ffd76a; border: 1px solid rgba(255, 207, 63, .45);
+  }
+  .env-trend { flex: 1 1 auto; min-height: 0; position: relative; border: 1px dashed rgba(64, 196, 255, .2); }
+  .env-trend svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .env-trend polyline { fill: none; stroke: #6fe3ff; stroke-width: 1.2; opacity: .65; }
+  .env-note { flex: none; font-size: 10px; color: #7ea9c4; }
+
+  /* ---------------- 占位内容：巡检点位 ---------------- */
+  .ph.points { flex-direction: column; }
+  .points-list { list-style: none; margin: 0; padding: 0; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+  .points-list li {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 2px; font-size: 11px; color: #d5ecff;
+    border-bottom: 1px dashed rgba(64, 196, 255, .16);
+  }
+  .points-list .idx {
+    flex: none; width: 20px; height: 18px; display: grid; place-items: center;
+    font-size: 10px; color: #9ff3ff;
+    border: 1px solid rgba(64, 196, 255, .4);
+    background: rgba(8, 48, 82, .7);
+  }
+  .points-list .nm { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .points-list .cd { flex: none; font-size: 10px; color: #8fbcd6; font-variant-numeric: tabular-nums; }
+
+  /* ---------------- 实时尺寸提示 ---------------- */
+  #liveSize {
+    position: fixed; z-index: 120; pointer-events: none; display: none;
+    padding: 4px 9px;
+    font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
+    color: #eafcff; background: rgba(3, 22, 38, .94);
+    border: 1px solid #8ff0ff;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .5), 0 0 14px rgba(111, 227, 255, .35);
+    white-space: nowrap;
+  }
+  #liveSize.on { display: block; }
+  #liveSize small { font-weight: 400; color: #8fbcd6; margin-left: 4px; }
+
+  /* ---------------- 页面底部说明 ---------------- */
+  .hint {
+    flex: none;
+    display: flex; align-items: center; justify-content: center;
+    flex-wrap: wrap; gap: 6px 18px;
+    padding: 8px 14px;
+    font-size: 12px; color: #9fd6ff;
+    background: linear-gradient(180deg, #05192a, #04121e);
+    border-top: 1px solid rgba(64, 196, 255, .28);
+  }
+  .hint kbd {
+    font: inherit; font-size: 11px; color: #04222f; font-weight: 700;
+    padding: 1px 5px; margin: 0 2px;
+    background: linear-gradient(180deg, #9ff3ff, #40b9da);
+  }
+  .hint .sub { color: #6f9dbb; }
+
+  /* ---------------- Toast ---------------- */
+  #toast {
+    position: fixed; left: 50%; bottom: 62px; transform: translate(-50%, 10px);
+    z-index: 200; pointer-events: none;
+    padding: 8px 16px; font-size: 12.5px; color: #eaffff;
+    background: rgba(3, 24, 40, .95);
+    border: 1px solid rgba(111, 227, 255, .65);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .5), 0 0 18px rgba(111, 227, 255, .25);
+    opacity: 0; transition: opacity .18s, transform .18s;
+    max-width: 80vw;
+  }
+  #toast.on { opacity: 1; transform: translate(-50%, 0); }
+  #toast.ok { border-color: rgba(56, 224, 123, .8); }
+  #toast.warn { border-color: rgba(255, 207, 63, .85); }
+
+  /* ---------------- CSS 弹窗 ---------------- */
+  .mask {
+    position: fixed; inset: 0; z-index: 300;
+    display: none; align-items: center; justify-content: center;
+    background: rgba(1, 10, 18, .78);
+    backdrop-filter: blur(2px);
+  }
+  .mask.on { display: flex; }
+  .card {
+    display: flex; flex-direction: column;
+    width: min(820px, 94vw); max-height: 82vh;
+    background: linear-gradient(180deg, #08283f, #04182a);
+    border: 1px solid rgba(64, 196, 255, .55);
+    box-shadow: 0 30px 80px rgba(0, 0, 0, .65), 0 0 40px rgba(0, 120, 200, .25);
+  }
+  .card header {
+    flex: none; display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(64, 196, 255, .3);
+    background: linear-gradient(90deg, rgba(20, 140, 230, .35), transparent);
+  }
+  .card header b { font-size: 14px; color: #fff; letter-spacing: .04em; }
+  .card header span { font-size: 11px; color: #8fbcd6; }
+  .card header .x {
+    margin-left: auto; width: 26px; height: 26px;
+    display: grid; place-items: center;
+    font: inherit; font-size: 13px; color: #bfe6ff; cursor: pointer;
+    background: transparent; border: 1px solid rgba(64, 196, 255, .35);
+  }
+  .card header .x:hover { color: #fff; border-color: #7fe9ff; }
+  .card .body { flex: 1 1 auto; min-height: 0; display: flex; padding: 12px 14px; }
+  #cssText {
+    flex: 1 1 auto; min-height: 320px; width: 100%;
+    font: 12px/1.55 Consolas, "Cascadia Mono", "Courier New", monospace;
+    color: #c8eeff; background: #02101c;
+    border: 1px solid rgba(64, 196, 255, .3);
+    padding: 10px 12px; resize: none; outline: none;
+    white-space: pre; overflow: auto;
+  }
+  #cssText:focus { border-color: rgba(111, 227, 255, .7); }
+  .card footer {
+    flex: none; display: flex; gap: 8px; justify-content: flex-end;
+    padding: 10px 14px; border-top: 1px solid rgba(64, 196, 255, .25);
+  }
+</style>
+</head>
+<body>
+
+<header class="tb">
+  <div class="brand">
+    <i></i>
+    <b>首页布局设计器</b>
+  </div>
+
+  <div class="chips">
+    <span class="chip">画布 <b id="cCanvas">1440×900</b></span>
+    <span class="chip">模块 <b id="cCount">10</b></span>
+    <span class="chip">缩放 <b id="cScale">100%</b></span>
+    <span class="chip">吸附 <b>4px</b></span>
+    <span class="chip sel idle" id="cSel">未选中模块</span>
+  </div>
+
+  <div class="spacer"></div>
+
+  <button class="btn primary" id="btnReset" type="button" title="恢复到实测初始布局，并清除本地保存">
+    <span class="ico">⟲</span>重置布局
+  </button>
+  <button class="btn" id="btnSave" type="button" title="保存到浏览器 localStorage">
+    <span class="ico">⌸</span>保存到本地
+  </button>
+  <button class="btn" id="btnExport" type="button" title="下载 layout.json">
+    <span class="ico">⤓</span>导出 JSON
+  </button>
+  <button class="btn" id="btnCopy" type="button" title="生成可粘贴回项目的 CSS Grid">
+    <span class="ico">⧉</span>复制 CSS Grid
+  </button>
+  <span class="tb-sep"></span>
+  <button class="btn" id="btnGrid" type="button" aria-pressed="false" title="显示/隐藏辅助网格">
+    <span class="ico">▦</span>显示网格
+  </button>
+  <button class="btn" id="btnLock" type="button" aria-pressed="false" title="锁定后禁止拖动和缩放">
+    <span class="ico">🔒</span>锁定模块
+  </button>
+</header>
+
+<div class="viewport" id="viewport">
+  <div class="holder" id="holder">
+    <div class="stage" id="stage">
+      <div class="grid-layer" id="gridLayer"></div>
+    </div>
+  </div>
+</div>
+
+<footer class="hint">
+  <span>拖<b>标题栏</b>移动</span>
+  <span class="sub">·</span>
+  <span>拖<b>右下角</b>缩放</span>
+  <span class="sub">·</span>
+  <span>坐标 <b>4px</b> 吸附</span>
+  <span class="sub">·</span>
+  <span>模块不会拖出画布</span>
+  <span class="sub">·</span>
+  <span>选中后用 <kbd>方向键</kbd> 微调（<kbd>Shift</kbd> 加速）</span>
+  <span class="sub">·</span>
+  <span>布局只存本地，不改现有首页代码</span>
+</footer>
+
+<div id="liveSize"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<div class="mask" id="cssMask" aria-hidden="true">
+  <div class="card" role="dialog" aria-modal="true" aria-labelledby="cssTitle">
+    <header>
+      <b id="cssTitle">CSS Grid · 可直接粘贴回项目</b>
+      <span id="cssInfo"></span>
+      <button class="x" id="cssClose" type="button" title="关闭">✕</button>
+    </header>
+    <div class="body">
+      <textarea id="cssText" readonly spellcheck="false" aria-label="生成的 CSS"></textarea>
+    </div>
+    <footer>
+      <button class="btn" id="cssCopyAgain" type="button">再复制一次</button>
+      <button class="btn primary" id="cssDone" type="button">关闭</button>
+    </footer>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* =======================================================================
+     1. 常量与实测初始布局
+     实测：2026-11-19，http://127.0.0.1:5173 首页，1440×900，admin 登录后
+     getBoundingClientRect()（x/y 即画布坐标，画布左上角在视口 0,0）
+     ======================================================================= */
+  var W = 1440;
+  var H = 900;
+  var GRID = 4;
+  var MIN_W = 80;
+  var MIN_H = 32;
+  var STORE_KEY = 'jc_layout_designer_v1';
+
+  var INITIAL = [
+    { id: 'header',   name: '顶栏',       kind: 'bar',   tone: 'blue',   x: 0,    y: 0,    w: 1440, h: 54 },
+    { id: 'visible',  name: '可见光视频', kind: 'panel', tone: 'cyan',   x: 12,   y: 104,  w: 388,  h: 279 },
+    { id: 'thermal',  name: '热红外视频', kind: 'panel', tone: 'gold',   x: 12,   y: 393,  w: 388,  h: 279 },
+    { id: 'control',  name: '实时控制',   kind: 'panel', tone: 'blue',   x: 12,   y: 682,  w: 388,  h: 182 },
+    { id: 'map',      name: '实时地图',   kind: 'panel', tone: 'blue',   x: 410,  y: 104,  w: 678,  h: 528.23 },
+    { id: 'messages', name: '实时消息',   kind: 'panel', tone: 'violet', x: 410,  y: 646,  w: 678,  h: 218 },
+    { id: 'alarm',    name: '告警统计',   kind: 'panel', tone: 'gold',   x: 1098, y: 104,  w: 330,  h: 196 },
+    { id: 'env',      name: '环境数据',   kind: 'panel', tone: 'cyan',   x: 1098, y: 310,  w: 330,  h: 376 },
+    { id: 'points',   name: '巡检点位',   kind: 'panel', tone: 'blue',   x: 1098, y: 696,  w: 330,  h: 168 },
+    { id: 'footer',   name: '底栏',       kind: 'bar',   tone: 'blue',   x: 0,    y: 874,  w: 1440, h: 26 }
+  ];
+
+  /* 占位内容：各模块身体（纯展示，pointer-events: none） */
+  var BODY = {
+    visible:
+      '<div class="ph">' +
+        '<div class="vid-box">' +
+          '<span class="vid-live"><i></i>LIVE</span>' +
+          '<div class="vid-center"><b>可见光画面占位</b><span>1920×1080 · 25 fps · CAM-01</span></div>' +
+          '<span class="vid-hud">PTZ / 可见光</span>' +
+        '</div>' +
+      '</div>',
+    thermal:
+      '<div class="ph">' +
+        '<div class="vid-box thermal">' +
+          '<div class="vid-center"><b>热红外画面占位</b><span>640×512 · 测温范围 -20~150℃</span></div>' +
+          '<span class="heat-bar"></span>' +
+          '<span class="vid-hud">IR / 热像仪</span>' +
+        '</div>' +
+      '</div>',
+    control:
+      '<div class="ph ctrl">' +
+        '<div class="ctrl-tabs"><span class="on">云台控制</span><span>车体控制</span></div>' +
+        '<div class="ctrl-main">' +
+          '<div class="pad">' +
+            '<span class="pb up">▲</span><span class="pb left">◀</span><span class="pb stop">停</span>' +
+            '<span class="pb right">▶</span><span class="pb down">▼</span>' +
+            '<span class="pb zi">＋</span><span class="pb zo">－</span>' +
+          '</div>' +
+          '<div class="ctrl-side">' +
+            '<b>预置位占位</b>' +
+            '<div class="preset-row"><span>1 · 泵房</span><span>2 · 门口</span><span>3 · 通道</span></div>' +
+          '</div>' +
+        '</div>' +
+      '</div>',
+    map:
+      '<div class="ph map">' +
+        '<div class="map-ph">' +
+          '<span class="map-x"></span><span class="map-y"></span>' +
+          '<span class="map-center"></span>' +
+          '<span class="map-badge">实时地图占位</span>' +
+          '<div class="map-toggle"><span class="on">2D</span><span>3D</span></div>' +
+          '<span class="map-meta">map1 · 0.050 m/px · 6 个点位</span>' +
+          '<span class="map-hint">机器人位姿占位</span>' +
+        '</div>' +
+      '</div>',
+    messages:
+      '<div class="ph msg">' +
+        '<div class="msg-tabs"><span class="on">巡检消息</span><span>告警消息</span><span>控制消息</span><span class="today">今日任务状态</span></div>' +
+        '<table class="msg-tbl">' +
+          '<thead><tr><th>时间</th><th>告警内容</th><th>状态</th></tr></thead>' +
+          '<tbody>' +
+            '<tr><td>11:08:51</td><td><i class="bar crit"></i>占位消息：机器人定位丢失</td><td><em class="pill">未确认</em></td></tr>' +
+            '<tr><td>11:06:41</td><td><i class="bar"></i>占位消息：检测到烟雾（置信度 0.80）</td><td><em class="pill ok">已确认</em></td></tr>' +
+            '<tr><td>11:02:14</td><td><i class="bar crit"></i>占位消息：定位丢失，导航不可信</td><td><em class="pill">未确认</em></td></tr>' +
+            '<tr><td>10:58:03</td><td><i class="bar ok"></i>占位消息：巡检点位 03 完成</td><td><em class="pill ok">已完成</em></td></tr>' +
+          '</tbody>' +
+        '</table>' +
+      '</div>',
+    alarm:
+      '<div class="ph alarm">' +
+        '<div class="alarm-top">' +
+          '<div class="donut"></div>' +
+          '<div class="legend">' +
+            '<span><i class="gold"></i>未确认 <b>41</b></span>' +
+            '<span><i class="green"></i>已确认 <b>1</b></span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="trend">' +
+          '<div class="col"><em style="height:34%"></em><span>13</span></div>' +
+          '<div class="col"><em style="height:52%"></em><span>14</span></div>' +
+          '<div class="col"><em style="height:26%"></em><span>15</span></div>' +
+          '<div class="col"><em style="height:64%"></em><span>16</span></div>' +
+          '<div class="col"><em style="height:44%"></em><span>17</span></div>' +
+          '<div class="col"><em style="height:78%"></em><span>18</span></div>' +
+          '<div class="col"><em style="height:58%"></em><span>19</span></div>' +
+        '</div>' +
+      '</div>',
+    env:
+      '<div class="ph env">' +
+        '<div class="env-grid">' +
+          '<div class="env-cell"><span>可燃气体</span><b>--<small>%LEL</small></b><em class="off">离线</em></div>' +
+          '<div class="env-cell"><span>温度</span><b>--<small>℃</small></b></div>' +
+          '<div class="env-cell"><span>湿度</span><b>--<small>%RH</small></b></div>' +
+          '<div class="env-cell"><span>SF6</span><b>--<small>ppm</small></b></div>' +
+        '</div>' +
+        '<div class="env-trend"><svg viewBox="0 0 100 32" preserveAspectRatio="none"><polyline points="0,24 12,20 24,26 36,14 48,18 60,9 72,13 84,7 100,11" /></svg></div>' +
+        '<p class="env-note">占位：本机 3 个传感器 · 近 1 小时趋势</p>' +
+      '</div>',
+    points:
+      '<div class="ph points">' +
+        '<ul class="points-list">' +
+          '<li><span class="idx">01</span><span class="nm">点位 01</span><span class="cd">-4.0, 0.0</span><i class="dot green"></i></li>' +
+          '<li><span class="idx">02</span><span class="nm">点位 02</span><span class="cd">-1.0, -3.0</span><i class="dot green"></i></li>' +
+          '<li><span class="idx">03</span><span class="nm">点位 03</span><span class="cd">2.0, -2.0</span><i class="dot green"></i></li>' +
+          '<li><span class="idx">04</span><span class="nm">点位 04</span><span class="cd">4.0, 1.0</span><i class="dot green"></i></li>' +
+        '</ul>' +
+      '</div>'
+  };
+
+  var BAR = {
+    header:
+      '<div class="bar-inner">' +
+        '<span class="bar-logo">M</span>' +
+        '<span class="b-name">AI防爆巡检</span>' +
+        '<span class="b-nav on">首页</span>' +
+        '<span class="b-nav">实时监控</span>' +
+        '<span class="b-nav">巡检管理</span>' +
+        '<span class="b-nav">告警中心</span>' +
+        '<b class="b-title">智能巡检机器人管理平台</b>' +
+        '<span class="b-right"><span class="b-bell">◔<em>41</em></span><span class="b-avatar">管</span></span>' +
+      '</div>',
+    footer:
+      '<div class="bar-inner foot-inner">' +
+        '<span><i class="dot green"></i>链路 正常</span>' +
+        '<span>数据更新于 11:08:50（0.5s 前）</span>' +
+        '<span>固件 6.1.5 · 导航源 camera · 急停 未按下</span>' +
+        '<span class="spacer"></span>' +
+        '<span>数据刷新 1s</span>' +
+        '<span class="lk">通讯链路正常</span>' +
+      '</div>'
+  };
+
+  /* =======================================================================
+     2. DOM 引用与小工具
+     ======================================================================= */
+  var stage = document.getElementById('stage');
+  var holder = document.getElementById('holder');
+  var viewport = document.getElementById('viewport');
+  var gridLayer = document.getElementById('gridLayer');
+  var liveSize = document.getElementById('liveSize');
+  var toastEl = document.getElementById('toast');
+  var cScale = document.getElementById('cScale');
+  var cSel = document.getElementById('cSel');
+  var cssMask = document.getElementById('cssMask');
+  var cssText = document.getElementById('cssText');
+  var cssInfo = document.getElementById('cssInfo');
+
+  var byId = {};
+  var els = {};
+  var state = { modules: [] };
+  var selected = null;
+  var locked = false;
+  var dirty = false;
+  var scale = 1;
+  var drag = null;
+  var toastTimer = 0;
+
+  function clone(list) {
+    return list.map(function (m) {
+      return { id: m.id, name: m.name, kind: m.kind, tone: m.tone, x: m.x, y: m.y, w: m.w, h: m.h };
+    });
+  }
+  function num(v) { return typeof v === 'number' && isFinite(v); }
+  function r2(v) { return Math.round(v * 100) / 100; }
+  function fmt(v) { return Number.isInteger(v) ? String(v) : String(r2(v)); }
+  function clamp(v, lo, hi) { return Math.min(Math.max(v, lo), hi); }
+  function snap(v) {
+    // +1e-4 抵消浮点误差：指针位移换算后常常落在 4px 半格边界（如 509.99999），
+    // 不补偿会向下取整，出现「拖 +100 只走 +98」的跳变
+    return Math.round(v / GRID + 1e-4) * GRID;
+  }
+
+  function toast(msg, kind) {
+    toastEl.textContent = msg;
+    toastEl.className = 'on' + (kind ? ' ' + kind : '');
+    clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(function () { toastEl.className = ''; }, 2400);
+  }
+
+  /* =======================================================================
+     3. 构建画布
+     ======================================================================= */
+  function build() {
+    INITIAL.forEach(function (m) {
+      var el = document.createElement('div');
+      el.className = 'mod' + (m.kind === 'bar' ? ' bar' : '');
+      el.dataset.id = m.id;
+      el.innerHTML =
+        '<span class="c tl"></span><span class="c tr"></span>' +
+        '<span class="c bl"></span><span class="c br"></span>' +
+        '<div class="mod-head">' +
+          '<span class="tag ' + m.tone + '">' + m.name + '</span>' +
+          '<span class="dash"></span>' +
+          '<span class="mod-wh"></span>' +
+        '</div>' +
+        (m.kind === 'bar'
+          ? ''
+          : '<div class="mod-body">' + (BODY[m.id] || '') + '</div>') +
+        '<span class="rs" title="拖动缩放"></span>';
+
+      if (m.kind === 'bar') {
+        el.querySelector('.mod-head').insertAdjacentHTML('beforeend', BAR[m.id] || '');
+      }
+      stage.appendChild(el);
+      els[m.id] = el;
+
+      var head = el.querySelector('.mod-head');
+      var rs = el.querySelector('.rs');
+      head.addEventListener('pointerdown', function (e) { startDrag(e, m, 'move'); });
+      rs.addEventListener('pointerdown', function (e) { startDrag(e, m, 'resize'); });
+      el.addEventListener('pointerdown', function (e) {
+        if (e.target.closest('.mod-head') || e.target.closest('.rs')) return;
+        select(m.id);
+      });
+    });
+  }
+
+  function apply(m) {
+    var el = els[m.id];
+    if (!el) return;
+    el.style.left = m.x + 'px';
+    el.style.top = m.y + 'px';
+    el.style.width = m.w + 'px';
+    el.style.height = m.h + 'px';
+    el.querySelector('.mod-wh').textContent = fmt(m.w) + ' × ' + fmt(m.h);
+  }
+  function applyAll() { state.modules.forEach(apply); }
+
+  function select(id) {
+    selected = id || null;
+    state.modules.forEach(function (m) {
+      if (els[m.id]) els[m.id].classList.toggle('sel', m.id === selected);
+    });
+    updateSelChip();
+  }
+  function updateSelChip() {
+    var m = selected ? byId[selected] : null;
+    var text = m
+      ? m.name + ' ' + fmt(m.x) + ',' + fmt(m.y) + ' ' + fmt(m.w) + '×' + fmt(m.h)
+      : '未选中模块';
+    cSel.textContent = (dirty ? '● ' : '') + text;
+    cSel.title = (dirty ? '有未保存的改动 · ' : '') + text;
+    cSel.classList.toggle('dirty', dirty);
+    cSel.classList.toggle('idle', !dirty && !m);
+  }
+  function markDirty() {
+    if (dirty) return;
+    dirty = true;
+    updateSelChip();
+  }
+  function clearDirty() {
+    dirty = false;
+    updateSelChip();
+  }
+
+  /* =======================================================================
+     4. 交互：拖动 / 缩放（4px 吸附 + 画布边界钳制）
+     ======================================================================= */
+  function showLive(x, y, w, h) {
+    liveSize.innerHTML = fmt(w) + ' × ' + fmt(h) + '<small>px</small>';
+    liveSize.style.left = (x + 16) + 'px';
+    liveSize.style.top = (y + 18) + 'px';
+    liveSize.classList.add('on');
+  }
+  function hideLive() { liveSize.classList.remove('on'); }
+
+  function startDrag(e, m, mode) {
+    if (e.button !== undefined && e.button !== 0) return;
+    if (locked) {
+      toast('模块已锁定：先关掉工具栏的「锁定模块」', 'warn');
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    select(m.id);
+
+    drag = {
+      id: m.id, mode: mode,
+      sx: e.clientX, sy: e.clientY,
+      ox: m.x, oy: m.y, ow: m.w, oh: m.h,
+      // 锁住按下瞬间的缩放：窗口/工具栏在拖动中途变化也不影响位移换算
+      scale: scale,
+      pointerId: e.pointerId
+    };
+    els[m.id].classList.add('dragging');
+    showLive(e.clientX, e.clientY, m.w, m.h);
+
+    try { e.target.setPointerCapture(e.pointerId); } catch (err) { /* 忽略 */ }
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
+  }
+
+  function onPointerMove(e) {
+    if (!drag) return;
+    var m = byId[drag.id];
+    if (!m) return;
+    var dx = (e.clientX - drag.sx) / drag.scale;
+    var dy = (e.clientY - drag.sy) / drag.scale;
+
+    if (drag.mode === 'move') {
+      // 先吸附再钳制：保证不越界，正常位置一定落在 4px 网格上
+      m.x = clamp(snap(drag.ox + dx), 0, W - m.w);
+      m.y = clamp(snap(drag.oy + dy), 0, H - m.h);
+    } else {
+      m.w = clamp(snap(drag.ow + dx), MIN_W, W - m.x);
+      m.h = clamp(snap(drag.oh + dy), MIN_H, H - m.y);
+    }
+    apply(m);
+    updateSelChip();
+    showLive(e.clientX, e.clientY, m.w, m.h);
+    markDirty();
+  }
+
+  function onPointerUp() {
+    if (!drag) return;
+    var el = els[drag.id];
+    if (el) el.classList.remove('dragging');
+    drag = null;
+    hideLive();
+    window.removeEventListener('pointermove', onPointerMove);
+    window.removeEventListener('pointerup', onPointerUp);
+    window.removeEventListener('pointercancel', onPointerUp);
+  }
+
+  /* 方向键微调选中模块 */
+  document.addEventListener('keydown', function (e) {
+    var tag = (e.target && e.target.tagName) || '';
+    if (tag === 'TEXTAREA' || tag === 'INPUT') return;
+    if (e.key === 'Escape') {
+      if (cssMask.classList.contains('on')) { closeCss(); return; }
+      select(null);
+      return;
+    }
+    if (!selected || locked) return;
+    var step = e.shiftKey ? 40 : GRID;
+    var vec = {
+      ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1]
+    }[e.key];
+    if (!vec) return;
+    e.preventDefault();
+    var m = byId[selected];
+    m.x = clamp(snap(m.x + vec[0] * step), 0, W - m.w);
+    m.y = clamp(snap(m.y + vec[1] * step), 0, H - m.h);
+    apply(m);
+    updateSelChip();
+    markDirty();
+  });
+
+  /* =======================================================================
+     5. 状态：本地保存 / 读取 / 重置
+     ======================================================================= */
+  function payload() {
+    return {
+      canvas: { width: W, height: H, grid: GRID },
+      modules: state.modules.map(function (m) {
+        return { id: m.id, name: m.name, x: r2(m.x), y: r2(m.y), w: r2(m.w), h: r2(m.h) };
+      })
+    };
+  }
+
+  function loadState() {
+    var fresh = clone(INITIAL);
+    var saved = null;
+    try { saved = JSON.parse(localStorage.getItem(STORE_KEY) || 'null'); } catch (err) { saved = null; }
+    if (!saved || !Array.isArray(saved.modules)) return fresh;
+
+    return fresh.map(function (base) {
+      var hit = null;
+      for (var i = 0; i < saved.modules.length; i += 1) {
+        if (saved.modules[i] && saved.modules[i].id === base.id) { hit = saved.modules[i]; break; }
+      }
+      if (!hit) return base;
+      var m = base;
+      ['x', 'y', 'w', 'h'].forEach(function (k) {
+        if (num(hit[k])) m[k] = hit[k];
+      });
+      // 越界或过小的存档值修正回画布内
+      m.w = clamp(m.w, MIN_W, W);
+      m.h = clamp(m.h, MIN_H, H);
+      m.x = clamp(m.x, 0, W - m.w);
+      m.y = clamp(m.y, 0, H - m.h);
+      return m;
+    });
+  }
+
+  function reset() {
+    onPointerUp();
+    state.modules = clone(INITIAL);
+    byId = {};
+    state.modules.forEach(function (m) { byId[m.id] = m; });
+    applyAll();
+    select(null);
+    try { localStorage.removeItem(STORE_KEY); } catch (err) { /* 忽略 */ }
+    clearDirty();
+    toast('已重置为实测初始布局（1440×900）', 'ok');
+    updateSelChip();
+  }
+
+  function save() {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(payload()));
+      clearDirty();
+      toast('布局已保存到本地（localStorage）', 'ok');
+    } catch (err) {
+      toast('保存失败：' + (err && err.message ? err.message : 'localStorage 不可用'), 'warn');
+    }
+  }
+
+  function exportJSON() {
+    var data = payload();
+    data.exportedAt = new Date().toISOString();
+    var text = JSON.stringify(data, null, 2);
+    download('layout.json', text);
+    toast('已导出 layout.json（' + data.modules.length + ' 个模块）', 'ok');
+  }
+
+  function download(filename, text) {
+    var blob = new Blob([text], { type: 'application/json;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    window.setTimeout(function () {
+      URL.revokeObjectURL(url);
+      a.remove();
+    }, 1500);
+  }
+
+  /* =======================================================================
+     6. CSS Grid 生成
+     ======================================================================= */
+  function tracks(values) {
+    var uniq = [];
+    values.forEach(function (v) { if (uniq.indexOf(v) === -1) uniq.push(v); });
+    return uniq.sort(function (a, b) { return a - b; });
+  }
+
+  function cssText_() {
+    var mods = state.modules.map(function (m) {
+      return {
+        id: m.id, name: m.name,
+        x: Math.round(m.x), y: Math.round(m.y),
+        w: Math.round(m.w), h: Math.round(m.h)
+      };
+    });
+    var xs = tracks([0, W].concat(mods.map(function (m) { return m.x; }), mods.map(function (m) { return m.x + m.w; })));
+    var ys = tracks([0, H].concat(mods.map(function (m) { return m.y; }), mods.map(function (m) { return m.y + m.h; })));
+    var colW = xs.slice(1).map(function (v, i) { return v - xs[i]; });
+    var rowH = ys.slice(1).map(function (v, i) { return v - ys[i]; });
+    var pad = function (n) { return String(n).padStart(4, ' '); };
+    var lines = [];
+
+    lines.push('/* ============================================================');
+    lines.push('   首页布局 · CSS Grid（布局设计器导出）');
+    lines.push('   画布 ' + W + '×' + H + ' · 网格 ' + GRID + 'px · ' + new Date().toLocaleString('zh-CN'));
+    lines.push('   用法：容器加 .home-layout，每个模块加 .m-<id>（与下方规则同名）');
+    lines.push('   ============================================================ */');
+    lines.push('');
+    lines.push('.home-layout {');
+    lines.push('  position: relative;');
+    lines.push('  width: ' + W + 'px;');
+    lines.push('  height: ' + H + 'px;');
+    lines.push('  display: grid;');
+    lines.push('  grid-template-columns: ' + colW.map(function (n) { return n + 'px'; }).join(' ') + ';');
+    lines.push('  grid-template-rows: ' + rowH.map(function (n) { return n + 'px'; }).join(' ') + ';');
+    lines.push('  gap: 0;');
+    lines.push('}');
+    lines.push('');
+    lines.push('/* 每个模块的网格定位（列 / 行 起止线） */');
+    mods.forEach(function (m) {
+      var c1 = xs.indexOf(m.x) + 1;
+      var c2 = xs.indexOf(m.x + m.w) + 1;
+      var r1 = ys.indexOf(m.y) + 1;
+      var r2i = ys.indexOf(m.y + m.h) + 1;
+      lines.push('.m-' + m.id + ' { grid-column: ' + c1 + ' / ' + c2 + '; grid-row: ' + r1 + ' / ' + r2i + '; }' +
+        '  /* ' + m.name + ' ' + m.x + ',' + m.y + ' ' + m.w + '×' + m.h + ' */');
+    });
+    lines.push('');
+    lines.push('/* 坐标表（x, y, w, h — 和 layout.json 一致） */');
+    lines.push('/*');
+    mods.forEach(function (m) {
+      lines.push('   ' + ('.m-' + m.id).padEnd(16) + ' ' + pad(m.x) + ' ' + pad(m.y) + ' ' + pad(m.w) + ' ' + pad(m.h));
+    });
+    lines.push('*/');
+    lines.push('');
+    lines.push('/* 备用：绝对定位版本（与上面的 grid 二选一）');
+    lines.push('   .home-layout { position: relative; width: ' + W + 'px; height: ' + H + 'px; }');
+    lines.push('   .m-xxx { position: absolute; }                                  */');
+    mods.forEach(function (m) {
+      lines.push('.abs-' + m.id + ' { position: absolute; left: ' + m.x + 'px; top: ' + m.y + 'px; width: ' + m.w + 'px; height: ' + m.h + 'px; }');
+    });
+    lines.push('');
+    return lines.join('\n');
+  }
+
+  function copyCss() {
+    var css = cssText_();
+    var done = function (ok) {
+      cssText.value = css;
+      cssInfo.textContent = ok ? '已写入剪贴板，可直接粘贴' : '剪贴板不可用，请手动全选复制';
+      cssMask.classList.add('on');
+      cssMask.setAttribute('aria-hidden', 'false');
+      cssText.focus();
+      cssText.setSelectionRange(0, css.length);
+      toast(ok ? 'CSS Grid 已复制到剪贴板' : '剪贴板不可用：已打开弹窗，手动复制即可', ok ? 'ok' : 'warn');
+    };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(css).then(function () { done(true); }, function () { legacyCopy(css, done); });
+    } else {
+      legacyCopy(css, done);
+    }
+  }
+
+  function legacyCopy(text, done) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
+    ta.remove();
+    done(ok);
+  }
+
+  function closeCss() {
+    cssMask.classList.remove('on');
+    cssMask.setAttribute('aria-hidden', 'true');
+  }
+
+  /* =======================================================================
+     7. 布局与缩放
+     ======================================================================= */
+  function layoutStage() {
+    var vw = viewport.clientWidth - 32;
+    var vh = viewport.clientHeight - 24;
+    var s = Math.min(vw / W, vh / H, 1);
+    scale = Math.max(0.2, s);
+    stage.style.transform = 'scale(' + scale + ')';
+    holder.style.width = Math.round(W * scale) + 'px';
+    holder.style.height = Math.round(H * scale) + 'px';
+    cScale.textContent = Math.round(scale * 100) + '%';
+  }
+
+  /* =======================================================================
+     8. 工具栏绑定
+     ======================================================================= */
+  function bindToolbar() {
+    document.getElementById('btnReset').addEventListener('click', reset);
+    document.getElementById('btnSave').addEventListener('click', save);
+    document.getElementById('btnExport').addEventListener('click', exportJSON);
+    document.getElementById('btnCopy').addEventListener('click', copyCss);
+
+    var btnGrid = document.getElementById('btnGrid');
+    btnGrid.addEventListener('click', function () {
+      var on = btnGrid.getAttribute('aria-pressed') !== 'true';
+      btnGrid.setAttribute('aria-pressed', on ? 'true' : 'false');
+      gridLayer.classList.toggle('on', on);
+    });
+
+    var btnLock = document.getElementById('btnLock');
+    btnLock.addEventListener('click', function () {
+      locked = btnLock.getAttribute('aria-pressed') !== 'true';
+      btnLock.setAttribute('aria-pressed', locked ? 'true' : 'false');
+      stage.classList.toggle('locked', locked);
+      if (locked) onPointerUp();
+      toast(locked ? '已锁定：模块不能拖动/缩放' : '已解锁：可以拖动/缩放', locked ? 'warn' : 'ok');
+    });
+
+    document.getElementById('cssClose').addEventListener('click', closeCss);
+    document.getElementById('cssDone').addEventListener('click', closeCss);
+    document.getElementById('cssCopyAgain').addEventListener('click', function () {
+      navigator.clipboard && navigator.clipboard.writeText
+        ? navigator.clipboard.writeText(cssText.value).then(
+            function () { toast('已复制', 'ok'); },
+            function () { legacyCopy(cssText.value, function (ok) { toast(ok ? '已复制' : '复制失败，请手动复制', ok ? 'ok' : 'warn'); }); }
+          )
+        : legacyCopy(cssText.value, function (ok) { toast(ok ? '已复制' : '复制失败，请手动复制', ok ? 'ok' : 'warn'); });
+    });
+    cssMask.addEventListener('click', function (e) { if (e.target === cssMask) closeCss(); });
+
+    // 点击画布空白处取消选中
+    stage.addEventListener('pointerdown', function (e) {
+      if (!e.target.closest('.mod')) select(null);
+    });
+  }
+
+  /* =======================================================================
+     9. 启动
+     ======================================================================= */
+  build();
+  state.modules = loadState();
+  byId = {};
+  state.modules.forEach(function (m) { byId[m.id] = m; });
+  applyAll();
+  bindToolbar();
+  layoutStage();
+  document.getElementById('cCanvas').textContent = W + '×' + H;
+  document.getElementById('cCount').textContent = String(state.modules.length);
+
+  window.addEventListener('resize', layoutStage);
+  if (window.ResizeObserver) new ResizeObserver(layoutStage).observe(viewport);
+
+  // 仅用于调试/自动化验证，不影响交互
+  window.layoutDesigner = {
+    version: 1,
+    canvas: { width: W, height: H, grid: GRID },
+    getState: function () { return JSON.parse(JSON.stringify(state)); },
+    getScale: function () { return scale; },
+    getSelected: function () { return selected; },
+    isLocked: function () { return locked; },
+    css: cssText_,
+    reset: reset,
+    save: save,
+    exportJSON: exportJSON,
+    payload: payload
+  };
+  window.__layoutDesignerReady = true;
+})();
+</script>
+</body>
+</html>

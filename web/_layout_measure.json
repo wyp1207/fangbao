@@ -1,0 +1,163 @@
+{
+  "viewport": {
+    "w": 1440,
+    "h": 900,
+    "dpr": 1
+  },
+  "title": "智能巡检机器人管理平台",
+  "modules": {
+    "header": {
+      "name": "顶栏",
+      "sel": "header.hdr",
+      "found": true,
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 1440,
+        "h": 54,
+        "x2": 1440,
+        "y2": 54
+      }
+    },
+    "footer": {
+      "name": "底栏",
+      "sel": "footer.footbar",
+      "found": true,
+      "rect": {
+        "x": 0,
+        "y": 874,
+        "w": 1440,
+        "h": 26,
+        "x2": 1440,
+        "y2": 900
+      }
+    },
+    "visible": {
+      "name": "可见光视频",
+      "sel": "aside.col.left > .t-panel:nth-of-type(1)",
+      "found": true,
+      "rect": {
+        "x": 12,
+        "y": 104,
+        "w": 388,
+        "h": 279,
+        "x2": 400,
+        "y2": 383
+      }
+    },
+    "thermal": {
+      "name": "热红外视频",
+      "sel": "aside.col.left > .t-panel:nth-of-type(2)",
+      "found": true,
+      "rect": {
+        "x": 12,
+        "y": 393,
+        "w": 388,
+        "h": 279,
+        "x2": 400,
+        "y2": 672
+      }
+    },
+    "control": {
+      "name": "实时控制",
+      "sel": "aside.col.left > .t-panel:nth-of-type(3)",
+      "found": true,
+      "rect": {
+        "x": 12,
+        "y": 682,
+        "w": 388,
+        "h": 182,
+        "x2": 400,
+        "y2": 864
+      }
+    },
+    "map": {
+      "name": "实时地图",
+      "sel": "main.col.center > .t-panel",
+      "found": true,
+      "rect": {
+        "x": 410,
+        "y": 104,
+        "w": 678,
+        "h": 528.23,
+        "x2": 1088,
+        "y2": 632.23
+      }
+    },
+    "messages": {
+      "name": "实时消息",
+      "sel": "main.col.center > section.rt",
+      "found": true,
+      "rect": {
+        "x": 410,
+        "y": 646,
+        "w": 678,
+        "h": 218,
+        "x2": 1088,
+        "y2": 864
+      }
+    },
+    "alarm": {
+      "name": "告警统计",
+      "sel": "aside.col.right > .t-panel:nth-of-type(1)",
+      "found": true,
+      "rect": {
+        "x": 1098,
+        "y": 104,
+        "w": 330,
+        "h": 196,
+        "x2": 1428,
+        "y2": 300
+      }
+    },
+    "env": {
+      "name": "环境数据",
+      "sel": "aside.col.right > .t-panel:nth-of-type(2)",
+      "found": true,
+      "rect": {
+        "x": 1098,
+        "y": 310,
+        "w": 330,
+        "h": 376,
+        "x2": 1428,
+        "y2": 686
+      }
+    },
+    "points": {
+      "name": "巡检点位",
+      "sel": "aside.col.right > .t-panel:nth-of-type(3)",
+      "found": true,
+      "rect": {
+        "x": 1098,
+        "y": 696,
+        "w": 330,
+        "h": 168,
+        "x2": 1428,
+        "y2": 864
+      }
+    }
+  },
+  "doc": {
+    "scrollW": 1440,
+    "scrollH": 900,
+    "clientW": 1440,
+    "clientH": 900
+  },
+  "bodyH": {
+    "x": 0,
+    "y": 94,
+    "w": 1440,
+    "h": 780,
+    "x2": 1440,
+    "y2": 874
+  },
+  "subbarH": {
+    "x": 0,
+    "y": 54,
+    "w": 1440,
+    "h": 40,
+    "x2": 1440,
+    "y2": 94
+  },
+  "errors": []
+}

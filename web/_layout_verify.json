@@ -1,0 +1,373 @@
+{
+  "url": "file:///D:/Desktop/%E9%98%B2%E7%88%86%E6%9C%BA%E5%99%A8%E4%BA%BA/web/layout-designer.html",
+  "checks": [
+    {
+      "name": "画布按窗口等比缩放（0<scale<=1）",
+      "ok": true,
+      "detail": {
+        "scale": 0.8811111111111111
+      }
+    },
+    {
+      "name": "初始 10 个模块坐标 = 首页实测值（1:1）",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "模块数 = 10",
+      "ok": true,
+      "detail": {
+        "count": 10,
+        "chip": "10"
+      }
+    },
+    {
+      "name": "DOM 渲染尺寸与布局状态一致",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "截图 web/_layout_designer.png",
+      "ok": true,
+      "detail": {
+        "bytes": 594741
+      }
+    },
+    {
+      "name": "拖动中显示实时「宽×高」",
+      "ok": true,
+      "detail": {
+        "on": true,
+        "text": "678 × 528.23px"
+      }
+    },
+    {
+      "name": "拖动过程中画布缩放保持稳定（工具栏不换行）",
+      "ok": true,
+      "detail": {
+        "scaleBeforeDrag": 0.8811111111111111,
+        "scaleAfterDrag": 0.8811111111111111
+      }
+    },
+    {
+      "name": "拖动 +100,+40 后实时地图吸附落点 = 512,144",
+      "ok": true,
+      "detail": {
+        "x": 512,
+        "y": 144,
+        "w": 678,
+        "h": 528.23
+      }
+    },
+    {
+      "name": "拖动 +100 的位移符合 4px 吸附（510→512）",
+      "ok": true,
+      "detail": {
+        "dx": 102,
+        "dy": 40
+      }
+    },
+    {
+      "name": "导出 layout.json 文件名正确",
+      "ok": true,
+      "detail": {
+        "name": "layout.json"
+      }
+    },
+    {
+      "name": "导出 JSON 里实时地图坐标同步 = 512,144",
+      "ok": true,
+      "detail": {
+        "x": 512,
+        "y": 144,
+        "w": 678,
+        "h": 528.23
+      }
+    },
+    {
+      "name": "导出 JSON 含 id/name/x/y/w/h",
+      "ok": true,
+      "detail": {
+        "keys": [
+          "id",
+          "name",
+          "x",
+          "y",
+          "w",
+          "h"
+        ]
+      }
+    },
+    {
+      "name": "缩放到 500×300 后 DOM 宽高正确",
+      "ok": true,
+      "detail": {
+        "x": 12,
+        "y": 104,
+        "w": 500,
+        "h": 300
+      }
+    },
+    {
+      "name": "导出 JSON 里可见光视频 = 500×300",
+      "ok": true,
+      "detail": {
+        "x": 12,
+        "y": 104,
+        "w": 500,
+        "h": 300
+      }
+    },
+    {
+      "name": "导出 JSON 里实时地图仍保持拖动后坐标",
+      "ok": true,
+      "detail": {
+        "x": 512,
+        "y": 144,
+        "w": 678,
+        "h": 528.23
+      }
+    },
+    {
+      "name": "不能拖出画布左上角（x=0,y=0）",
+      "ok": true,
+      "detail": {
+        "x": 0,
+        "y": 0,
+        "w": 500,
+        "h": 300
+      }
+    },
+    {
+      "name": "不能拖出画布右下角（贴边 940,600）",
+      "ok": true,
+      "detail": {
+        "x": 940,
+        "y": 600,
+        "w": 500,
+        "h": 300
+      }
+    },
+    {
+      "name": "拖动后坐标仍在 4px 网格上",
+      "ok": true,
+      "detail": {
+        "x": 940,
+        "y": 600,
+        "w": 500,
+        "h": 300
+      }
+    },
+    {
+      "name": "重置后回到初始实测坐标",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "重置后清掉本地存档",
+      "ok": true,
+      "detail": {
+        "saved": null
+      }
+    },
+    {
+      "name": "工具栏显示模块数 10",
+      "ok": true,
+      "detail": {}
+    },
+    {
+      "name": "保存到 localStorage（含 10 个模块）",
+      "ok": true,
+      "detail": {
+        "key": "jc_layout_designer_v1",
+        "count": 10
+      }
+    },
+    {
+      "name": "刷新后从 localStorage 恢复（巡检点位 x=1060）",
+      "ok": true,
+      "detail": {
+        "pointsReload": {
+          "x": 1060,
+          "y": 696,
+          "w": 330,
+          "h": 168
+        },
+        "pointsAfterDrag": {
+          "x": 1060,
+          "y": 696,
+          "w": 330,
+          "h": 168
+        }
+      }
+    },
+    {
+      "name": "锁定模块后拖不动",
+      "ok": true,
+      "detail": {
+        "before": {
+          "x": 410,
+          "y": 104,
+          "w": 678,
+          "h": 528.23
+        },
+        "after": {
+          "x": 410,
+          "y": 104,
+          "w": 678,
+          "h": 528.23
+        }
+      }
+    },
+    {
+      "name": "显示网格开关生效",
+      "ok": true,
+      "detail": {}
+    },
+    {
+      "name": "CSS Grid 弹窗打开且已全选",
+      "ok": true,
+      "detail": {
+        "open": true
+      }
+    },
+    {
+      "name": "CSS 列宽合计=1440 / 行高合计=900",
+      "ok": true,
+      "detail": {
+        "colSum": 1440,
+        "rowSum": 900
+      }
+    },
+    {
+      "name": "CSS 含每个模块的 grid-column/grid-row",
+      "ok": true,
+      "detail": {}
+    },
+    {
+      "name": "CSS 含坐标表与绝对定位版本",
+      "ok": true,
+      "detail": {}
+    },
+    {
+      "name": "无 JS 异常（pageerror 0）",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "无 console.error",
+      "ok": true,
+      "detail": []
+    }
+  ],
+  "errors": [],
+  "consoleErrors": [],
+  "scale": 0.8811111111111111,
+  "cssPreview": "/* ============================================================\n   首页布局 · CSS Grid（布局设计器导出）\n   画布 1440×900 · 网格 4px · 2026/11/19 11:18:20\n   用法：容器加 .home-layout，每个模块加 .m-<id>（与下方规则同名）\n   ============================================================ */\n\n.home-layout {\n  position: relative;\n  width: 1440px;\n  height: 900px;\n  display: grid;\n  grid-template-columns: 12px 388px 10px 678px 10px 330px 12px;\n  grid-template-rows: 54px 50px 196px 10px 73px 10px 239px 14px 26px 10px 4px 10px 168px 10px 26px;\n  gap: 0;\n}\n\n/* 每个模块的网格定位（列 / 行 起止线） */\n.m-header { grid-column: 1 / 8; grid-row: 1 / 2; }  /* 顶栏 0,0 1440×54 */\n.m-visible { grid-column: 2 / 3; grid-row: 3 / 6; }  /* 可见光视频 12,104 388×279 */\n.m-thermal { grid-column: 2 / 3; grid-row: 7 / 10; }  /* 热红外视频 12,393 388×279 */\n.m-control { grid-column: 2 / 3; grid-row: 11 / 14; }  /* 实时控制 12,682 388×182 */\n.m-map { grid-column: 4 / 5; grid-row: 3 / 8; }  /* 实时地图 410,104 678×528 */\n.m-messages { grid-column: 4 / 5; grid-row: 9 / 14; }  /* 实时消息 410,646 678×218 */\n.m-alarm { grid-column: 6 / 7; grid-row: 3 / 4; }  /* 告警统计 1098,104 330×196 */\n.m-env { grid-column: 6 / 7; grid-row: 5 / 12; }  /* 环境数据 1098,310 330×376 */\n.m-points { grid-column: 6 / 7; grid-row: 13 / 14; }  /* 巡检点位 1098,696 330×168 */",
+  "finalState": {
+    "modules": [
+      {
+        "id": "header",
+        "name": "顶栏",
+        "kind": "bar",
+        "tone": "blue",
+        "x": 0,
+        "y": 0,
+        "w": 1440,
+        "h": 54
+      },
+      {
+        "id": "visible",
+        "name": "可见光视频",
+        "kind": "panel",
+        "tone": "cyan",
+        "x": 12,
+        "y": 104,
+        "w": 388,
+        "h": 279
+      },
+      {
+        "id": "thermal",
+        "name": "热红外视频",
+        "kind": "panel",
+        "tone": "gold",
+        "x": 12,
+        "y": 393,
+        "w": 388,
+        "h": 279
+      },
+      {
+        "id": "control",
+        "name": "实时控制",
+        "kind": "panel",
+        "tone": "blue",
+        "x": 12,
+        "y": 682,
+        "w": 388,
+        "h": 182
+      },
+      {
+        "id": "map",
+        "name": "实时地图",
+        "kind": "panel",
+        "tone": "blue",
+        "x": 410,
+        "y": 104,
+        "w": 678,
+        "h": 528.23
+      },
+      {
+        "id": "messages",
+        "name": "实时消息",
+        "kind": "panel",
+        "tone": "violet",
+        "x": 410,
+        "y": 646,
+        "w": 678,
+        "h": 218
+      },
+      {
+        "id": "alarm",
+        "name": "告警统计",
+        "kind": "panel",
+        "tone": "gold",
+        "x": 1098,
+        "y": 104,
+        "w": 330,
+        "h": 196
+      },
+      {
+        "id": "env",
+        "name": "环境数据",
+        "kind": "panel",
+        "tone": "cyan",
+        "x": 1098,
+        "y": 310,
+        "w": 330,
+        "h": 376
+      },
+      {
+        "id": "points",
+        "name": "巡检点位",
+        "kind": "panel",
+        "tone": "blue",
+        "x": 1098,
+        "y": 696,
+        "w": 330,
+        "h": 168
+      },
+      {
+        "id": "footer",
+        "name": "底栏",
+        "kind": "bar",
+        "tone": "blue",
+        "x": 0,
+        "y": 874,
+        "w": 1440,
+        "h": 26
+      }
+    ]
+  },
+  "pass": 31,
+  "fail": 0
+}
