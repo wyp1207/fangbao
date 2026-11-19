@@ -7,7 +7,7 @@
  * 坐标天然对齐（同一米制坐标系），机器人位姿、点位、告警、轨迹全是真数据驱动。
  * 将来客户给了 GLB 白模，只要换 modelGroup，业务对象一个不用动。
  */
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
@@ -511,6 +511,9 @@ function updateAlarms(list: { id: number; message: string; level: string; metric
   }
   scene.add(alarmGroup)
 }
+
+// 直接刷新 /twin 时 store 的告警可能还没回填；挂载时只画一次会永远空着。
+watch(() => robot.alarms, (v) => updateAlarms(v as any), { deep: true })
 
 let lastTick = performance.now()
 let frames = 0
