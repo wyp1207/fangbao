@@ -182,6 +182,19 @@ async def lifespan(app: FastAPI):
                         _db.commit()
                 except Exception:  # noqa: BLE001
                     pass
+                # 告警/证据图保留期：图片最吃盘，默认 30 天；工单关联的告警保留
+                try:
+                    from app.services.alarm_retention import purge_old_alarms
+
+                    with _SL() as _db:
+                        n = purge_old_alarms(
+                            _db, keep_days=int(cfg.get("alarm.keep_days", 30)))
+                        _db.commit()
+                    if n["ai_results"] or n["alarms"]:
+                        log.info("告警保留期清理：AI %s 条 / 图 %s 张 / 告警 %s 条",
+                                 n["ai_results"], n["images"], n["alarms"])
+                except Exception:  # noqa: BLE001
+                    log.warning("告警保留期清理失败", exc_info=True)
             except Exception:  # noqa: BLE001
                 pass
             _t.sleep(6 * 3600)

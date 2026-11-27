@@ -42,6 +42,10 @@ SCHEMA: dict[str, dict[str, Any]] = {
         "label": "告警弹窗", "type": "bool", "default": False,
         "group": "告警", "effect": "开启后新告警在右上角弹出 1.5 秒，点击跳到告警详情",
     },
+    "alarm.keep_days": {
+        "label": "告警与证据图保留（天）", "type": "int", "default": 30, "min": 1, "max": 3650,
+        "group": "告警", "effect": "超过天数自动删除 AI 结果/证据图和未转工单的告警；已转工单的告警保留",
+    },
 
     # ---- 告警外发 ----
     "notify.escalate_enabled": {
