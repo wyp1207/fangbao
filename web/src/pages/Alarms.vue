@@ -411,6 +411,10 @@ onMounted(async () => {
   }
   applyQuery()
   await reload()
+  if (f) {
+    const hit = rows.value.find((a) => a.id === f)
+    if (hit) await openEvidence(hit)
+  }
   void robot.refreshAlarms()
   try { cfg.value = (await api.settings()).values } catch { /* 设置读不到就显示默认 */ }
 })

@@ -38,6 +38,10 @@ SCHEMA: dict[str, dict[str, Any]] = {
         "label": "告警持续确认（秒）", "type": "int", "default": 0, "min": 0, "max": 600,
         "group": "告警", "effect": "条件持续这么久才报，0=立即报（防抖）",
     },
+    "alarm.popup_enabled": {
+        "label": "告警弹窗", "type": "bool", "default": False,
+        "group": "告警", "effect": "开启后新告警在右上角弹出 1.5 秒，点击跳到告警详情",
+    },
 
     # ---- 告警外发 ----
     "notify.escalate_enabled": {

@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import TopNav from '@/components/TopNav.vue'
 import Breadcrumb from '@/components/Breadcrumb.vue'
 import UserMenu from '@/components/UserMenu.vue'
+import AlarmPopup from '@/components/AlarmPopup.vue'
 import DarkSelect from '@/components/DarkSelect.vue'
 import logoUrl from '@/assets/logo.png'
 import { toast } from '@/composables/useToast'
@@ -113,6 +114,7 @@ function onKey(e: KeyboardEvent) {
       <Breadcrumb />
       <div class="page-host"><router-view /></div>
     </main>
+    <AlarmPopup />
   </div>
 </template>
 
