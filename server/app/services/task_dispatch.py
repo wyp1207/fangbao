@@ -199,6 +199,35 @@ def dispatch(db, run: TaskRun, adapter) -> TaskRun:
     if run.status != "planned":
         raise BadRequest(f"当前状态 {run.status} 不能下发", code="BAD_STATUS")
 
+    from app.models.map_library import PlatformMap, PointDraft
+    from app.models.robot import Robot as _Robot
+    from app.services.map_check import check_point_free, current_map_id
+    from app.services.sites import assert_no_cross_site
+
+    # 先定地图：run 自己记的 > 模板的 > 设备当前图
+    template = db.get(TaskTemplate, run.template_id) if run.template_id else None
+    # 与 _adapter_for 保持同一套回落：老计划没有 robot_id 时按 1 号设备下发
+    robot_row = db.get(_Robot, run.robot_id or 1)
+    map_id = (run.map_id
+              or (template.map_id if template is not None else None)
+              or current_map_id(db, robot_row))
+    map_row = db.get(PlatformMap, map_id) if map_id is not None else None
+
+    # 历史行懒回填：只在为空时补，不覆盖任何已有值
+    if run.site_id is None:
+        run.site_id = ((robot_row.site_id if robot_row is not None else None)
+                       or (map_row.site_id if map_row is not None else None))
+    if run.map_id is None and map_id is not None:
+        run.map_id = map_id
+
+    # 跨站硬边界：run / 设备 / 地图 / 模板 任一不一致 → 409，不再只 warn
+    assert_no_cross_site(
+        run_site=run.site_id,
+        robot_site=robot_row.site_id if robot_row is not None else None,
+        map_site=map_row.site_id if map_row is not None else None,
+        template_site=template.site_id if template is not None else None,
+    )
+
     # 同一台车只允许一个运行中的任务，否则两条订单会互相打断
     from app.services.task_lock import assert_free
 
@@ -221,16 +250,7 @@ def dispatch(db, run: TaskRun, adapter) -> TaskRun:
     except Exception:  # noqa: BLE001
         pass
 
-    # 点位必须属于当前地图，否则坐标对不上（GLM/豆包都点名的翻车点）
-    from app.models.map_library import PointDraft
-    from app.services.map_check import check_point_free, current_map_id
-
-    map_id = current_map_id(db, None)
-    from app.models.robot import Robot as _Robot
-
-    robot_row = db.get(_Robot, run.robot_id) if run.robot_id else None
-    if robot_row is not None:
-        map_id = current_map_id(db, robot_row)
+    # 点位必须属于本次使用的地图，否则坐标对不上（跨图在 strict_check 下直接拒绝）
     for st in db.query(TaskRunStep).filter(TaskRunStep.run_id == run.id).all():
         if not st.point_id:
             continue
@@ -240,16 +260,16 @@ def dispatch(db, run: TaskRun, adapter) -> TaskRun:
         if map_id is not None and pt.map_id != map_id:
             try:
                 from app.api.v1.settings import load_all
-        
-                strict = bool(load_all().get('map.strict_check'))
+
+                strict = bool(load_all().get("map.strict_check", True))
             except Exception:  # noqa: BLE001
-                strict = False
+                strict = True
             if strict:
                 raise PlatformError(
-                    f"点位「{pt.name}」属于地图 #{pt.map_id}，当前激活地图是 #{map_id}，"
+                    f"点位「{pt.name}」属于地图 #{pt.map_id}，本次任务使用地图 #{map_id}，"
                     f"先切图或改点位",
                     code="POINT_MAP_MISMATCH", status_code=409)
-            log.warning('点位 %s 地图 #%s 与激活地图 #%s 不一致（未开严格校验）',
+            log.warning('点位 %s 地图 #%s 与任务地图 #%s 不一致（未开严格校验）',
                         pt.name, pt.map_id, map_id)
         ok, why = check_point_free(db, pt.map_id, pt.x, pt.y)
         if not ok:
@@ -266,7 +286,6 @@ def dispatch(db, run: TaskRun, adapter) -> TaskRun:
 
     # 先落库抢占，再发网络
     order_id = _claim_dispatch(db, run)
-    template = db.get(TaskTemplate, run.template_id) if run.template_id else None
     order = _order_payload(db, template, steps, order_id=order_id)
 
     from app.adapters.jcrob import errors as jerr

@@ -21,6 +21,8 @@ class PlatformMap(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(64))
     floor: Mapped[str] = mapped_column(String(32), default="1F")
+    # 场站归属：跨站下发在 dispatch 阶段被 409 拦下（见 task_dispatch）
+    site_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     station: Mapped[str] = mapped_column(String(64), default="默认场站")
     resolution: Mapped[float] = mapped_column(Float, default=0.05)   # 米/像素
     origin_x: Mapped[float] = mapped_column(Float, default=0.0)

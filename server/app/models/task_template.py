@@ -26,6 +26,9 @@ class TaskTemplate(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(64))
     map_id: Mapped[int | None] = mapped_column(Integer, nullable=True)       # 平台地图库 id
+    site_id: Mapped[int | None] = mapped_column(Integer, nullable=True)      # 由 map 推导
+    # 历史列名保留（不删列，避免旧前端/旧库炸），语义降级为“默认设备”；
+    # API 同时输出 default_robot_id 别名，新代码不要再用 robot_id 表达“必须绑定”。
     robot_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     actions_json: Mapped[str] = mapped_column(Text, default="[]")
     loop: Mapped[bool] = mapped_column(Boolean, default=False)

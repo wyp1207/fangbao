@@ -80,6 +80,10 @@ def _run_out(r: TaskRun, steps: list[TaskRunStep] | None = None) -> dict:
         "id": r.id, "name": r.name, "status": r.status,
         "status_label": STATUS_LABELS.get(r.status, r.status),
         "template_id": r.template_id, "robot_id": r.robot_id,
+        "site_id": getattr(r, "site_id", None), "map_id": getattr(r, "map_id", None),
+        "batch_id": getattr(r, "batch_id", None),
+        "from_seq": int(getattr(r, "from_seq", 0) or 0),
+        "retry_of": getattr(r, "retry_of", None),
         "started_at": r.started_at.isoformat(timespec="seconds") if r.started_at else None,
         "finished_at": r.finished_at.isoformat(timespec="seconds") if r.finished_at else None,
         "created_at": r.created_at.isoformat(timespec="seconds") if r.created_at else None,
@@ -113,6 +117,7 @@ def _run_out(r: TaskRun, steps: list[TaskRunStep] | None = None) -> dict:
 def list_runs(
     status: str | None = Query(None),
     robot_id: int | None = Query(None),
+    site_id: int | None = Query(None),
     limit: int = Query(50, le=200),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
@@ -123,6 +128,8 @@ def list_runs(
         conds.append(TaskRun.status == status)
     if robot_id:
         conds.append(TaskRun.robot_id == robot_id)
+    if site_id is not None:
+        conds.append(TaskRun.site_id == site_id)
     q = select(TaskRun).order_by(TaskRun.id.desc()).limit(limit).offset(offset)
     cq = select(func.count()).select_from(TaskRun)
     if conds:
@@ -181,12 +188,16 @@ def create_run(
     """从模板生成一条计划（不下发）。"""
     name = (body.name or "").strip()
     steps: list[TaskRunStep] = []
+    site_id: int | None = None
+    map_id: int | None = None
 
     if body.template_id:
         t = db.get(TaskTemplate, body.template_id)
         if not t:
             raise NotFound("模板不存在")
         name = name or t.name
+        site_id = t.site_id
+        map_id = t.map_id
         try:
             actions = json.loads(t.actions_json or "[]")
         except Exception:  # noqa: BLE001
@@ -201,7 +212,16 @@ def create_run(
     if not name:
         raise BadRequest("要么给名称，要么给模板", code="NO_NAME")
 
+    # 没有模板时，执行记录跟随设备所在场站
+    if site_id is None and body.robot_id is not None:
+        from app.models.robot import Robot
+
+        robot = db.get(Robot, body.robot_id)
+        if robot is not None:
+            site_id = robot.site_id
+
     run = TaskRun(template_id=body.template_id, robot_id=body.robot_id,
+                  site_id=site_id, map_id=map_id,
                   name=name[:64], status="planned", note=body.note)
     db.add(run)
     db.flush()
@@ -264,12 +284,25 @@ async def ingest_run(
         run.status = status
         run.finished_at = body.finished_at or run.finished_at
         run.note = body.note or run.note
+        if run.site_id is None and body.robot_id:
+            from app.models.robot import Robot
+
+            robot = db.get(Robot, body.robot_id)
+            if robot is not None:
+                run.site_id = robot.site_id
         db.query(TaskRunStep).filter(TaskRunStep.run_id == run.id).delete()
         created = False
     else:
+        site_id = None
+        if body.robot_id:
+            from app.models.robot import Robot
+
+            robot = db.get(Robot, body.robot_id)
+            site_id = robot.site_id if robot is not None else None
         run = TaskRun(
             name=(body.name or f"机器人任务 {body.external_id}")[:64],
-            robot_id=body.robot_id, status=status, external_id=body.external_id,
+            robot_id=body.robot_id, site_id=site_id, status=status,
+            external_id=body.external_id,
             started_at=body.started_at, finished_at=body.finished_at, note=body.note,
         )
         db.add(run)
@@ -406,6 +439,7 @@ def start_cruise(
         s.error = None
         s.finished_at = None
         s.result_json = None
+    run.from_seq = from_seq
     db.commit()
 
     cruise_mod.runner.start(run.id, adapter, from_seq=from_seq)

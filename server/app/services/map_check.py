@@ -23,13 +23,34 @@ ROOT = Path(__file__).resolve().parents[2] / "data" / "maps"
 
 
 def current_map_id(db: Session, robot=None) -> int | None:
-    """当前激活地图；优先按设备绑定的 robot_map_name 匹配，否则取 is_active。"""
-    name = getattr(robot, "current_map_name", None) if robot is not None else None
-    if name:
-        row = db.query(PlatformMap).filter(PlatformMap.robot_map_name == name).first()
-        if row is not None:
-            return row.id
-    row = db.query(PlatformMap).filter(PlatformMap.is_active.is_(True)).first()
+    """当前使用的地图。
+
+    优先级（不再读根本不存在的 `robot.current_map_name`）：
+    1. robot.current_map_id 显式指定（切图后的真实值，哪怕它不是激活图）；
+    2. 该 robot.site_id 下 is_active 的地图；
+    3. 全局 is_active（兼容还没分场站的老数据）；
+    4. 任意一张图（兜底，避免空库报错）。
+    """
+    if robot is not None:
+        explicit = getattr(robot, "current_map_id", None)
+        if explicit:
+            row = db.get(PlatformMap, int(explicit))
+            if row is not None:
+                return row.id
+        site_id = getattr(robot, "site_id", None)
+        if site_id is not None:
+            row = (db.query(PlatformMap)
+                   .filter(PlatformMap.site_id == site_id,
+                           PlatformMap.is_active.is_(True))
+                   .order_by(PlatformMap.id)
+                   .first())
+            if row is not None:
+                return row.id
+
+    row = (db.query(PlatformMap)
+           .filter(PlatformMap.is_active.is_(True))
+           .order_by(PlatformMap.id)
+           .first())
     if row is not None:
         return row.id
     row = db.query(PlatformMap).order_by(PlatformMap.id).first()

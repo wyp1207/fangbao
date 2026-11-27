@@ -77,10 +77,10 @@ SCHEMA: dict[str, dict[str, Any]] = {
     },
 
     "map.strict_check": {
-        "label": "地图严格校验", "type": "bool", "default": False,
+        "label": "地图严格校验", "type": "bool", "default": True,
         "group": "地图",
-        "effect": "开启后：任务里的点位地图必须与当前激活地图一致，否则拒绝下发。"
-                  "真机确认 map_id 字段后再开；现在是警告模式",
+        "effect": "开启后：任务点位必须属于本次任务使用的地图，否则 409 拒绝下发。"
+                  "默认开启；关闭后只记警告（仅用于现场临时放行）",
     },
 
     "security.idle_lock_enabled": {

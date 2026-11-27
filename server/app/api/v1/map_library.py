@@ -38,6 +38,7 @@ MAX_BYTES = 20 * 1024 * 1024
 def _out(m: PlatformMap) -> dict:
     return {
         "id": m.id, "name": m.name, "floor": m.floor, "station": m.station,
+        "site_id": m.site_id,
         "resolution": m.resolution,
         "origin": [m.origin_x, m.origin_y, m.origin_theta],
         "width": m.width, "height": m.height,
@@ -50,8 +51,15 @@ def _out(m: PlatformMap) -> dict:
 
 
 @router.get("")
-def list_library(db: Session = Depends(get_db), _: User = Depends(get_current_user)) -> list[dict]:
-    rows = db.query(PlatformMap).order_by(PlatformMap.id.desc()).all()
+def list_library(
+    site_id: int | None = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> list[dict]:
+    q = db.query(PlatformMap)
+    if site_id is not None:
+        q = q.filter(PlatformMap.site_id == site_id)
+    rows = q.order_by(PlatformMap.id.desc()).all()
     counts = {}
     for p in db.query(PointDraft).all():
         counts[p.map_id] = counts.get(p.map_id, 0) + 1
@@ -69,6 +77,7 @@ async def import_map(
     name: str = Form(...),
     floor: str = Form("1F"),
     station: str = Form("默认场站"),
+    site_id: int | None = Form(None),
     resolution: float = Form(0.05),
     origin_x: float = Form(0.0),
     origin_y: float = Form(0.0),
@@ -102,13 +111,19 @@ async def import_map(
     except Exception as exc:  # noqa: BLE001
         raise BadRequest(f"图片解析失败：{exc}", code="BAD_IMAGE") from exc
 
+    if site_id is not None:
+        from app.services.sites import require_site
+
+        require_site(db, site_id)
+
     ROOT.mkdir(parents=True, exist_ok=True)
     fname = f"{uuid.uuid4().hex}.png"
     target = ROOT / fname
     img.convert("RGB").save(target, format="PNG")
 
     m = PlatformMap(
-        name=name, floor=floor, station=station, resolution=resolution,
+        name=name, floor=floor, station=station, site_id=site_id,
+        resolution=resolution,
         origin_x=origin_x, origin_y=origin_y, origin_theta=origin_theta,
         image_path=fname, width=w, height=h,
         robot_map_name=robot_map_name or None, note=note or None,
@@ -145,7 +160,11 @@ def update_map(
     m = db.get(PlatformMap, map_id)
     if not m:
         raise NotFound("地图不存在")
-    for k in ("name", "floor", "station", "resolution", "origin_x", "origin_y",
+    if body.get("site_id") is not None:
+        from app.services.sites import require_site
+
+        require_site(db, int(body["site_id"]))
+    for k in ("name", "floor", "station", "site_id", "resolution", "origin_x", "origin_y",
               "origin_theta", "robot_map_name", "note", "is_active"):
         if k in body and body[k] is not None:
             setattr(m, k, body[k])

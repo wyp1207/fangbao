@@ -30,6 +30,12 @@ class TaskRun(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     template_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     robot_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # 场站/地图/批次：下发前必须与设备、模板对齐（不一致 → 409 CROSS_SITE）
+    site_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    map_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    batch_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    from_seq: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    retry_of: Mapped[int | None] = mapped_column(Integer, nullable=True)
     name: Mapped[str] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(String(16), default="planned", index=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

@@ -8,18 +8,20 @@ from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_csrf, require_roles
-from app.core.errors import BadRequest, NotFound
+from app.core.errors import BadRequest, NotFound, PlatformError
 from app.db.session import get_db
 from app.models.map_library import PlatformMap, PointDraft
+from app.models.robot import Robot
 from app.models.task_run import TaskRun, TaskRunStep
 from app.models.task_template import TaskTemplate
 from app.models.user import User
 from app.services.messages import audit
+from app.services.sites import assert_no_cross_site, resolve_site_id
 
 router = APIRouter(prefix="/task-templates", tags=["task-templates"])
 
@@ -43,10 +45,18 @@ class ActionIn(BaseModel):
 class TemplateIn(BaseModel):
     name: str = Field(min_length=1, max_length=64)
     map_id: int | None = None
+    site_id: int | None = None
+    # 旧字段：语义降级为“默认设备”，仅为兼容旧前端保留
     robot_id: int | None = None
+    default_robot_id: int | None = None
     actions: list[ActionIn] = Field(default_factory=list)
     loop: bool = False
     note: str | None = None
+
+
+def _default_robot_id(body: TemplateIn) -> int | None:
+    """default_robot_id 是新名字；老前端仍传 robot_id 时按默认设备处理。"""
+    return body.default_robot_id if body.default_robot_id is not None else body.robot_id
 
 
 def _out(t: TaskTemplate, point_names: dict[int, str] | None = None) -> dict:
@@ -55,7 +65,9 @@ def _out(t: TaskTemplate, point_names: dict[int, str] | None = None) -> dict:
     except Exception:  # noqa: BLE001
         actions = []
     return {
-        "id": t.id, "name": t.name, "map_id": t.map_id, "robot_id": t.robot_id,
+        "id": t.id, "name": t.name, "map_id": t.map_id, "site_id": t.site_id,
+        # 同一列两个名字：新代码用 default_robot_id，旧前端继续读 robot_id
+        "robot_id": t.robot_id, "default_robot_id": t.robot_id,
         "loop": t.loop, "note": t.note,
         "actions": actions,
         "action_count": len(actions),
@@ -98,9 +110,16 @@ def meta(_: User = Depends(get_current_user)) -> dict:
 
 
 @router.get("")
-def list_templates(db: Session = Depends(get_db), _: User = Depends(get_current_user)) -> list[dict]:
+def list_templates(
+    site_id: int | None = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> list[dict]:
     names = {p.id: p.name for p in db.query(PointDraft).all()}
-    return [_out(t, names) for t in db.query(TaskTemplate).order_by(TaskTemplate.id.desc()).all()]
+    q = db.query(TaskTemplate)
+    if site_id is not None:
+        q = q.filter(TaskTemplate.site_id == site_id)
+    return [_out(t, names) for t in q.order_by(TaskTemplate.id.desc()).all()]
 
 
 @router.post("", dependencies=[Depends(require_csrf)])
@@ -110,8 +129,12 @@ def create_template(
     me: User = Depends(require_roles("admin", "safety", "operator")),
 ) -> dict:
     _validate_points(db, body)
+    robot_id = _default_robot_id(body)
+    # site 必须由 map 推导；显式传了不一致的 site、或默认设备不在同站，直接 409
+    site_id = resolve_site_id(db, map_id=body.map_id, site_id=body.site_id,
+                              robot_id=robot_id)
     t = TaskTemplate(
-        name=body.name, map_id=body.map_id, robot_id=body.robot_id,
+        name=body.name, map_id=body.map_id, site_id=site_id, robot_id=robot_id,
         actions_json=json.dumps([a.model_dump() for a in body.actions], ensure_ascii=False),
         loop=body.loop, note=body.note,
     )
@@ -146,7 +169,23 @@ def update_template(
         _validate_points(db, payload)
         t.actions_json = json.dumps([a.model_dump() for a in payload.actions], ensure_ascii=False)
 
-    for k in ("name", "map_id", "robot_id", "loop", "note"):
+    # 归属相关字段变了才重新推导，避免只改名字也被历史脏数据绊住
+    new_robot_id = t.robot_id
+    if "default_robot_id" in body:
+        new_robot_id = body["default_robot_id"]
+    elif "robot_id" in body:
+        new_robot_id = body["robot_id"]
+    new_map_id = body["map_id"] if "map_id" in body else t.map_id
+    if "map_id" in body or "site_id" in body or "robot_id" in body or "default_robot_id" in body:
+        t.site_id = resolve_site_id(
+            db, map_id=new_map_id,
+            site_id=body["site_id"] if "site_id" in body else None,
+            robot_id=new_robot_id, current=t.site_id,
+        )
+        t.map_id = new_map_id
+        t.robot_id = new_robot_id
+
+    for k in ("name", "loop", "note"):
         if k in body and body[k] is not None:
             setattr(t, k, body[k])
     db.commit()
@@ -170,7 +209,8 @@ def duplicate_template(
     while db.query(TaskTemplate).filter(TaskTemplate.name == name).first():
         name = f"{src.name} 副本{n}"[:64]
         n += 1
-    t = TaskTemplate(name=name, map_id=src.map_id, robot_id=src.robot_id,
+    t = TaskTemplate(name=name, map_id=src.map_id, site_id=src.site_id,
+                     robot_id=src.robot_id,
                      actions_json=src.actions_json, loop=src.loop, note=src.note)
     db.add(t)
     db.commit()
@@ -197,22 +237,39 @@ def delete_template(
 @router.post("/{template_id}/dispatch", dependencies=[Depends(require_csrf)])
 def dispatch_template(
     template_id: int,
+    robot_id: int | None = Body(None, embed=True),
     db: Session = Depends(get_db),
     me: User = Depends(require_roles("admin", "operator")),
 ) -> dict:
-    """从模板直接创建执行记录并下发（写开关仍然把关）。"""
+    """从模板直接创建执行记录并下发（写开关仍然把关）。
+
+    模板不再强制绑定设备：可以传 robot_id，也可以用模板的 default_robot_id。
+    真正拦人的是场站一致性——模板/地图/设备三者场站不一致时 409 CROSS_SITE。
+    """
     from app.services import task_dispatch
 
     tpl = db.get(TaskTemplate, template_id)
     if tpl is None:
         raise NotFound("模板不存在")
-    if not tpl.robot_id:
-        raise BadRequest("模板没绑定设备，先选设备", code="NO_ROBOT")
+
+    target_robot_id = robot_id if robot_id is not None else tpl.robot_id
+    if not target_robot_id:
+        raise BadRequest("模板没绑定默认设备，先选设备或传 robot_id", code="NO_ROBOT")
+    robot = db.get(Robot, int(target_robot_id))
+    if robot is None:
+        raise BadRequest(f"设备不存在：{target_robot_id}", code="NO_ROBOT")
+
+    map_row = db.get(PlatformMap, tpl.map_id) if tpl.map_id else None
+    map_site = map_row.site_id if map_row is not None else None
+    tpl_site = tpl.site_id if tpl.site_id is not None else map_site
+    run_site = robot.site_id if robot.site_id is not None else tpl_site
+    assert_no_cross_site(run_site=run_site, robot_site=robot.site_id,
+                         map_site=map_site, template_site=tpl_site)
 
     actions = json.loads(tpl.actions_json or "[]")
     names = {p.id: p.name for p in db.query(PointDraft).all()}
-    run = TaskRun(template_id=tpl.id, robot_id=tpl.robot_id, name=tpl.name[:64],
-                  status="planned")
+    run = TaskRun(template_id=tpl.id, robot_id=robot.id, site_id=run_site,
+                  map_id=tpl.map_id, name=tpl.name[:64], status="planned")
     db.add(run)
     db.flush()
     for i, a in enumerate(actions):

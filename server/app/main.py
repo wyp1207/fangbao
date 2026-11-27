@@ -25,6 +25,7 @@ from app.api.v1 import (alarms, audit, auth, device_keys, devices, feed, health,
                         ws,
                         self_check, metrics as health_metrics, peripherals,
                         ai, ai_callback, api_clients, inspection, messages, notify, sensor_gateways, record_plans, recordings, reports, robots, sensors,
+                        sites,
                         task_runs, task_templates, telemetry,
                         settings as settings_api, users, videos)
 from app.core.config import get_settings
@@ -445,6 +446,7 @@ def create_app() -> FastAPI:
     app.include_router(messages.router, prefix=settings.api_prefix)
     app.include_router(audit.router, prefix=settings.api_prefix)
     app.include_router(devices.router, prefix=settings.api_prefix)
+    app.include_router(sites.router, prefix=settings.api_prefix)
     app.include_router(map_library.router, prefix=settings.api_prefix)
     app.include_router(device_keys.router, prefix=settings.api_prefix)
     app.include_router(self_check.router, prefix=settings.api_prefix)

@@ -39,6 +39,7 @@ class DeviceOut(BaseModel):
     adapter_label: str
     supported: bool
     station: str
+    site_id: int | None = None
     ip: str
     port: int
     ws_port: int
@@ -65,6 +66,7 @@ class DeviceIn(BaseModel):
     device_type: str = "jcrob_wheel"
     adapter: str = "jcrob_http"
     station: str = "默认场站"
+    site_id: int | None = None
     ip: str = Field(min_length=1, max_length=64)
     port: int = 3546
     ws_port: int = 3547
@@ -88,6 +90,7 @@ class DevicePatch(BaseModel):
     device_type: str | None = None
     adapter: str | None = None
     station: str | None = None
+    site_id: int | None = None
     ip: str | None = None
     port: int | None = None
     ws_port: int | None = None
@@ -126,7 +129,7 @@ def _out(r: Robot) -> DeviceOut:
     return DeviceOut(
         id=r.id, name=r.name, device_type=r.device_type, adapter=r.adapter,
         adapter_label=meta.get("label", r.adapter), supported=bool(meta.get("supported")),
-        station=r.station, ip=r.ip, port=r.port, ws_port=r.ws_port,
+        station=r.station, site_id=r.site_id, ip=r.ip, port=r.port, ws_port=r.ws_port,
         username=r.username, mode=r.mode, is_active=r.is_active,
         version=r.version, slam_type=r.slam_type,
         last_seen=r.last_seen.isoformat(timespec="seconds") if r.last_seen else None,
@@ -161,10 +164,14 @@ def device_meta(_: User = Depends(get_current_user)) -> dict:
 
 @router.get("")
 def list_devices(
+    site_id: int | None = Query(None),
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ) -> list[DeviceOut]:
-    return [_out(r) for r in db.query(Robot).order_by(Robot.id).all()]
+    q = db.query(Robot)
+    if site_id is not None:
+        q = q.filter(Robot.site_id == site_id)
+    return [_out(r) for r in q.order_by(Robot.id).all()]
 
 
 @router.post("", dependencies=[Depends(require_csrf)])
@@ -177,11 +184,16 @@ async def create_device(
         raise BadRequest(f"未知协议 {body.adapter}", code="BAD_ADAPTER")
     if db.query(Robot).filter(Robot.name == body.name).first():
         raise BadRequest("设备名已存在", code="NAME_TAKEN")
+    if body.site_id is not None:
+        from app.services.sites import require_site
+
+        require_site(db, body.site_id)
 
     settings = get_settings()
     r = Robot(
         name=body.name, device_type=body.device_type, adapter=body.adapter,
-        station=body.station, ip=body.ip, port=body.port, ws_port=body.ws_port,
+        station=body.station, site_id=body.site_id,
+        ip=body.ip, port=body.port, ws_port=body.ws_port,
         username=body.username, mode=body.mode, note=body.note,
         password_cipher=seal(body.password or "", secret=settings.secret_key),
         # 防爆台账
@@ -214,6 +226,10 @@ async def update_device(
         raise NotFound("设备不存在")
 
     data = body.model_dump(exclude_none=True)
+    if "site_id" in data:
+        from app.services.sites import require_site
+
+        require_site(db, data["site_id"])
     if "password" in data:
         pwd = data.pop("password")
         r.password_cipher = seal(pwd or "", secret=get_settings().secret_key)

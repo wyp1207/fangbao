@@ -22,7 +22,12 @@ class Robot(Base):
     # device_type：本体型号（决定用哪个适配器）；adapter：实际协议实现
     device_type: Mapped[str] = mapped_column(String(32), default="jcrob_wheel")
     adapter: Mapped[str] = mapped_column(String(32), default="jcrob_http")
+    # station 是历史自由文本（保留给旧前端展示）；site_id 才是可校验的场站边界
     station: Mapped[str] = mapped_column(String(64), default="默认场站")
+    site_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # 设备当前使用的地图（平台地图库 id）。以前读 current_map_name（表里没有这列），
+    # 结果永远落到"全局第一张激活图"；改为显式记录后，切图才有落点。
+    current_map_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     username: Mapped[str | None] = mapped_column(String(64), nullable=True)
     password_cipher: Mapped[str | None] = mapped_column(Text, nullable=True)
     note: Mapped[str | None] = mapped_column(String(200), nullable=True)

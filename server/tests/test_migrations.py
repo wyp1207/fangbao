@@ -28,6 +28,7 @@ def test_migrations_match_models(tmp_path):
     r = subprocess.run(
         [sys.executable, "-m", "alembic", "upgrade", "head"],
         cwd=SERVER_ROOT, env=env, capture_output=True, text=True,
+        encoding="utf-8", errors="replace",
     )
     assert r.returncode == 0, f"迁移失败:\n{r.stdout}\n{r.stderr}"
 
