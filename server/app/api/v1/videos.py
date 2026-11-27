@@ -59,6 +59,22 @@ def _upstream(url: str) -> str:
     return relay.rstrip("/") + "/" + url.split("/")[-1] if relay else url
 
 VENDORS = {"hikvision": "海康", "dahua": "大华", "other": "其他"}
+DASH_ROLES = {"none", "visible", "thermal"}
+
+
+def _apply_role(db: Session, v: VideoSource, role: str) -> None:
+    """一路摄像头只能占一个位置；选新的可见光/热红外时清掉同设备旧的那一路。"""
+    if role not in DASH_ROLES:
+        raise BadRequest("大屏位置只能是 none/visible/thermal", code="BAD_DASH_ROLE")
+    v.dashboard_role = role
+    v.show_on_dashboard = role != "none"
+    if role != "none" and v.robot_id is not None:
+        (db.query(VideoSource)
+         .filter(VideoSource.robot_id == v.robot_id,
+                 VideoSource.dashboard_role == role,
+                 VideoSource.id != v.id)
+         .update({"dashboard_role": "none", "show_on_dashboard": False},
+                 synchronize_session=False))
 
 _USERINFO = re.compile(r"(?P<scheme>\w+://)(?P<user>[^:/@]*):(?P<pwd>[^@/]*)@")
 MAX_URL_LEN = 512
@@ -128,6 +144,7 @@ class VideoOut(BaseModel):
     url: str          # 已打码
     enabled: bool
     show_on_dashboard: bool = False
+    dashboard_role: str = "none"
     # 摄像头页要显示归属设备；没有它现场只能看到一串 ID
     robot_id: int | None = None
     note: str | None = None
@@ -143,6 +160,7 @@ class VideoIn(BaseModel):
     url: str = Field(min_length=4, max_length=512)
     enabled: bool = True
     show_on_dashboard: bool = False
+    dashboard_role: str = "none"
     note: str | None = Field(default=None, max_length=200)
     stream_name: str = Field(default="", max_length=32)
     # 之前没有这个字段：POST 里带 robot_id 会被静默丢弃，新相机永远挂不到设备上
@@ -156,6 +174,7 @@ class VideoPatch(BaseModel):
     url: str | None = None
     enabled: bool | None = None
     show_on_dashboard: bool | None = None
+    dashboard_role: str | None = None
     note: str | None = None
     stream_name: str | None = None
     robot_id: int | None = None
@@ -242,7 +261,8 @@ def _out(v: VideoSource) -> VideoOut:
     return VideoOut(
         id=v.id, name=v.name, group_name=v.group_name, vendor=v.vendor,
         url=mask_url(v.url), enabled=v.enabled,
-        show_on_dashboard=v.show_on_dashboard, robot_id=v.robot_id, note=v.note,
+        show_on_dashboard=v.show_on_dashboard, dashboard_role=v.dashboard_role or "none",
+        robot_id=v.robot_id, note=v.note,
         stream_name=v.stream_name or "",
         play_url=_play_url(v.name) if v.enabled else None,
         go2rtc_url=_go2rtc_url(v.stream_name) if v.enabled else None,
@@ -321,13 +341,18 @@ def create_video(
 ) -> VideoOut:
     if body.vendor not in VENDORS:
         raise BadRequest("厂商只能是 hikvision/dahua/other", code="BAD_VENDOR")
+    if body.dashboard_role not in DASH_ROLES:
+        raise BadRequest("大屏位置只能是 none/visible/thermal", code="BAD_DASH_ROLE")
     split_url(body.url)  # 提前校验
     if body.robot_id is not None:
         from app.models.robot import Robot
         if db.get(Robot, body.robot_id) is None:
             raise BadRequest("设备不存在", code="BAD_ROBOT")
     v = VideoSource(**body.model_dump())
+    v.show_on_dashboard = body.dashboard_role != "none"
     db.add(v)
+    db.flush()
+    _apply_role(db, v, body.dashboard_role)
     db.commit()
     db.refresh(v)
     audit(db=db, action="video.create", target=v.name, user=me,
@@ -361,8 +386,13 @@ def update_video(
         # 用户会以为"改了地址没生效"（QA 实测发现）
         if "stream_name" not in data and new_url != v.url:
             data["stream_name"] = ""
+    role = data.pop("dashboard_role", None)
     for k, val in data.items():
         setattr(v, k, val)
+    if role is not None:
+        _apply_role(db, v, role)
+    elif v.dashboard_role:
+        v.show_on_dashboard = v.dashboard_role != "none"
     db.commit()
     db.refresh(v)
     return _out(v)

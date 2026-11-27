@@ -27,7 +27,9 @@ class VideoSource(Base):
     stream_name: Mapped[str] = mapped_column(String(32), default="")
     robot_id: Mapped[int | None] = mapped_column(Integer, index=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
-    # 是否在首页大屏显示。默认关：测试摄像头/临时接的流不应该自己跑到大屏上
+    # 首页大屏位置：none / visible / thermal。显式角色，不再靠名字猜
+    dashboard_role: Mapped[str] = mapped_column(String(16), default="none", index=True)
+    # 兼容旧字段：dashboard_role != none 时为 True
     show_on_dashboard: Mapped[bool] = mapped_column(Boolean, default=False)
     note: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

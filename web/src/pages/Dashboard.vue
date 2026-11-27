@@ -183,21 +183,33 @@ async function ptzCenter() {
 // 首页内嵌视频：取第一路可用视频源（可见光/热红外分开挑）
 const videoRows = ref<{
   id: number; name: string; group_name: string; stream_name: string
-  go2rtc_url: string | null; show_on_dashboard?: boolean; enabled?: boolean
+  go2rtc_url: string | null; show_on_dashboard?: boolean; enabled?: boolean; dashboard_role?: string
 }[]>([])
 
-/** 只有显式勾了「首页显示」的摄像头才上大屏；MJPEG 直连不依赖 go2rtc 中继 */
-const dashVideos = computed(() => videoRows.value.filter((v) => v.show_on_dashboard && v.enabled !== false))
-const visibleVideo = computed(() => {
-  // 热红外只进热红外面板：否则可见光区会拿到热成像画面，两栏同一路
-  const pool = dashVideos.value.filter((x) => !/热|红外|thermal/i.test(x.name + x.group_name + x.stream_name))
-  // 优先云台/球机：机载广角画面畸变，不能当大屏主画面
-  return pool.find((x) => /云台|PTZ|球机/i.test(x.name)) ??
-    pool.find((x) => !/机载|广角|鱼眼/.test(x.name)) ??
-    pool[0] ?? null
-})
+/** 首页两路画面只认用户在摄像头管理里指定的角色，不再按名字猜 */
+const dashVideos = computed(() => videoRows.value.filter((v) => v.enabled !== false))
+const visibleVideo = computed(() =>
+  dashVideos.value.find((v) => v.dashboard_role === 'visible') ?? null)
 const thermalVideo = computed(() =>
-  dashVideos.value.find((x) => /热|红外|thermal/i.test(x.name + x.group_name)) ?? null)
+  dashVideos.value.find((v) => v.dashboard_role === 'thermal') ?? null)
+const videoChoices = computed(() => [
+  { value: '', label: '不显示' },
+  ...dashVideos.value.map((v) => ({ value: String(v.id), label: v.name })),
+])
+async function setVideoRole(role: 'visible' | 'thermal', id: string) {
+  try {
+    await api.updateVideo(Number(id), { dashboard_role: id ? role : 'none' })
+    const rows = await api.videos(Number(deviceId.value))
+    videoRows.value = rows as never
+    await loadVideoHealth()
+    toast(id ? '已切换画面' : '已关闭该画面', 'ok')
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : '切换失败', 'danger')
+  }
+}
+function onPickRole(role: 'visible' | 'thermal', e: Event) {
+  void setVideoRole(role, (e.target as HTMLSelectElement).value)
+}
 
 // 消息中心未读数（和消息页用同一个 localStorage 时间戳）
 const msgUnread = ref(0)
@@ -437,14 +449,10 @@ const pickFor = ref<{ id: number; name: string; stream_name: string } | null>(nu
 const pickStreams = ref<{ name: string; source: string; web: boolean; ready: boolean; registered?: boolean }[]>([])
 const pickQ = ref('')
 
-// 默认只列"已登记的摄像头 + 当前这路"，避免 35 路实验室流糊一脸
+// 换流要能选 go2rtc 里任意一路，包括还没登记到平台的；登记状态只做标记
 const pickFiltered = computed(() => {
   const kw = pickQ.value.trim().toLowerCase()
-  return pickStreams.value.filter((s) => {
-    if (!s.registered && s.name !== pickFor.value?.stream_name) return false
-    if (kw && !s.name.toLowerCase().includes(kw)) return false
-    return true
-  })
+  return pickStreams.value.filter((s) => !kw || s.name.toLowerCase().includes(kw))
 })
 const pickBusy = ref(false)
 const pickErr = ref('')
@@ -528,7 +536,7 @@ async function openPick(v: { id: number; name: string; stream_name: string } | n
   pickErr.value = ''
   pickStreams.value = []
   try {
-    const res = await api.go2rtcStreams()
+    const res = await api.go2rtcStreams(true)
     pickStreams.value = res.streams ?? []
     if (!res.ok) {
       pickErr.value = res.reason || 'go2rtc 不可达'
@@ -661,7 +669,7 @@ async function loadFeed() {
 function openMsg(row: FeedRow) {
   void router.push(row.link)     // 和后端页面一一对应：告警/任务执行/系统日志
 }
-const alarmCritical = computed(() => robot.alarms.filter((a) => a.level === 'critical').length)
+const alarmCritical = computed(() => stats7.value?.critical ?? robot.alarms.filter((a) => a.level === 'critical').length)
 
 // 告警数统一口径：优先 /alarms/stats 的全量统计（列表接口 limit=200，超了就会和环图对不上）
 const alarmCounts = computed(() => {
@@ -827,7 +835,7 @@ const updated = computed(() => (robot.snapshot ? robot.snapshot.age_s.toFixed(1)
 
 const RING_C = 2 * Math.PI * 42
 // 全量口径：列表接口 limit=200，用它算总数会把 206 显示成 200（QA 实测发现）
-const stats7 = ref<{ total: number; unacked: number; acked: number } | null>(null)
+const stats7 = ref<{ total: number; unacked: number; acked: number; critical: number } | null>(null)
 
 const donut = computed(() => {
   const { total, unacked: un, acked: ac } = alarmCounts.value
@@ -917,9 +925,9 @@ function barH(n: number): number {
 
 async function loadTrend() {
   try {
-    const stats = await api.alarmStats(7)
+    const stats = await api.alarmStats(7, Number(deviceId.value) || undefined)
     trend.value = stats.series
-    stats7.value = { total: stats.total, unacked: stats.unacked, acked: stats.acked }
+    stats7.value = { total: stats.total, unacked: stats.unacked, acked: stats.acked, critical: stats.critical }
   } catch { /* 统计失败不影响大屏 */ }
 }
 
@@ -1155,7 +1163,13 @@ onBeforeUnmount(() => {
                 <button type="button" class="btn btn-sm" @click="openUrl(visibleVideo)">更换地址</button>
               </div>
             </div>
-            <button type="button" class="embed-pick" title="从视频流里选一路" @click="openPick(visibleVideo)">换流</button>
+            <label class="embed-cam" title="直接选这台设备的摄像头">
+              <span>画面</span>
+              <select :value="visibleVideo ? String(visibleVideo.id) : ''" @change="onPickRole('visible', $event)">
+                <option value="">不显示</option>
+                <option v-for="v in videoChoices" :key="v.value" :value="v.value">{{ v.label }}</option>
+              </select>
+            </label>
             <button type="button" class="embed-expand" title="打开视频监控" @click="goVideo(visibleVideo)">打开全屏页 ↗</button>
           </div>
         </ScadaPanel>
@@ -1177,6 +1191,13 @@ onBeforeUnmount(() => {
                 <button type="button" class="btn btn-sm" @click="openUrl(thermalVideo)">更换地址</button>
               </div>
             </div>
+            <label class="embed-cam" title="直接选这台设备的热红外摄像头">
+              <span>画面</span>
+              <select :value="thermalVideo ? String(thermalVideo.id) : ''" @change="onPickRole('thermal', $event)">
+                <option value="">不显示</option>
+                <option v-for="v in videoChoices" :key="v.value" :value="v.value">{{ v.label }}</option>
+              </select>
+            </label>
             <button type="button" class="embed-expand" title="打开视频监控" :disabled="!thermalVideo"
                     @click="goVideo(thermalVideo)">打开全屏页 ↗</button>
           </div>
@@ -1503,7 +1524,7 @@ onBeforeUnmount(() => {
           </button>
           <div class="pick-filter">
             <input v-model="pickQ" class="input" placeholder="搜索流名，如 train1_3f" />
-            <span class="dim small">{{ pickStreams.length }} 路已登记</span>
+            <span class="dim small">{{ pickStreams.length }} 路可选（含未登记）</span>
           </div>
           <p v-if="!pickFiltered.length" class="dim small">
             {{ pickBusy ? '读取中…' : (pickErr || '没有匹配的流') }}
@@ -2050,6 +2071,20 @@ onBeforeUnmount(() => {
   padding: 3px 8px; font-size: 11px; cursor: pointer;
 }
 .embed-expand:hover { border-color: #7fe9ff; color: #fff; }
+.embed-cam {
+  position: absolute; left: 8px; top: 34px; z-index: 3;
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; color: #cfe9ff;
+  background: rgba(0, 30, 62, 0.86);
+  border: 1px solid rgba(111, 227, 255, 0.38); border-radius: 4px;
+  padding: 2px 6px;
+}
+.embed-cam select {
+  max-width: 150px; height: 20px;
+  background: rgba(0, 20, 44, 0.9); color: #d9f4ff;
+  border: 1px solid rgba(111, 227, 255, 0.32); border-radius: 3px;
+  font-size: 11px; outline: none;
+}
 
 /* 近 7 日告警趋势柱 */
 .trend { position: relative; height: 46px; display: flex; align-items: stretch; gap: 4px; }

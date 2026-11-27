@@ -89,7 +89,7 @@ def test_site_migration_backfill(tmp_path):
     _alembic(db, "head")
 
     conn = sqlite3.connect(db)
-    assert conn.execute("select version_num from alembic_version").fetchone()[0] == "0031"
+    assert conn.execute("select version_num from alembic_version").fetchone()[0] == "0032"
     # 不丢数据
     assert conn.execute("select count(*) from robot").fetchone()[0] == 3
     assert conn.execute("select count(*) from platform_map").fetchone()[0] == 4

@@ -77,7 +77,7 @@ def _save_image(b64: str) -> str:
 
 
 def _out(r: AiResult, algorithm_name: str | None = None,
-         alarm_level: str | None = None) -> dict:
+         alarm_level: str | None = None, alarm_priority: str | None = None) -> dict:
     return {
         "id": r.id, "algorithm": r.algorithm, "algorithm_name": algorithm_name or r.algorithm,
         "camera_id": r.camera_id, "point_id": r.point_id,
@@ -94,6 +94,7 @@ def _out(r: AiResult, algorithm_name: str | None = None,
         "ts": r.ts.isoformat(timespec="seconds") if r.ts else None,
         "alarm_id": r.alarm_id,
         "alarm_level": alarm_level,
+        "alarm_priority": alarm_priority,
         # 演示种子行（source_id=99）：前端据此打 DEMO 角标，别和真实回调混在一起
         "demo": r.source_id == DEMO_SOURCE_ID,
     }
@@ -273,6 +274,7 @@ def list_results(
     level: str | None = None,
     since: datetime | None = None,
     limit: int = 50,
+    offset: int = 0,
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ) -> dict:
@@ -303,19 +305,21 @@ def list_results(
         if since.tzinfo is not None:
             since = since.astimezone().replace(tzinfo=None)
         q = q.filter(AiResult.ts >= since)
-    rows = q.limit(max(1, min(limit, 200))).all()
+    total = q.count()
+    rows = q.offset(max(0, offset)).limit(max(1, min(limit, 200))).all()
     names = {a.code: a.name for a in db.query(AiAlgorithm).all()}
-    # 一次查完这页的告警级别，避免每行再查一次
+    # 一次查完这页的告警级别/优先级，避免每行再查一次
     alarm_ids = [r.alarm_id for r in rows if r.alarm_id]
-    levels = dict(
-        db.query(AlarmRecord.id, AlarmRecord.level)
-        .filter(AlarmRecord.id.in_(alarm_ids))
-        .all()
-    ) if alarm_ids else {}
+    alarm_meta = {
+        aid: (level, priority)
+        for aid, level, priority in db.query(
+            AlarmRecord.id, AlarmRecord.level, AlarmRecord.priority
+        ).filter(AlarmRecord.id.in_(alarm_ids)).all()
+    } if alarm_ids else {}
     return {
-        "total": len(rows),
+        "total": total,
         "items": [
-            _out(r, names.get(r.algorithm), levels.get(r.alarm_id))
+            _out(r, names.get(r.algorithm), *alarm_meta.get(r.alarm_id, (None, None)))
             for r in rows
         ],
     }
@@ -360,13 +364,19 @@ def result_stats(
     p1 = (
         db.query(func.count(AiResult.id))
         .join(AlarmRecord, AlarmRecord.id == AiResult.alarm_id)
-        .filter(AlarmRecord.level == "critical")
+        .filter(AlarmRecord.priority == "P1")
         .scalar() or 0
     )
     p2 = (
         db.query(func.count(AiResult.id))
         .join(AlarmRecord, AlarmRecord.id == AiResult.alarm_id)
-        .filter(AlarmRecord.level == "warn")
+        .filter(AlarmRecord.priority == "P2")
+        .scalar() or 0
+    )
+    p3 = (
+        db.query(func.count(AiResult.id))
+        .join(AlarmRecord, AlarmRecord.id == AiResult.alarm_id)
+        .filter(AlarmRecord.priority == "P3")
         .scalar() or 0
     )
     demo = (
@@ -379,6 +389,7 @@ def result_stats(
         "today": today,
         "p1": p1,
         "p2": p2,
+        "p3": p3,
         "demo": demo,
         "by_camera": [
             {"external_camera_id": cid, "camera_name": name, "count": count}

@@ -313,11 +313,13 @@ def test_stats_totals_groups_and_p1_p2(auth_client, db, created):
     today = datetime.now().replace(microsecond=0)
     yesterday = today - timedelta(days=1)
 
+    a1 = _alarm(db, "critical"); a1.priority = "P1"; db.commit()
+    a2 = _alarm(db, "warn"); a2.priority = "P2"; db.commit()
     _make(db, created, camera=12, algorithm="行人闯入", ts=today,
-          alarm=_alarm(db, "critical"))
+          alarm=a1)
     _make(db, created, camera=12, algorithm="行人闯入", ts=today)
     _make(db, created, camera=13, algorithm="安全帽识别", ts=today,
-          alarm=_alarm(db, "warn"))
+          alarm=a2)
     _make(db, created, camera=13, algorithm="安全帽识别", ts=today)
     _make(db, created, camera=13, algorithm="安全帽识别", ts=today)
     _make(db, created, camera=14, algorithm="火焰识别", ts=yesterday)

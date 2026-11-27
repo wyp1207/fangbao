@@ -27,48 +27,19 @@ const vendors = [
 ]
 const vendorText: Record<string, string> = { hikvision: '海康', dahua: '大华', other: '其他' }
 
-const form = ref({ name: '', group_name: '默认分组', vendor: 'hikvision', url: '', note: '', enabled: true, stream_name: '' })
-
-const g2streams = ref<{ name: string; source: string; web: boolean; ready: boolean }[]>([])
-const g2reason = ref('')
-
-const g2Options = computed(() => [
-  { value: '', label: '（不使用 go2rtc）' },
-  ...g2streams.value.map((s) => ({
-    value: s.name,
-    label: s.web ? `${s.name} · 网页转码` : `${s.name}${s.ready ? '' : ' · 无源'}`,
-  })),
+const form = ref({
+  name: '', group_name: '默认分组', vendor: 'hikvision', url: '', note: '',
+  enabled: true, stream_name: '', robot_id: '' as string, dashboard_role: 'none',
+})
+const dashRoles = [
+  { value: 'none', label: '不上大屏' },
+  { value: 'visible', label: '可见光主画面' },
+  { value: 'thermal', label: '热红外画面' },
+]
+const deviceOptions = computed(() => [
+  { value: '', label: '不绑定设备' },
+  ...devices.value.map((d) => ({ value: String(d.id), label: d.name })),
 ])
-
-async function loadGo2rtc() {
-  try {
-    const res = await api.go2rtcStreams()
-    g2streams.value = res.streams
-    g2reason.value = res.ok ? '' : (res.reason ?? '')
-  } catch {
-    g2streams.value = []
-    g2reason.value = 'go2rtc 不可达'
-  }
-}
-
-/** 按 RTSP 地址自动找同源的 go2rtc 流（优先 _web） */
-function suggestStream(url: string): string {
-  const norm = (u: string) => u.replace(/^[a-z]+:\/\/[^@/]*@/i, '').toLowerCase()
-  const target = norm(url)
-  const hit = g2streams.value.find((s) => s.source && norm(s.source) === target)
-  if (!hit) return ''
-  const web = g2streams.value.find((s) => s.name === `${hit.name.replace(/_web$/, '')}_web`)
-  return (web ?? hit).name
-}
-
-function applySuggest() {
-  if (!form.value.url) return
-  const name = suggestStream(form.value.url)
-  if (name && !form.value.stream_name) {
-    form.value.stream_name = name
-    toast(`找到同源流：${name}`, 'ok')
-  }
-}
 
 const groups = computed(() => {
   const set = new Set(rows.value.map((r) => r.group_name))
@@ -109,7 +80,10 @@ async function reload() {
 }
 
 function openCreate() {
-  form.value = { name: '', group_name: '默认分组', vendor: 'hikvision', url: '', note: '', enabled: true, stream_name: '' }
+  form.value = {
+    name: '', group_name: '默认分组', vendor: 'hikvision', url: '', note: '',
+    enabled: true, stream_name: '', robot_id: '', dashboard_role: 'none',
+  }
   creating.value = true
 }
 
@@ -117,6 +91,8 @@ function openEdit(v: VideoRow) {
   form.value = {
     name: v.name, group_name: v.group_name, vendor: v.vendor,
     url: v.url, note: v.note ?? '', enabled: v.enabled, stream_name: v.stream_name,
+    robot_id: v.robot_id ? String(v.robot_id) : '',
+    dashboard_role: v.dashboard_role || 'none',
   }
   editing.value = v
 }
@@ -128,7 +104,17 @@ async function submitCreate() {
     return
   }
   try {
-    await api.createVideo({ ...form.value, note: form.value.note || null })
+    await api.createVideo({
+      name: form.value.name,
+      group_name: form.value.group_name,
+      vendor: form.value.vendor,
+      url: form.value.url,
+      note: form.value.note || null,
+      enabled: form.value.enabled,
+      stream_name: form.value.stream_name,
+      robot_id: form.value.robot_id ? Number(form.value.robot_id) : null,
+      dashboard_role: form.value.dashboard_role,
+    })
     toast(`已添加视频源 ${form.value.name}`, 'ok')
     creating.value = false
     await reload()
@@ -144,24 +130,14 @@ async function submitEdit() {
       name: form.value.name, group_name: form.value.group_name,
       vendor: form.value.vendor, url: form.value.url,
       note: form.value.note || null, enabled: form.value.enabled, stream_name: form.value.stream_name,
+      robot_id: form.value.robot_id ? Number(form.value.robot_id) : null,
+      dashboard_role: form.value.dashboard_role,
     })
     toast('已保存（密码不变则保留原值）', 'ok')
     editing.value = null
     await reload()
   } catch (e) {
     toast(e instanceof ApiError ? e.message : '保存失败', 'danger')
-  }
-}
-
-async function registerGo2rtc(v: VideoRow) {
-  try {
-    const res = await api.registerGo2rtc(v.id)
-    toast(`已注册到 go2rtc：${res.web_stream}（现在可以实时播放）`, 'ok', 3600)
-    if (editing.value?.id === v.id) editing.value = null
-    await reload()
-    await loadGo2rtc()
-  } catch (e) {
-    toast(e instanceof ApiError ? e.message : '注册失败', 'danger', 3600)
   }
 }
 
@@ -186,10 +162,10 @@ async function toggle(v: VideoRow) {
   }
 }
 
-async function toggleDashboard(v: VideoRow) {
+async function setRole(v: VideoRow, role: string) {
   try {
-    await api.updateVideo(v.id, { show_on_dashboard: !v.show_on_dashboard })
-    toast(v.show_on_dashboard ? '已从首页移除' : '已设为首页显示', 'ok')
+    await api.updateVideo(v.id, { dashboard_role: role })
+    toast(role === 'none' ? '已移出首页' : role === 'thermal' ? '已设为热红外画面' : '已设为可见光主画面', 'ok')
     await reload()
   } catch (e) {
     toast(e instanceof ApiError ? e.message : '设置失败', 'danger')
@@ -215,7 +191,7 @@ async function reset() {
   toast('已重置', 'ok', 2000)
 }
 
-onMounted(() => { void reload(); void loadGo2rtc(); void loadDevices() })
+onMounted(() => { void reload(); void loadDevices() })
 </script>
 
 <template>
@@ -246,10 +222,9 @@ onMounted(() => { void reload(); void loadGo2rtc(); void loadDevices() })
             <th style="width: 130px">分组</th>
             <th style="width: 140px">设备</th>
             <th style="width: 90px">厂商</th>
-            <th style="width: 110px">go2rtc 流名</th>
             <th>视频流地址</th>
             <th style="width: 90px">启用</th>
-            <th style="width: 100px">首页显示</th>
+            <th style="width: 150px">大屏位置</th>
             <th style="width: 170px">操作</th>
           </tr>
         </thead>
@@ -260,21 +235,16 @@ onMounted(() => { void reload(); void loadGo2rtc(); void loadDevices() })
             <td class="dim">{{ v.group_name }}</td>
             <td class="dim">{{ deviceText(v.robot_id) }}</td>
             <td><span class="tag" :class="v.vendor === 'other' ? '' : 'ok'">{{ vendorText[v.vendor] }}</span></td>
-            <td class="mono dim">{{ v.stream_name || '—' }}</td>
             <td class="mono url">{{ v.url }}</td>
             <td><span class="tag" :class="v.enabled ? 'ok' : 'danger'">{{ v.enabled ? '启用' : '停用' }}</span></td>
             <td>
-              <button type="button" class="dash-toggle" :class="{ on: v.show_on_dashboard }"
-                      :title="v.show_on_dashboard ? '已在大屏显示，点击取消' : '点击让它在首页大屏显示'"
-                      @click="toggleDashboard(v)">
-                {{ v.show_on_dashboard ? '大屏显示' : '不上大屏' }}
-              </button>
+              <DarkSelect :model-value="v.dashboard_role || 'none'" :options="dashRoles" width="150px"
+                          @update:model-value="(role: string) => setRole(v, role)" />
             </td>
             <td>
               <div class="row-actions">
                 <button type="button" class="act" title="预览画面" @click="$router.push({ name: 'video', query: { source: String(v.id) } })">▶</button>
                 <button type="button" class="act" title="编辑" @click="openEdit(v)">✎</button>
-                <button type="button" class="act" title="一键注册到 go2rtc（实时播放）" @click="registerGo2rtc(v)">⚡</button>
                 <button type="button" class="act" title="测试连通性" :disabled="testing === v.id" @click="test(v)">⇄</button>
                 <button type="button" class="act" :title="v.enabled ? '停用' : '启用'" @click="toggle(v)">{{ v.enabled ? '⏸' : '▶' }}</button>
                 <button type="button" class="act danger" title="删除" @click="remove(v)">🗑</button>
@@ -282,7 +252,7 @@ onMounted(() => { void reload(); void loadGo2rtc(); void loadDevices() })
             </td>
           </tr>
           <tr v-if="!filtered.length">
-            <td colspan="10" class="dim">{{ loading ? '读取中…' : '还没有视频源，点右上角新增' }}</td>
+            <td colspan="9" class="dim">{{ loading ? '读取中…' : '还没有视频源，点右上角新增' }}</td>
           </tr>
         </tbody>
       </table>
@@ -300,19 +270,12 @@ onMounted(() => { void reload(); void loadGo2rtc(); void loadDevices() })
         <div class="panel-title"><span>新增视频源</span><span class="req-legend">带 * 为必填</span></div>
         <label class="fld"><span>名称<i class="req">*</i></span><input class="input" :class="{ missing: tried && !form.name.trim() }" v-model="form.name" placeholder="如：充电房-可见光" /></label>
         <label class="fld"><span>分组</span><input class="input" v-model="form.group_name" placeholder="如：充电房 / 机器人本体" /></label>
+        <label class="fld"><span>归属设备</span><DarkSelect v-model="form.robot_id" :options="deviceOptions" width="260px" /></label>
+        <label class="fld"><span>大屏位置</span><DarkSelect v-model="form.dashboard_role" :options="dashRoles" width="200px" /></label>
         <label class="fld"><span>厂商</span><DarkSelect v-model="form.vendor" :options="vendors" width="180px" /></label>
         <label class="fld">
           <span>视频流地址<i class="req">*</i></span>
           <input class="input" v-model="form.url" placeholder="rtsp://user:password@host:554/..." />
-        </label>
-        <label class="fld">
-          <span>go2rtc 流名（选了就是实时 MSE 播放）</span>
-          <div class="row">
-            <DarkSelect v-model="form.stream_name" :options="g2Options" width="260px" />
-            <button class="btn btn-sm" type="button" @click="applySuggest">按地址自动匹配</button>
-          </div>
-          <em class="hint" v-if="g2reason">{{ g2reason }}</em>
-          <em class="hint" v-else>列表来自 go2rtc，带「网页转码」的才能被浏览器直接播放</em>
         </label>
         <label class="fld"><span>备注（可选）</span><input class="input" v-model="form.note" /></label>
         <div class="modal-actions">
@@ -328,21 +291,15 @@ onMounted(() => { void reload(); void loadGo2rtc(); void loadDevices() })
         <div class="panel-title"><span>编辑 · {{ editing.name }}</span></div>
         <label class="fld"><span>名称</span><input class="input" v-model="form.name" /></label>
         <label class="fld"><span>分组</span><input class="input" v-model="form.group_name" /></label>
+        <label class="fld"><span>归属设备</span><DarkSelect v-model="form.robot_id" :options="deviceOptions" width="260px" /></label>
+        <label class="fld"><span>大屏位置</span><DarkSelect v-model="form.dashboard_role" :options="dashRoles" width="200px" /></label>
         <label class="fld"><span>厂商</span><DarkSelect v-model="form.vendor" :options="vendors" width="180px" /></label>
         <label class="fld">
           <span>视频流地址<i class="req">*</i></span>
           <input class="input" v-model="form.url" />
           <em class="hint">密码显示为 ***，原样提交即保留原密码</em>
         </label>
-        <label class="fld">
-          <span>go2rtc 流名</span>
-          <div class="row">
-            <DarkSelect v-model="form.stream_name" :options="g2Options" width="260px" />
-            <button class="btn btn-sm" type="button" @click="applySuggest">按地址自动匹配</button>
-          </div>
-        </label>
         <div class="modal-actions">
-          <button class="btn btn-sm" type="button" @click="registerGo2rtc(editing)">一键注册到 go2rtc</button>
           <button type="button" class="btn btn-sm" @click="editing = null">取消</button>
           <button type="button" class="btn btn-sm primary" @click="submitEdit">保存</button>
         </div>
@@ -352,15 +309,6 @@ onMounted(() => { void reload(); void loadGo2rtc(); void loadDevices() })
 </template>
 
 <style scoped>
-.dash-toggle {
-  background: rgba(0, 60, 110, 0.6); color: #9fd2ff;
-  border: 1px solid rgba(111, 227, 255, 0.3); border-radius: 4px;
-  padding: 3px 9px; font-size: 12px; cursor: pointer;
-}
-.dash-toggle.on {
-  background: rgba(41, 212, 255, 0.28); color: #eaf7ff; border-color: #7fe9ff;
-}
-
 .page { display: flex; flex-direction: column; gap: 12px; min-height: 100%; }
 .page > .panel { flex: 1; min-height: 0; }
 .small { font-size: 12px; line-height: 1.8; }

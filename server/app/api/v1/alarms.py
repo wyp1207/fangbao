@@ -248,6 +248,7 @@ def close_alarm(
 @router.get("/stats")
 def alarm_stats(
     days: int = Query(7, ge=1, le=90),
+    robot_id: int | None = Query(None),
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> dict:
@@ -259,10 +260,13 @@ def alarm_stats(
     from app.models.alarm import AlarmRecord
 
     start = datetime.combine(date.today() - timedelta(days=days - 1), datetime.min.time())
-    rows = db.execute(
+    stmt = (
         select(AlarmRecord.started_at, AlarmRecord.level, AlarmRecord.acked_at)
         .where(AlarmRecord.started_at >= start)
-    ).all()
+    )
+    if robot_id is not None:
+        stmt = stmt.where(AlarmRecord.robot_id == robot_id)
+    rows = db.execute(stmt).all()
 
     buckets: dict[str, dict[str, int]] = {}
     for i in range(days):
@@ -270,9 +274,14 @@ def alarm_stats(
         buckets[d] = {"warn": 0, "critical": 0}
 
     unacked = acked = 0
+    critical = warn = 0
     for started, level, acked_at in rows:
         if started is None:
             continue
+        if level == "critical":
+            critical += 1
+        elif level == "warn":
+            warn += 1
         key = started.date().isoformat()
         if key in buckets and level in buckets[key]:
             buckets[key][level] += 1
@@ -284,7 +293,7 @@ def alarm_stats(
     series = [{"date": d, "warn": v["warn"], "critical": v["critical"],
                "total": v["warn"] + v["critical"]} for d, v in buckets.items()]
     return {"days": days, "series": series, "total": len(rows),
-            "unacked": unacked, "acked": acked,
+            "unacked": unacked, "acked": acked, "critical": critical, "warn": warn,
             "peak": max((s["total"] for s in series), default=0)}
 
 

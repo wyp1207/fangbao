@@ -14,6 +14,9 @@ const loading = ref(false)
 const error = ref('')
 const preview = ref<AiResultItem | null>(null)
 const dialogEl = ref<HTMLDialogElement | null>(null)
+const page = ref(0)
+const total = ref(0)
+const PAGE_SIZE = 50
 
 /** 真实回调是盒子侧三路相机；固定给出，stats 有数时再补计数。 */
 const CAMERAS = [
@@ -83,9 +86,11 @@ async function load() {
       external_camera_id: camera.value ? Number(camera.value) : undefined,
       min_confidence: confidence.value ? Number(confidence.value) : undefined,
       level: (level.value || undefined) as 'p1' | 'p2' | 'none' | undefined,
-      limit: 200,
+      limit: PAGE_SIZE,
+      offset: page.value * PAGE_SIZE,
     })
     rows.value = res.items
+    total.value = res.total
   } catch (e) {
     error.value = e instanceof Error ? e.message : '加载失败'
   } finally {
@@ -95,6 +100,23 @@ async function load() {
 
 async function refreshAll() {
   await Promise.all([load(), loadStats()])
+}
+
+function applyFilter() {
+  page.value = 0
+  void load()
+}
+
+function prevPage() {
+  if (page.value <= 0) return
+  page.value -= 1
+  void load()
+}
+
+function nextPage() {
+  if ((page.value + 1) * PAGE_SIZE >= total.value) return
+  page.value += 1
+  void load()
 }
 
 // 15 秒自动刷新；页面隐藏时停表，回来先补一次再继续
@@ -152,12 +174,11 @@ function cameraText(r: AiResultItem): string {
 }
 
 function alarmText(r: AiResultItem): string {
-  const prefix = r.alarm_level === 'critical' ? 'P1' : r.alarm_level === 'warn' ? 'P2' : '告警'
-  return `${prefix} #${r.alarm_id}`
+  return `${r.alarm_priority ?? '告警'} #${r.alarm_id}`
 }
 
 function alarmClass(r: AiResultItem): string {
-  return r.alarm_level === 'critical' ? 'danger' : r.alarm_level === 'warn' ? 'warn' : ''
+  return r.alarm_priority === 'P1' ? 'danger' : r.alarm_priority === 'P2' ? 'warn' : ''
 }
 
 function openImage(r: AiResultItem) {
@@ -179,10 +200,10 @@ function closeImage() {
         <span class="muted small">真实回调回看 · 每 15 秒自动刷新（页面隐藏时暂停）</span>
         <span class="grow" />
         <div class="filters">
-          <DarkSelect v-model="algo" width="170px" :options="algoOptions" @update:model-value="load" />
-          <DarkSelect v-model="camera" width="150px" :options="cameraOptions" @update:model-value="load" />
-          <DarkSelect v-model="confidence" width="130px" :options="confidenceOptions" @update:model-value="load" />
-          <DarkSelect v-model="level" width="140px" :options="levelOptions" @update:model-value="load" />
+          <DarkSelect v-model="algo" width="170px" :options="algoOptions" @update:model-value="applyFilter" />
+          <DarkSelect v-model="camera" width="150px" :options="cameraOptions" @update:model-value="applyFilter" />
+          <DarkSelect v-model="confidence" width="130px" :options="confidenceOptions" @update:model-value="applyFilter" />
+          <DarkSelect v-model="level" width="140px" :options="levelOptions" @update:model-value="applyFilter" />
           <button type="button" class="btn btn-sm ok" :disabled="loading" @click="refreshAll">刷新</button>
         </div>
       </div>
@@ -190,8 +211,9 @@ function closeImage() {
       <div class="kpis">
         <div class="kpi"><span>总数</span><b>{{ stats?.total ?? '—' }}</b></div>
         <div class="kpi"><span>今日</span><b>{{ stats?.today ?? '—' }}</b></div>
-        <div class="kpi danger"><span>P1 告警</span><b>{{ stats?.p1 ?? '—' }}</b></div>
-        <div class="kpi warn"><span>P2 告警</span><b>{{ stats?.p2 ?? '—' }}</b></div>
+        <div class="kpi danger"><span>P1 严重</span><b>{{ stats?.p1 ?? '—' }}</b></div>
+        <div class="kpi warn"><span>P2 一般</span><b>{{ stats?.p2 ?? '—' }}</b></div>
+        <div class="kpi"><span>P3 提醒</span><b>{{ stats?.p3 ?? '—' }}</b></div>
       </div>
 
       <p v-if="error" class="err small">{{ error }}</p>
@@ -222,7 +244,7 @@ function closeImage() {
             </td>
             <td>
               <span v-if="r.alarm_id" class="tag" :class="alarmClass(r)">{{ alarmText(r) }}</span>
-              <span v-else class="dim small">未告警</span>
+              <span v-else class="dim small" title="未建告警：同相机同算法 60 秒内去重、置信度未达阈值，或相机不在告警白名单">未告警</span>
             </td>
             <td>
               <img
@@ -244,6 +266,12 @@ function closeImage() {
           </tr>
         </tbody>
       </table>
+      <div class="pager">
+        <span class="dim small">共 {{ total }} 条 · 第 {{ total ? page + 1 : 0 }}/{{ Math.ceil(total / PAGE_SIZE) || 1 }} 页</span>
+        <span class="grow" />
+        <button type="button" class="btn btn-sm" :disabled="page <= 0 || loading" @click="prevPage">上一页</button>
+        <button type="button" class="btn btn-sm" :disabled="(page + 1) * PAGE_SIZE >= total || loading" @click="nextPage">下一页</button>
+      </div>
     </section>
 
     <dialog ref="dialogEl" class="lightbox" @click="closeImage" @close="preview = null">
@@ -264,6 +292,7 @@ function closeImage() {
 .small { font-size: 12px; }
 .num { font-variant-numeric: tabular-nums; }
 .filters { display: flex; align-items: center; gap: 8px; }
+.pager { display: flex; align-items: center; gap: 8px; padding: 8px 2px 2px; }
 .err { color: #ff9b9b; margin: 0 0 8px; }
 
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 4px 0 14px; }

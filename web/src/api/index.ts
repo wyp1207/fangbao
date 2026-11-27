@@ -48,6 +48,7 @@ export interface UserRow {
 
 export interface VideoRow {
   show_on_dashboard?: boolean
+  dashboard_role?: 'none' | 'visible' | 'thermal'
   id: number
   name: string
   group_name: string
@@ -210,6 +211,7 @@ export interface AiResultItem {
   ts: string | null
   alarm_id: number | null
   alarm_level: 'critical' | 'warn' | null
+  alarm_priority: 'P1' | 'P2' | 'P3' | null
   /** 演示种子行（source_id=99），不是真实回调 */
   demo: boolean
 }
@@ -219,6 +221,7 @@ export interface AiResultStats {
   today: number
   p1: number
   p2: number
+  p3: number
   demo: number
   by_camera: { external_camera_id: number | null; camera_name: string | null; count: number }[]
   by_algorithm: { algorithm: string; count: number }[]
@@ -367,10 +370,12 @@ export const api = {
     request<VideoRow[]>(robotId ? `/videos?robot_id=${robotId}` : '/videos'),
   registerGo2rtc: (id: number) =>
     request<{ ok: boolean; stream: string; web_stream: string; video: VideoRow }>(`/videos/${id}/register-go2rtc`, { method: 'POST' }),
-  go2rtcStreams: () => request<{ ok: boolean; reason?: string; streams: { name: string; source: string; web: boolean; ready: boolean }[] }>('/videos/go2rtc-streams'),
-  createVideo: (body: { name: string; group_name: string; vendor: string; url: string; note?: string | null; stream_name?: string }) =>
+  go2rtcStreams: (all = false) =>
+    request<{ ok: boolean; reason?: string; streams: { name: string; source: string; web: boolean; ready: boolean; registered?: boolean }[] }>(
+      `/videos/go2rtc-streams${all ? '?all=true' : ''}`),
+  createVideo: (body: { name: string; group_name: string; vendor: string; url: string; note?: string | null; stream_name?: string; enabled?: boolean; robot_id?: number | null; show_on_dashboard?: boolean; dashboard_role?: string }) =>
     request<VideoRow>('/videos', { method: 'POST', body }),
-  updateVideo: (id: number, body: Partial<{ name: string; group_name: string; vendor: string; url: string; enabled: boolean; show_on_dashboard: boolean; note: string | null; stream_name: string }>) =>
+  updateVideo: (id: number, body: Partial<{ name: string; group_name: string; vendor: string; url: string; enabled: boolean; show_on_dashboard: boolean; dashboard_role: string; note: string | null; stream_name: string; robot_id: number | null }>) =>
     request<VideoRow>(`/videos/${id}`, { method: 'PATCH', body }),
   snapshotUrl: (id: number, tick: number) => `/api/v1/videos/${id}/snapshot?t=${tick}`,
   testVideo: (id: number) =>
@@ -419,6 +424,7 @@ export const api = {
     level?: 'p1' | 'p2' | 'none'
     since?: string
     limit?: number
+    offset?: number
   } = {}) => {
     const qs = Object.entries(params)
       .filter(([, v]) => v !== undefined && v !== null && v !== '')
@@ -605,9 +611,10 @@ export const api = {
   tasks: (id = 1) => request<TaskItem[]>(`/robots/${id}/tasks`),
   alarms: (activeOnly = false) =>
     request<AlarmPage>(`/alarms?limit=200${activeOnly ? '&status=unacked' : ''}`),
-  alarmStats: (days = 7) =>
+  alarmStats: (days = 7, robotId?: number) =>
     request<{ days: number; series: { date: string; warn: number; critical: number; total: number }[];
-              total: number; unacked: number; acked: number; peak: number }>(`/alarms/stats?days=${days}`),
+              total: number; unacked: number; acked: number; peak: number; critical: number; warn: number }>(
+      `/alarms/stats?days=${days}${robotId ? `&robot_id=${robotId}` : ''}`),
   handleAlarm: (id: number, note: string) =>
     request<AlarmItem>(`/alarms/${id}/handle`, { method: 'POST', body: { note } }),
   closeAlarm: (id: number, resolution: string, note: string) =>
