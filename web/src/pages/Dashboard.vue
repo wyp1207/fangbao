@@ -193,13 +193,14 @@ const visibleVideo = computed(() =>
   dashVideos.value.find((v) => v.dashboard_role === 'visible') ?? null)
 const thermalVideo = computed(() =>
   dashVideos.value.find((v) => v.dashboard_role === 'thermal') ?? null)
-const videoChoices = computed(() => [
-  { value: '', label: '不显示' },
-  ...dashVideos.value.map((v) => ({ value: String(v.id), label: v.name })),
-])
+const videoChoices = computed(() =>
+  dashVideos.value.map((v) => ({ value: String(v.id), label: v.name })))
 async function setVideoRole(role: 'visible' | 'thermal', id: string) {
+  const current = role === 'visible' ? visibleVideo.value : thermalVideo.value
+  const targetId = id ? Number(id) : current?.id
+  if (!targetId) return
   try {
-    await api.updateVideo(Number(id), { dashboard_role: id ? role : 'none' })
+    await api.updateVideo(targetId, { dashboard_role: id ? role : 'none' })
     const rows = await api.videos(Number(deviceId.value))
     videoRows.value = rows as never
     await loadVideoHealth()
