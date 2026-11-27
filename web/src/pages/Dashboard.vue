@@ -184,7 +184,7 @@ async function ptzCenter() {
 // 首页内嵌视频：取第一路可用视频源（可见光/热红外分开挑）
 const videoRows = ref<{
   id: number; name: string; group_name: string; stream_name: string
-  go2rtc_url: string | null; show_on_dashboard?: boolean; enabled?: boolean; dashboard_role?: string
+  go2rtc_url: string | null; show_on_dashboard?: boolean; enabled?: boolean; dashboard_role?: string; url?: string
 }[]>([])
 
 /** 首页两路画面只认用户在摄像头管理里指定的角色，不再按名字猜 */
@@ -608,8 +608,11 @@ async function loadVideoHealth(seq: number = videoSeq) {
   } catch { /* 探测失败按未知处理，不拦视频 */ }
 }
 
-function healthOf(v: { id: number } | null): { ok: boolean; reason: string } {
+function healthOf(v: { id: number; url?: string; stream_name?: string } | null): { ok: boolean; reason: string } {
   if (!v) return { ok: false, reason: '未配置视频源' }
+  // 没有 go2rtc 流名时首页走 MJPEG 直连；能不能出图由 img 的 load/error 决定，
+  // 不再拿 go2rtc 健康检查把直连源误判成“未配置”。
+  if (v.url && !v.stream_name) return { ok: true, reason: '直连 MJPEG' }
   return videoHealth.value[v.id] ?? { ok: false, reason: '检测中' }
 }
 
