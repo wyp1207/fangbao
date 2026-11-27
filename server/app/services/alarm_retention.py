@@ -21,22 +21,37 @@ from sqlalchemy.orm import Session
 from app.models.ai import AiResult
 from app.models.alarm import AlarmRecord
 from app.models.inspection import WorkOrder
+from app.services.ai_callback_ingest import IMAGE_ROOT
 from app.services.snapshot import AI_SHOT_ROOT
 
 log = logging.getLogger(__name__)
+
+
+def _resolve_image(image_path: str, root: Path) -> Path | None:
+    """把库里的相对路径还原成真实文件；只接受两个证据目录。"""
+    p = Path(image_path)
+    if p.is_absolute():
+        target = p
+    elif image_path.startswith("ai_images/"):
+        target = IMAGE_ROOT.parent / p
+    elif image_path.startswith("ai_snapshots/"):
+        target = AI_SHOT_ROOT.parent / p
+    else:
+        target = root / p
+    target = target.resolve()
+    allowed = (AI_SHOT_ROOT.resolve(), IMAGE_ROOT.resolve(), root.resolve())
+    if not any(a == target or a in target.parents for a in allowed):
+        return None
+    return target
 
 
 def _unlink_image(image_path: str | None, root: Path) -> bool:
     if not image_path:
         return False
     try:
-        p = Path(image_path)
-        if not p.is_absolute():
-            p = root / p
-        p = p.resolve()
-        root = root.resolve()
-        if root not in p.parents:
-            log.warning("拒绝删除证据图：路径不在 AI_SHOT_ROOT 下 %s", p)
+        p = _resolve_image(image_path, root)
+        if p is None:
+            log.warning("拒绝删除证据图：路径不在证据目录下 %s", image_path)
             return False
         if p.is_file():
             p.unlink()
