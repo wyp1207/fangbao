@@ -8,6 +8,7 @@ import AnimatedNumber from '@/components/AnimatedNumber.vue'
 import DarkSelect from '@/components/DarkSelect.vue'
 import TopNav from '@/components/TopNav.vue'
 import UserMenu from '@/components/UserMenu.vue'
+import AlarmPopup from '@/components/AlarmPopup.vue'
 import { toast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { usePlatformStore } from '@/stores/platform'
@@ -1550,7 +1551,7 @@ onBeforeUnmount(() => {
       <span :class="{ danger: serverOk === false }" :title="serverErr">通讯链路{{ linkText }}</span>
     </footer>
 
-    
+    <AlarmPopup />
   </div>
 
     <!-- 定位弹窗：不占右栏，避免把环境数据挤掉 -->

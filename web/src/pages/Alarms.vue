@@ -458,7 +458,7 @@ onUnmounted(() => window.removeEventListener('keydown', onEvidenceKey))
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(a, i) in paged" :key="a.id">
+          <tr v-for="(a, i) in paged" :key="a.id" :data-alarm-id="a.id">
             <td>{{ (page - 1) * pageSize + i + 1 }}</td>
             <td class="num dim">{{ a.started_at.replace('T', ' ').slice(0, 19) }}</td>
             <td>
